@@ -1,607 +1,548 @@
-'use strict';
 
-const LIMITS = Object.freeze({
-  rooms: 1000000,
-  walls: 4,
-  shelves: 5,
-  books: 999,
-  pages: 410,
-});
+const VERSION = "v1";
 
-const PAGE_CHARS = 3600;
-const LINE_LENGTH = 76;
-const FAVORITES_KEY = 'babel.ru.favorites.v1';
-const MODE_KEY = 'babel.ru.mode.v1';
+const LIMITS = {
+  room: 999999,
+  wall: 6,
+  shelf: 12,
+  book: 999999,
+  page: 410,
+};
 
-const CHAOS_ALPHABET = ' абвгдеёжзийклмнопрстуфхцчшщъыьэюя.,!?;:—«»()';
+const WORDS = `
+абсолютный абсурд автор адрес алфавит архив башня бездна белый библиотека близкий
+буква бумага быть вечность вечер вещь видеть воздух возвращение время вход выбирать
+главный глухой город граница дверь движение дневник доказательство дом другой душа
+единственный желать ждать зал записка зеркало знак знать искать книга ключ комната
+конец коридор красный круг лабиринт лист молчание мысль найти начало небо неверный
+невозможный ночь образ окно память первый письмо порядок потерянный правда предел
+призрак пространство прочитать пыль рукопись ряд свет слово случай смысл смотреть
+страница стена странный тень текст тишина точный том узнать фраза холод человек
+читать шаг шёпот шум язык
 
-const WORDS = [
-  'бездна', 'вечность', 'зеркало', 'зал', 'том', 'страница', 'полка', 'память', 'тишина', 'шёпот',
-  'город', 'ночь', 'окно', 'рукопись', 'пыль', 'лампа', 'читатель', 'лабиринт', 'порог', 'след',
-  'слово', 'время', 'голос', 'архив', 'сон', 'пепел', 'север', 'сад', 'камень', 'река', 'тень',
-  'ключ', 'карта', 'море', 'письмо', 'смысл', 'ошибка', 'судьба', 'страх', 'радость', 'книга',
-  'молчание', 'ветер', 'переход', 'комната', 'знак', 'снег', 'часы', 'дверь', 'линия', 'имя',
-  'звезда', 'пламя', 'путь', 'голубь', 'свет', 'угол', 'бумага', 'чернила', 'звук', 'символ'
-];
+если когда потому что однако словно будто где-то рядом внутри между после перед
+каждый всякий этот тот один два три снова уже ещё там здесь никто кто-то что-то
+никогда всегда почти вдруг медленно странно тихо точно поздно
 
-const TEMPLATES = [
-  'В зале {a} читатель {b} нашёл {c}, но не понял, была ли это ошибка или знак.',
-  'Каждая {a} помнит {b}; каждое {c} скрывает другое имя.',
-  'Когда {a} открывает {b}, из глубины выходит {c}.',
-  'Никто не знает, почему {a} повторяет {b}, пока {c} молчит.',
-  'В этой книге {a} становится {b}, а {c} — последней дверью.',
-  'Если {a} исчезнет, останется только {b} и едва заметный {c}.',
-  'Библиотекарь записал: {a} есть форма {b}, а {c} есть её тень.',
-  'На полке лежали {a}, {b} и {c}; порядок казался случайным, но был неизбежен.',
-];
+я ты он она мы вы они мне тебе ему ей нас вас их мой твой свой наш ваш
+`.trim().split(/\s+/);
 
-const $ = (selector) => document.querySelector(selector);
-const app = $('#app');
-const hero = $('#hero');
-const modeSelect = $('#modeSelect');
-const addressInput = $('#addressInput');
-const phraseInput = $('#phraseInput');
-const saveFavoriteButton = $('#saveFavorite');
+const ALPHABET = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя     .,!?;:—«»()";
 
-function xmur3(str) {
-  let h = 1779033703 ^ str.length;
-  for (let i = 0; i < str.length; i += 1) {
-    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
-    h = (h << 13) | (h >>> 19);
+const $ = (sel) => document.querySelector(sel);
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+  }[c]));
+}
+
+function fnv1a(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
   }
-  return function seed() {
-    h = Math.imul(h ^ (h >>> 16), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    return (h ^= h >>> 16) >>> 0;
-  };
+  return h >>> 0;
 }
 
 function mulberry32(seed) {
-  return function random() {
-    let t = (seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-function rngFrom(text) {
-  return mulberry32(xmur3(text)());
+function rngFrom(seedText) {
+  return mulberry32(fnv1a(seedText));
 }
 
-function intFromRng(rng, min, max) {
-  return Math.floor(rng() * (max - min + 1)) + min;
+function pick(rng, arr) {
+  return arr[Math.floor(rng() * arr.length)];
+}
+
+function intFromHash(text, min, max) {
+  const h = fnv1a(text);
+  return min + (h % (max - min + 1));
+}
+
+function normalizeAddress(a) {
+  return {
+    room: clampInt(a.room, 1, LIMITS.room),
+    wall: clampInt(a.wall, 1, LIMITS.wall),
+    shelf: clampInt(a.shelf, 1, LIMITS.shelf),
+    book: clampInt(a.book, 1, LIMITS.book),
+    page: clampInt(a.page, 1, LIMITS.page),
+  };
 }
 
 function clampInt(value, min, max) {
-  const parsed = Number.parseInt(String(value), 10);
-  if (Number.isNaN(parsed)) return min;
-  return Math.min(max, Math.max(min, parsed));
+  const n = Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.min(max, Math.max(min, Math.floor(n)));
 }
 
-function escapeHtml(text) {
-  return String(text)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+function addressSeed(a) {
+  return `${VERSION}:${a.room}:${a.wall}:${a.shelf}:${a.book}:${a.page}`;
 }
 
-function encodeText(text) {
-  const bytes = new TextEncoder().encode(text);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+function addressTitle(a) {
+  return `Зал ${a.room} · Стена ${a.wall} · Полка ${a.shelf} · Том ${a.book} · Страница ${a.page}`;
 }
 
-function decodeText(encoded) {
-  const normalized = encoded.replaceAll('-', '+').replaceAll('_', '/');
-  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+function addressUrl(a) {
+  return `#/${VERSION}/room/${a.room}/wall/${a.wall}/shelf/${a.shelf}/book/${a.book}/page/${a.page}`;
+}
+
+function phraseAddress(phrase) {
+  const n = (salt, min, max) => intFromHash(`${VERSION}:phrase:${salt}:${phrase}`, min, max);
+  return {
+    room: n("room", 1, LIMITS.room),
+    wall: n("wall", 1, LIMITS.wall),
+    shelf: n("shelf", 1, LIMITS.shelf),
+    book: n("book", 1, LIMITS.book),
+    page: n("page", 1, LIMITS.page),
+  };
+}
+
+function encodePayload(obj) {
+  const json = JSON.stringify(obj);
+  const bytes = new TextEncoder().encode(json);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function decodePayload(payload) {
+  const base = payload.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base + "=".repeat((4 - base.length % 4) % 4);
   const binary = atob(padded);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
+  const bytes = new Uint8Array([...binary].map(ch => ch.charCodeAt(0)));
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-function normalizeMode(mode) {
-  return ['chaos', 'words', 'prophecy'].includes(mode) ? mode : 'chaos';
+function phraseUrl(phrase) {
+  const a = phraseAddress(phrase);
+  const payload = encodePayload({
+    v: VERSION,
+    kind: "phrase-page",
+    phrase,
+    address: a,
+  });
+  return `#/${VERSION}/phrase/${payload}`;
 }
 
-function parseHash() {
-  const raw = window.location.hash || '#/';
-  const withoutHash = raw.startsWith('#') ? raw.slice(1) : raw;
-  const [pathPart, queryPart = ''] = withoutHash.split('?');
-  const params = new URLSearchParams(queryPart);
-  const parts = pathPart.split('/').filter(Boolean);
-  const mode = normalizeMode(params.get('mode') || localStorage.getItem(MODE_KEY) || 'chaos');
-  return { raw, path: pathPart || '/', parts, params, mode };
-}
+function generateWordText(a, opts = {}) {
+  const phrase = opts.phrase || "";
+  const seed = opts.phrase ? `${addressSeed(a)}:phrase:${phrase}` : addressSeed(a);
+  const rng = rngFrom(seed);
+  const targetWords = opts.phrase ? 210 : 190;
+  const phraseWords = phrase.trim() ? phrase.trim().split(/\s+/) : [];
+  const insertAt = phraseWords.length ? 38 + Math.floor(rng() * 95) : -1;
+  const out = [];
 
-function addressToSeed(address, mode) {
-  return `mode:${mode}|room:${address.room}|wall:${address.wall}|shelf:${address.shelf}|book:${address.book}|page:${address.page}`;
-}
-
-function addressToPath(address, options = {}) {
-  const params = new URLSearchParams();
-  const mode = normalizeMode(options.mode || modeSelect.value || 'chaos');
-  params.set('mode', mode);
-  if (options.phrase) params.set('q', encodeText(options.phrase));
-  return `#/room/${address.room}/wall/${address.wall}/shelf/${address.shelf}/book/${address.book}/page/${address.page}?${params.toString()}`;
-}
-
-function addressLabel(address) {
-  return `Зал ${address.room} · Стена ${address.wall} · Полка ${address.shelf} · Том ${address.book} · Страница ${address.page}`;
-}
-
-function parseAddress(parts) {
-  const map = {};
-  for (let i = 0; i < parts.length; i += 2) {
-    map[parts[i]] = parts[i + 1];
-  }
-  if (!map.room || !map.wall || !map.shelf || !map.book || !map.page) return null;
-  return {
-    room: clampInt(map.room, 0, LIMITS.rooms - 1),
-    wall: clampInt(map.wall, 1, LIMITS.walls),
-    shelf: clampInt(map.shelf, 1, LIMITS.shelves),
-    book: clampInt(map.book, 1, LIMITS.books),
-    page: clampInt(map.page, 1, LIMITS.pages),
-  };
-}
-
-function randomAddress(seedText = String(Date.now())) {
-  const rng = rngFrom(seedText);
-  return {
-    room: intFromRng(rng, 0, LIMITS.rooms - 1),
-    wall: intFromRng(rng, 1, LIMITS.walls),
-    shelf: intFromRng(rng, 1, LIMITS.shelves),
-    book: intFromRng(rng, 1, LIMITS.books),
-    page: intFromRng(rng, 1, LIMITS.pages),
-  };
-}
-
-function addressFromPhrase(phrase) {
-  return randomAddress(`phrase:${phrase}`);
-}
-
-function nextAddress(address, direction) {
-  const next = { ...address };
-  next.page += direction;
-
-  if (next.page > LIMITS.pages) {
-    next.page = 1;
-    next.book += 1;
-  }
-  if (next.page < 1) {
-    next.page = LIMITS.pages;
-    next.book -= 1;
-  }
-  if (next.book > LIMITS.books) {
-    next.book = 1;
-    next.shelf += 1;
-  }
-  if (next.book < 1) {
-    next.book = LIMITS.books;
-    next.shelf -= 1;
-  }
-  if (next.shelf > LIMITS.shelves) {
-    next.shelf = 1;
-    next.wall += 1;
-  }
-  if (next.shelf < 1) {
-    next.shelf = LIMITS.shelves;
-    next.wall -= 1;
-  }
-  if (next.wall > LIMITS.walls) {
-    next.wall = 1;
-    next.room += 1;
-  }
-  if (next.wall < 1) {
-    next.wall = LIMITS.walls;
-    next.room -= 1;
-  }
-  if (next.room >= LIMITS.rooms) next.room = 0;
-  if (next.room < 0) next.room = LIMITS.rooms - 1;
-
-  return next;
-}
-
-function wrapText(text, width = LINE_LENGTH) {
-  const words = text.split(/(\s+)/);
-  const lines = [];
-  let line = '';
-  for (const chunk of words) {
-    if (chunk.includes('\n')) {
-      const subparts = chunk.split('\n');
-      line += subparts[0];
-      lines.push(line.trimEnd());
-      line = subparts.slice(1).join(' ');
+  for (let i = 0; i < targetWords; i++) {
+    if (i === insertAt) {
+      out.push(...phraseWords);
+      i += phraseWords.length - 1;
       continue;
     }
-    if ((line + chunk).length > width && line.trim()) {
-      lines.push(line.trimEnd());
-      line = chunk.trimStart();
+
+    const r = rng();
+    if (r < 0.11) {
+      out.push(pick(rng, WORDS) + pick(rng, [",", ";", ":", ""]));
+    } else if (r < 0.145) {
+      out.push(pick(rng, ["—", "«" + pick(rng, WORDS) + "»"]));
     } else {
-      line += chunk;
+      out.push(pick(rng, WORDS));
     }
   }
-  if (line.trim()) lines.push(line.trimEnd());
-  return lines.join('\n');
-}
 
-function generateChaos(seed, length = PAGE_CHARS) {
-  const rng = rngFrom(seed);
-  const chars = [];
-  for (let i = 0; i < length; i += 1) {
-    if (i > 0 && i % LINE_LENGTH === 0) chars.push('\n');
-    chars.push(CHAOS_ALPHABET[intFromRng(rng, 0, CHAOS_ALPHABET.length - 1)]);
-  }
-  return chars.join('');
-}
-
-function generateWordNoise(seed, length = PAGE_CHARS) {
-  const rng = rngFrom(seed);
-  const punctuation = ['.', '.', '.', '?', '!', ';', ' —'];
-  const sentences = [];
-  let total = 0;
-  while (total < length) {
-    const count = intFromRng(rng, 4, 13);
-    const words = [];
-    for (let i = 0; i < count; i += 1) {
-      const word = WORDS[intFromRng(rng, 0, WORDS.length - 1)];
-      words.push(i === 0 ? word[0].toUpperCase() + word.slice(1) : word);
+  const words = out;
+  const paragraphs = [];
+  let pos = 0;
+  while (pos < words.length) {
+    const step = 38 + Math.floor(rng() * 19);
+    const part = words.slice(pos, pos + step);
+    if (part.length) {
+      let s = part.join(" ");
+      s = s.slice(0, 1).toUpperCase() + s.slice(1);
+      if (!/[.!?…]$/.test(s)) s += pick(rng, [".", ".", ".", "?", "…"]);
+      paragraphs.push(s);
     }
-    const sentence = words.join(' ') + punctuation[intFromRng(rng, 0, punctuation.length - 1)];
-    sentences.push(sentence);
-    total += sentence.length + 1;
-  }
-  return wrapText(sentences.join(' ')).slice(0, length + 200);
-}
-
-function generateProphecy(seed, length = PAGE_CHARS) {
-  const rng = rngFrom(seed);
-  const sentences = [];
-  let total = 0;
-  while (total < length) {
-    const template = TEMPLATES[intFromRng(rng, 0, TEMPLATES.length - 1)];
-    const sentence = template
-      .replace('{a}', WORDS[intFromRng(rng, 0, WORDS.length - 1)])
-      .replace('{b}', WORDS[intFromRng(rng, 0, WORDS.length - 1)])
-      .replace('{c}', WORDS[intFromRng(rng, 0, WORDS.length - 1)]);
-    sentences.push(sentence);
-    total += sentence.length + 1;
-  }
-  return wrapText(sentences.join(' ')).slice(0, length + 200);
-}
-
-function generatePageText(address, mode) {
-  const seed = addressToSeed(address, mode);
-  if (mode === 'words') return generateWordNoise(seed);
-  if (mode === 'prophecy') return generateProphecy(seed);
-  return generateChaos(seed);
-}
-
-function injectPhrase(text, phrase, seed) {
-  if (!phrase) return { text, index: -1 };
-  const normalizedPhrase = phrase.trim();
-  if (!normalizedPhrase) return { text, index: -1 };
-
-  const rng = rngFrom(`inject:${seed}|${normalizedPhrase}`);
-  const cleanText = text.replaceAll(normalizedPhrase, ' '.repeat(Math.min(normalizedPhrase.length, 80)));
-  const maxIndex = Math.max(0, cleanText.length - normalizedPhrase.length - 1);
-  const index = intFromRng(rng, 0, maxIndex);
-  const injected = cleanText.slice(0, index) + normalizedPhrase + cleanText.slice(index + normalizedPhrase.length);
-  return { text: injected, index };
-}
-
-function pageHtml(text, phrase) {
-  if (!phrase) return escapeHtml(text);
-  const trimmed = phrase.trim();
-  const index = text.indexOf(trimmed);
-  if (index === -1) return escapeHtml(text);
-  return `${escapeHtml(text.slice(0, index))}<span class="highlight">${escapeHtml(trimmed)}</span>${escapeHtml(text.slice(index + trimmed.length))}`;
-}
-
-function currentAbsoluteUrl(hash = window.location.hash) {
-  const url = new URL(window.location.href);
-  url.hash = hash;
-  return url.toString();
-}
-
-function getFavorites() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function setFavorites(items) {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(items.slice(0, 100)));
-}
-
-function isCurrentFavorite() {
-  const url = currentAbsoluteUrl();
-  return getFavorites().some((item) => item.url === url);
-}
-
-function updateFavoriteButton() {
-  saveFavoriteButton.textContent = isCurrentFavorite() ? '★ В избранном' : '★ В избранное';
-}
-
-function toggleFavorite(address, phrase, text) {
-  const url = currentAbsoluteUrl();
-  const favorites = getFavorites();
-  const existingIndex = favorites.findIndex((item) => item.url === url);
-  if (existingIndex >= 0) {
-    favorites.splice(existingIndex, 1);
-    setFavorites(favorites);
-    showToast('Страница удалена из избранного');
-    updateFavoriteButton();
-    return;
+    pos += step;
   }
 
-  favorites.unshift({
-    url,
-    hash: window.location.hash,
-    address: addressLabel(address),
-    phrase: phrase || '',
-    snippet: (phrase || text.slice(0, 160)).replace(/\s+/g, ' ').trim(),
-    createdAt: new Date().toISOString(),
-  });
-  setFavorites(favorites);
-  showToast('Страница сохранена в избранном');
-  updateFavoriteButton();
+  return paragraphs.join("\n\n");
 }
 
-async function copyText(text, message = 'Скопировано') {
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast(message);
-  } catch {
-    const input = document.createElement('textarea');
-    input.value = text;
-    document.body.appendChild(input);
-    input.select();
-    document.execCommand('copy');
-    input.remove();
-    showToast(message);
+function generateChaosText(a) {
+  const rng = rngFrom(addressSeed(a) + ":chaos");
+  const paragraphs = [];
+  for (let p = 0; p < 5; p++) {
+    const len = 360 + Math.floor(rng() * 160);
+    let s = "";
+    for (let i = 0; i < len; i++) {
+      s += ALPHABET[Math.floor(rng() * ALPHABET.length)];
+    }
+    s = s.replace(/\s+/g, " ").trim();
+    s = s.slice(0, 1).toUpperCase() + s.slice(1);
+    paragraphs.push(s);
   }
+  return paragraphs.join("\n\n");
 }
 
-function showToast(message) {
-  document.querySelectorAll('.toast').forEach((node) => node.remove());
-  const template = $('#toastTemplate');
-  const node = template.content.firstElementChild.cloneNode(true);
-  node.textContent = message;
-  document.body.appendChild(node);
-  window.setTimeout(() => node.remove(), 2200);
+function generatePage(a, mode = "words", phrase = "") {
+  if (mode === "chaos" && !phrase) return generateChaosText(a);
+  return generateWordText(a, { phrase });
 }
 
-function setHash(hash) {
-  window.location.hash = hash.startsWith('#') ? hash.slice(1) : hash;
+function parseRoute() {
+  const raw = location.hash || "#/";
+  const hash = raw.slice(1);
+  const [path, qs] = hash.split("?");
+  const parts = path.split("/").filter(Boolean);
+  const params = new URLSearchParams(qs || "");
+
+  if (parts.length === 0) return { name: "home", params };
+  if (parts[0] === VERSION && parts[1] === "room") {
+    return {
+      name: "page",
+      params,
+      address: normalizeAddress({
+        room: parts[2],
+        wall: parts[4],
+        shelf: parts[6],
+        book: parts[8],
+        page: parts[10],
+      }),
+    };
+  }
+  if (parts[0] === VERSION && parts[1] === "phrase") {
+    return {
+      name: "phrase",
+      params,
+      payload: parts[2] || "",
+    };
+  }
+  if (parts[0] === "about") return { name: "about", params };
+  return { name: "home", params };
+}
+
+function highlightPhrase(text, phrase) {
+  if (!phrase.trim()) return esc(text);
+  const escapedText = esc(text);
+  const words = phrase.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return escapedText;
+
+  // Exact phrase can be split by HTML escaping, so highlight by escaped exact string first.
+  const phraseEsc = esc(phrase.trim()).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  const exactRe = new RegExp(`(${phraseEsc})`, "giu");
+  const exact = escapedText.replace(exactRe, "<mark>$1</mark>");
+  if (exact !== escapedText) return exact;
+
+  const wordRe = new RegExp(`(${words.slice(0, 10).map(w => esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "giu");
+  return escapedText.replace(wordRe, "<mark>$1</mark>");
 }
 
 function renderHome() {
-  hero.hidden = false;
-  const favorites = getFavorites();
-  app.innerHTML = `
-    <section class="panel">
-      <div class="grid">
-        <article class="feature">
-          <h3>Постоянные ссылки</h3>
-          <p>Маршрут вида <code>#/room/17/wall/2/shelf/4/book/119/page/36</code> полностью задаёт страницу.</p>
-        </article>
-        <article class="feature">
-          <h3>Без backend</h3>
-          <p>Весь проект — обычные статические файлы. Его можно положить прямо в репозиторий GitHub Pages.</p>
-        </article>
-        <article class="feature">
-          <h3>Поиск фразы</h3>
-          <p>Фраза кодируется в URL результата и подсвечивается на найденной странице.</p>
-        </article>
-      </div>
-    </section>
-    <section class="panel favorites">
-      <h2>Избранные страницы</h2>
-      ${favorites.length ? `
-        <div class="favorites-list">
-          ${favorites.map((item) => `
-            <article class="favorite-item">
-              <a href="${escapeHtml(item.hash)}">${escapeHtml(item.address)}</a>
-              <small>${escapeHtml(item.phrase ? `Фраза: ${item.phrase}` : item.snippet)}</small>
-            </article>
-          `).join('')}
+  $("#app").innerHTML = `
+    <section class="grid">
+      <div class="card">
+        <div class="tabs">
+          <a class="button tab active" href="#/">Главная</a>
+          <a class="button tab" href="#/about">Архитектура</a>
         </div>
-      ` : '<p class="empty">Пока пусто. Открой страницу и нажми «В избранное».</p>'}
+
+        <h1>Страница восстанавливается из адреса</h1>
+        <p>
+          Здесь не хранятся страницы и не строится индекс. Ссылка сама является полным адресом.
+          Один и тот же URL всегда даёт один и тот же текст, потому что генератор получает seed из координат.
+        </p>
+
+        <div class="notice">
+          Это честная модель для GitHub Pages: нет backend, нет базы, нет заранее сохранённых страниц.
+          Но есть строгое правило: <code>URL → seed → тот же самый текст</code>.
+        </div>
+
+        <h2>Открыть страницу по адресу</h2>
+        <form id="addrForm" class="form-grid">
+          ${[
+            ["room", "Зал", 17],
+            ["wall", "Стена", 2],
+            ["shelf", "Полка", 4],
+            ["book", "Том", 119],
+            ["page", "Страница", 36],
+          ].map(([key, label, value]) => `
+            <div class="field">
+              <label>${label}</label>
+              <input id="${key}Input" inputmode="numeric" value="${value}">
+            </div>
+          `).join("")}
+          <button class="primary" type="submit" style="grid-column:1/-1">Открыть страницу</button>
+        </form>
+
+        <h2 style="margin-top:24px">Страница с фразой</h2>
+        <p>
+          Без хранения и индекса нельзя честно «найти» произвольную фразу. Поэтому фразовый режим работает иначе:
+          фраза кодируется прямо в ссылке, а страница восстанавливается из этой ссылки.
+        </p>
+        <form id="phraseForm">
+          <textarea id="phraseInput" placeholder="Например: каждая страница имеет свою ссылку"></textarea>
+          <div class="row" style="margin-top:10px">
+            <button class="primary" type="submit">Создать восстанавливаемую ссылку</button>
+          </div>
+        </form>
+      </div>
+
+      <aside class="card">
+        <h2>Почему так лучше</h2>
+        <p>
+          Если не хранить страницы, то нельзя обещать настоящий поиск по корпусу. Зато можно дать другое:
+          стабильную, математически воспроизводимую библиотеку.
+        </p>
+        <div class="notice warning">
+          Если фраза не записана в URL и нигде не хранится, восстановить её из одного хеша нельзя.
+          Поэтому фразовый адрес содержит payload.
+        </div>
+        <h3>Формат ссылки</h3>
+        <p class="mono">#/${VERSION}/room/17/wall/2/shelf/4/book/119/page/36</p>
+        <p>
+          Версия <code>v1</code> нужна, чтобы будущие изменения алгоритма не ломали старые ссылки.
+        </p>
+      </aside>
     </section>
   `;
-  addressInput.value = '';
-  updateFavoriteButton();
+
+  $("#addrForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const a = normalizeAddress({
+      room: $("#roomInput").value,
+      wall: $("#wallInput").value,
+      shelf: $("#shelfInput").value,
+      book: $("#bookInput").value,
+      page: $("#pageInput").value,
+    });
+    location.hash = addressUrl(a);
+  });
+
+  $("#phraseForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const phrase = $("#phraseInput").value.trim();
+    if (!phrase) {
+      alert("Введи фразу.");
+      return;
+    }
+    location.hash = phraseUrl(phrase);
+  });
 }
 
-function renderPage(address, mode, phrase = '') {
-  hero.hidden = true;
-  modeSelect.value = mode;
-  localStorage.setItem(MODE_KEY, mode);
-  addressInput.value = `${address.room}/${address.wall}/${address.shelf}/${address.book}/${address.page}`;
+function renderPage(address, params = new URLSearchParams()) {
+  const mode = params.get("mode") || "words";
+  const text = generatePage(address, mode);
+  const title = addressTitle(address);
 
-  const seed = addressToSeed(address, mode);
-  const baseText = generatePageText(address, mode);
-  const result = injectPhrase(baseText, phrase, seed);
-  const text = result.text;
-  const prev = addressToPath(nextAddress(address, -1), { mode });
-  const next = addressToPath(nextAddress(address, 1), { mode });
-  const canonical = addressToPath(address, { mode });
-
-  app.innerHTML = `
-    <article class="page-card">
-      <header class="page-header">
-        <div class="page-title">
-          <h2>${escapeHtml(addressLabel(address))}</h2>
-          <p>${phrase ? 'Фраза найдена и подсвечена внутри страницы.' : 'Детерминированная страница библиотеки.'}</p>
-        </div>
-        <div class="badges">
-          <span class="badge">${escapeHtml(modeLabel(mode))}</span>
-          <span class="badge">${PAGE_CHARS.toLocaleString('ru-RU')} знаков</span>
-        </div>
-      </header>
-
-      <div class="page-actions">
-        <a href="${prev}"><button type="button">← Предыдущая</button></a>
-        <a href="${next}"><button type="button">Следующая →</button></a>
-        <button id="copyPageLink" type="button">Скопировать ссылку</button>
-        <button id="copyPageText" type="button">Скопировать текст</button>
-        <button id="downloadPage" type="button">Скачать .txt</button>
-        ${phrase ? `<a href="${canonical}"><button type="button">Каноническая страница без фразы</button></a>` : ''}
+  $("#app").innerHTML = `
+    <article class="card">
+      <h1>${esc(title)}</h1>
+      ${renderBadges(address, mode, "обычная страница")}
+      <div class="controls">
+        <a class="button" href="${addressUrl(prevAddress(address))}?mode=${encodeURIComponent(mode)}">← предыдущая</a>
+        <a class="button" href="${addressUrl(nextAddress(address))}?mode=${encodeURIComponent(mode)}">следующая →</a>
+        <button id="toggleModeBtn" type="button">${mode === "chaos" ? "Словесный режим" : "Кириллический хаос"}</button>
+        <button id="copyTextBtn" type="button">Скопировать текст</button>
+        <button id="downloadBtn" type="button">Скачать .txt</button>
       </div>
-
-      <pre class="book-page">${pageHtml(text, phrase)}</pre>
-
-      <footer class="meta-row">
-        <div class="meta-item"><small>Зал</small><strong>${address.room}</strong></div>
-        <div class="meta-item"><small>Стена</small><strong>${address.wall}</strong></div>
-        <div class="meta-item"><small>Полка</small><strong>${address.shelf}</strong></div>
-        <div class="meta-item"><small>Том</small><strong>${address.book}</strong></div>
-        <div class="meta-item"><small>Страница</small><strong>${address.page}</strong></div>
-      </footer>
+      <div class="notice">
+        Эта страница не лежит в файле. Она восстановлена из адреса <code>${esc(addressSeed(address))}</code>.
+      </div>
+      <div class="page-text">${esc(text)}</div>
     </article>
   `;
 
-  $('#copyPageLink').addEventListener('click', () => copyText(currentAbsoluteUrl(), 'Ссылка на страницу скопирована'));
-  $('#copyPageText').addEventListener('click', () => copyText(text, 'Текст страницы скопирован'));
-  $('#downloadPage').addEventListener('click', () => downloadText(`${address.room}-${address.wall}-${address.shelf}-${address.book}-${address.page}.txt`, text));
-  saveFavoriteButton.onclick = () => toggleFavorite(address, phrase, text);
-  updateFavoriteButton();
+  $("#toggleModeBtn").addEventListener("click", () => {
+    const next = mode === "chaos" ? "words" : "chaos";
+    location.hash = `${addressUrl(address)}?mode=${next}`;
+  });
+
+  wirePageButtons(title, text);
 }
 
-function modeLabel(mode) {
-  return {
-    chaos: 'Кириллический хаос',
-    words: 'Словесный шум',
-    prophecy: 'Псевдопророчество',
-  }[mode] || 'Кириллический хаос';
-}
-
-function downloadText(filename, text) {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  URL.revokeObjectURL(link.href);
-  link.remove();
-}
-
-function rerender() {
-  const route = parseHash();
-  modeSelect.value = route.mode;
-
-  if (route.parts[0] === 'room') {
-    const address = parseAddress(route.parts);
-    if (!address) {
-      renderNotFound();
-      return;
-    }
-    let phrase = '';
-    const encodedPhrase = route.params.get('q');
-    if (encodedPhrase) {
-      try {
-        phrase = decodeText(encodedPhrase);
-      } catch {
-        phrase = '';
-      }
-    }
-    renderPage(address, route.mode, phrase);
+function renderPhrasePage(payload) {
+  let data;
+  try {
+    data = decodePayload(payload);
+  } catch (err) {
+    $("#app").innerHTML = `
+      <section class="card">
+        <h1>Ссылка повреждена</h1>
+        <p>Payload фразовой страницы не удалось прочитать.</p>
+      </section>
+    `;
     return;
   }
 
-  renderHome();
+  const phrase = String(data.phrase || "").trim();
+  const address = normalizeAddress(data.address || phraseAddress(phrase));
+  const text = generatePage(address, "words", phrase);
+  const title = `${addressTitle(address)} · фразовая страница`;
+
+  $("#app").innerHTML = `
+    <article class="card">
+      <h1>${esc(title)}</h1>
+      ${renderBadges(address, "phrase", "фразовая страница")}
+      <div class="controls">
+        <a class="button" href="${addressUrl(address)}">Открыть обычную страницу этого адреса</a>
+        <button id="copyTextBtn" type="button">Скопировать текст</button>
+        <button id="downloadBtn" type="button">Скачать .txt</button>
+      </div>
+      <div class="notice">
+        Фраза не была найдена по индексу. Она восстановлена из самой ссылки и встроена в страницу
+        детерминированно. Поэтому этой ссылкой можно поделиться, и другой человек увидит тот же текст.
+      </div>
+      <p class="mono">${esc(location.href)}</p>
+      <div class="page-text">${highlightPhrase(text, phrase)}</div>
+    </article>
+  `;
+
+  wirePageButtons(title, text);
 }
 
-function renderNotFound() {
-  hero.hidden = false;
-  app.innerHTML = `
-    <section class="panel">
-      <h2>Такой полки нет</h2>
-      <p class="empty">Адрес не похож на страницу библиотеки. Открой случайную страницу или вернись на главную.</p>
-      <button id="notFoundRandom" type="button">Случайная страница</button>
+function renderBadges(a, mode, kind) {
+  return `
+    <div class="address">
+      <span class="badge">${esc(kind)}</span>
+      <span class="badge">версия ${VERSION}</span>
+      <span class="badge">режим ${esc(mode)}</span>
+      <span class="badge">зал ${a.room}</span>
+      <span class="badge">стена ${a.wall}</span>
+      <span class="badge">полка ${a.shelf}</span>
+      <span class="badge">том ${a.book}</span>
+      <span class="badge">страница ${a.page}</span>
+    </div>
+  `;
+}
+
+function wirePageButtons(title, text) {
+  $("#copyTextBtn").addEventListener("click", async () => {
+    await navigator.clipboard.writeText(text);
+    alert("Текст скопирован.");
+  });
+
+  $("#downloadBtn").addEventListener("click", () => {
+    const blob = new Blob([`${title}\n\n${text}\n`], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "babel-page.txt";
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+function prevAddress(a) {
+  const x = { ...a };
+  x.page -= 1;
+  if (x.page < 1) {
+    x.page = LIMITS.page;
+    x.book -= 1;
+    if (x.book < 1) x.book = LIMITS.book;
+  }
+  return x;
+}
+
+function nextAddress(a) {
+  const x = { ...a };
+  x.page += 1;
+  if (x.page > LIMITS.page) {
+    x.page = 1;
+    x.book += 1;
+    if (x.book > LIMITS.book) x.book = 1;
+  }
+  return x;
+}
+
+function renderAbout() {
+  $("#app").innerHTML = `
+    <section class="card">
+      <div class="tabs">
+        <a class="button tab" href="#/">Главная</a>
+        <a class="button tab active" href="#/about">Архитектура</a>
+      </div>
+
+      <h1>Архитектура без хранения страниц</h1>
+      <p>
+        Здесь нет заранее построенного корпуса. Страницы не лежат в JSON, не лежат в базе и не скачиваются
+        с сервера. GitHub Pages отдаёт только статический фронтенд.
+      </p>
+
+      <h2>Обычная страница</h2>
+      <p>
+        Адрес страницы содержит координаты: зал, стена, полка, том, страница. Из координат собирается seed:
+      </p>
+      <p class="mono">v1:17:2:4:119:36</p>
+      <p>
+        Затем стабильный генератор псевдослучайных чисел строит текст. Пока алгоритм <code>v1</code> не меняется,
+        ссылка всегда восстанавливает тот же самый лист.
+      </p>
+
+      <h2>Фразовая страница</h2>
+      <p>
+        Произвольную фразу нельзя восстановить из пустоты. Если нет ни индекса, ни сохранённой страницы,
+        то единственный честный способ поделиться страницей с фразой — включить фразу в ссылку.
+      </p>
+      <p>
+        Поэтому фразовый URL содержит payload: версию алгоритма, фразу и адрес. Это не поиск по библиотеке,
+        а самодостаточная восстанавливаемая страница.
+      </p>
+
+      <h2>Правило совместимости</h2>
+      <p>
+        Нельзя менять поведение генератора <code>v1</code> после публикации. Если понадобится новый стиль текста,
+        нужно добавить <code>v2</code>, но старые ссылки <code>v1</code> должны продолжать открываться как раньше.
+      </p>
     </section>
   `;
-  $('#notFoundRandom').addEventListener('click', openRandomPage);
 }
 
-function openRandomPage() {
-  const address = randomAddress(`random:${Date.now()}:${Math.random()}`);
-  setHash(addressToPath(address, { mode: modeSelect.value }));
-}
-
-function openSearchResult(phrase) {
-  const trimmed = phrase.trim();
-  if (!trimmed) {
-    showToast('Сначала введи фразу');
-    return;
-  }
-  const address = addressFromPhrase(trimmed);
-  setHash(addressToPath(address, { mode: modeSelect.value, phrase: trimmed }));
-}
-
-function changeMode(mode) {
-  localStorage.setItem(MODE_KEY, mode);
-  const route = parseHash();
-  if (route.parts[0] !== 'room') return;
-  const address = parseAddress(route.parts);
-  if (!address) return;
-  const phrase = route.params.get('q') ? decodeText(route.params.get('q')) : '';
-  setHash(addressToPath(address, { mode, phrase }));
-}
-
-function parseManualAddress(value) {
-  const numbers = String(value).match(/\d+/g);
-  if (!numbers || numbers.length < 5) return null;
+function randomAddress() {
   return {
-    room: clampInt(numbers[0], 0, LIMITS.rooms - 1),
-    wall: clampInt(numbers[1], 1, LIMITS.walls),
-    shelf: clampInt(numbers[2], 1, LIMITS.shelves),
-    book: clampInt(numbers[3], 1, LIMITS.books),
-    page: clampInt(numbers[4], 1, LIMITS.pages),
+    room: 1 + Math.floor(Math.random() * LIMITS.room),
+    wall: 1 + Math.floor(Math.random() * LIMITS.wall),
+    shelf: 1 + Math.floor(Math.random() * LIMITS.shelf),
+    book: 1 + Math.floor(Math.random() * LIMITS.book),
+    page: 1 + Math.floor(Math.random() * LIMITS.page),
   };
 }
 
-$('#searchForm').addEventListener('submit', (event) => {
-  event.preventDefault();
-  openSearchResult(phraseInput.value);
-});
-
-$('#clearPhrase').addEventListener('click', () => {
-  phraseInput.value = '';
-  phraseInput.focus();
-});
-
-$('#randomPageTop').addEventListener('click', openRandomPage);
-
-$('#copyLinkTop').addEventListener('click', () => copyText(currentAbsoluteUrl(), 'Ссылка скопирована'));
-
-modeSelect.addEventListener('change', (event) => changeMode(event.target.value));
-
-$('#goAddress').addEventListener('click', () => {
-  const address = parseManualAddress(addressInput.value);
-  if (!address) {
-    showToast('Формат: зал/стена/полка/том/страница');
-    return;
-  }
-  setHash(addressToPath(address, { mode: modeSelect.value }));
-});
-
-addressInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') $('#goAddress').click();
-});
-
-window.addEventListener('hashchange', rerender);
-
-if (!window.location.hash) {
-  window.location.hash = '#/';
-} else {
-  rerender();
+async function copyCurrentLink() {
+  await navigator.clipboard.writeText(location.href);
+  alert("Ссылка скопирована.");
 }
+
+function router() {
+  try {
+    const route = parseRoute();
+    if (route.name === "home") renderHome();
+    else if (route.name === "page") renderPage(route.address, route.params);
+    else if (route.name === "phrase") renderPhrasePage(route.payload);
+    else if (route.name === "about") renderAbout();
+    else renderHome();
+  } catch (err) {
+    console.error(err);
+    $("#app").innerHTML = `<section class="card"><h1>Ошибка</h1><p>${esc(err.message)}</p></section>`;
+  }
+}
+
+window.addEventListener("hashchange", router);
+window.addEventListener("DOMContentLoaded", () => {
+  $("#randomBtn").addEventListener("click", () => {
+    location.hash = addressUrl(randomAddress());
+  });
+  $("#copyLinkBtn").addEventListener("click", copyCurrentLink);
+  router();
+});

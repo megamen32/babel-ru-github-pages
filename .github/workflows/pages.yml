@@ -1,8 +1,8 @@
-name: Deploy static site to GitHub Pages
+name: Deploy deterministic Babel library to Pages
 
 on:
   push:
-    branches: [main]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: "pages"
   cancel-in-progress: false
 
 jobs:
@@ -24,13 +24,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure Pages
+      - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload static files
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: "."
 
       - name: Deploy to GitHub Pages
         id: deployment

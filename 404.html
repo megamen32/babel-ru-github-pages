@@ -3,16 +3,37 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Переход в Библиотеку Вавилона</title>
-  <script>
-    const path = window.location.pathname.replace(/\/index\.html$/, '');
-    const repoBase = path.split('/').slice(0, 2).join('/');
-    const rest = path.slice(repoBase.length);
-    const target = `${window.location.origin}${repoBase}/#${rest}${window.location.search}`;
-    window.location.replace(target);
-  </script>
+  <title>Русская Библиотека Вавилона</title>
+  <meta name="description" content="Детерминированная русская Библиотека Вавилона для GitHub Pages: страницы не хранятся, а однозначно восстанавливаются из ссылки." />
+  <meta property="og:title" content="Русская Библиотека Вавилона" />
+  <meta property="og:description" content="Страницы не хранятся: URL является адресом и источником восстановления." />
+  <meta property="og:type" content="website" />
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <p>Переход...</p>
+  <div class="shell">
+    <header class="hero">
+      <a class="brand" href="./#/">
+        <span class="brand-mark">БВ</span>
+        <span>
+          <strong>Русская Библиотека Вавилона</strong>
+          <small>страницы не хранятся — они восстанавливаются из ссылки</small>
+        </span>
+      </a>
+      <nav class="top-actions">
+        <button id="randomBtn" type="button">Случайный адрес</button>
+        <button id="copyLinkBtn" type="button">Скопировать ссылку</button>
+      </nav>
+    </header>
+
+    <main id="app"></main>
+
+    <footer class="footer">
+      <span>GitHub Pages отдаёт только <code>index.html</code>, <code>app.js</code> и <code>styles.css</code>.</span>
+      <span>Текст страницы вычисляется из URL по стабильному алгоритму <code>v1</code>.</span>
+    </footer>
+  </div>
+
+  <script src="./app.js"></script>
 </body>
 </html>

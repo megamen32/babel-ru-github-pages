@@ -3,83 +3,36 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Русская статическая Библиотека Вавилона для GitHub Pages: каждая страница имеет постоянную ссылку." />
-  <meta name="theme-color" content="#14110f" />
-  <meta property="og:title" content="Библиотека Вавилона · русская версия" />
-  <meta property="og:description" content="Статическая библиотека, где каждая страница восстанавливается по ссылке." />
+  <title>Русская Библиотека Вавилона</title>
+  <meta name="description" content="Детерминированная русская Библиотека Вавилона для GitHub Pages: страницы не хранятся, а однозначно восстанавливаются из ссылки." />
+  <meta property="og:title" content="Русская Библиотека Вавилона" />
+  <meta property="og:description" content="Страницы не хранятся: URL является адресом и источником восстановления." />
   <meta property="og:type" content="website" />
-  <title>Библиотека Вавилона · русская версия</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="bg-orb orb-one"></div>
-  <div class="bg-orb orb-two"></div>
+  <div class="shell">
+    <header class="hero">
+      <a class="brand" href="./#/">
+        <span class="brand-mark">БВ</span>
+        <span>
+          <strong>Русская Библиотека Вавилона</strong>
+          <small>страницы не хранятся — они восстанавливаются из ссылки</small>
+        </span>
+      </a>
+      <nav class="top-actions">
+        <button id="randomBtn" type="button">Случайный адрес</button>
+        <button id="copyLinkBtn" type="button">Скопировать ссылку</button>
+      </nav>
+    </header>
 
-  <header class="topbar">
-    <a class="brand" href="#/" aria-label="На главную">
-      <span class="brand-mark">БВ</span>
-      <span>
-        <strong>Библиотека Вавилона</strong>
-        <small>русская статическая версия</small>
-      </span>
-    </a>
+    <main id="app"></main>
 
-    <nav class="nav">
-      <a href="#/">Главная</a>
-      <button id="randomPageTop" type="button">Случайная страница</button>
-      <button id="copyLinkTop" type="button">Скопировать ссылку</button>
-    </nav>
-  </header>
-
-  <main class="shell">
-    <section class="hero" id="hero">
-      <div>
-        <p class="eyebrow">URL → seed → текст</p>
-        <h1>Каждая страница имеет свою ссылку.</h1>
-        <p class="lead">
-          Сайт ничего не хранит на сервере. Адрес страницы сам становится математическим ключом:
-          один и тот же URL всегда восстанавливает один и тот же лист библиотеки.
-        </p>
-      </div>
-
-      <form class="search-card" id="searchForm">
-        <label for="phraseInput">Найти фразу в библиотеке</label>
-        <textarea id="phraseInput" rows="4" placeholder="Например: я помню чудное мгновенье"></textarea>
-        <div class="search-actions">
-          <button class="primary" type="submit">Найти страницу</button>
-          <button type="button" id="clearPhrase">Очистить</button>
-        </div>
-        <p class="hint">
-          Фраза кодируется в ссылке результата, поэтому найденной страницей можно поделиться.
-        </p>
-      </form>
-    </section>
-
-    <section class="toolbar" aria-label="Настройки страницы">
-      <label>
-        Режим текста
-        <select id="modeSelect">
-          <option value="chaos">Кириллический хаос</option>
-          <option value="words">Словесный шум</option>
-          <option value="prophecy">Псевдопророчество</option>
-        </select>
-      </label>
-
-      <label>
-        Быстрый переход
-        <input id="addressInput" type="text" inputmode="text" placeholder="зал/стена/полка/том/страница" />
-      </label>
-
-      <button id="goAddress" type="button">Открыть</button>
-      <button id="saveFavorite" type="button">★ В избранное</button>
-    </section>
-
-    <section id="app" class="app" aria-live="polite"></section>
-  </main>
-
-  <template id="toastTemplate">
-    <div class="toast" role="status"></div>
-  </template>
+    <footer class="footer">
+      <span>GitHub Pages отдаёт только <code>index.html</code>, <code>app.js</code> и <code>styles.css</code>.</span>
+      <span>Текст страницы вычисляется из URL по стабильному алгоритму <code>v1</code>.</span>
+    </footer>
+  </div>
 
   <script src="./app.js"></script>
 </body>
