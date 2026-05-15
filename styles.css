@@ -28,6 +28,21 @@ textarea{min-height:120px;resize:vertical}
 .grid{display:grid;grid-template-columns:1.05fr .95fr;gap:18px;align-items:start}
 .card{border:1px solid var(--line);background:var(--panel);border-radius:28px;box-shadow:0 24px 80px rgba(0,0,0,.3);backdrop-filter:blur(10px);padding:22px}
 .card h1,.card h2,.card h3{margin:0 0 14px;letter-spacing:-.03em}.card p{color:var(--muted);line-height:1.65}
+.page-card{padding-bottom:18px}
+.page-header{display:grid;gap:8px;margin-bottom:14px}
+.page-title{margin:0;font-size:clamp(24px,3vw,34px);line-height:1.12;overflow-wrap:anywhere;word-break:break-word}
+.page-subtitle{color:var(--muted);font-size:13px;letter-spacing:.01em}
+.page-nav{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin:2px 0 14px;
+}
+.page-nav .button{
+  min-width:160px;
+  justify-content:center;
+}
 .notice{margin:14px 0;border:1px solid rgba(222,192,125,.36);background:rgba(222,192,125,.1);color:#f3dca3;border-radius:18px;padding:12px 14px;line-height:1.55}
 .good{border-color:rgba(167,243,208,.35);background:rgba(167,243,208,.08);color:var(--ok)}
 .warning{border-color:rgba(255,177,177,.35);background:rgba(255,177,177,.08);color:var(--bad)}
@@ -166,6 +181,114 @@ mark{background:rgba(222,192,125,.82);color:#211804;border-radius:5px;padding:1p
   content: " скрыть";
 }
 
+.page-lower{
+  display:grid;
+  gap:16px;
+  margin-top:18px;
+}
+
+.passport-spoiler{
+  margin-top:4px;
+}
+
+.passport-spoiler > summary{
+  cursor:pointer;
+  color:#ffe6ac;
+  font-weight:700;
+  padding:12px 14px;
+  border:1px solid rgba(255,255,255,.11);
+  background:rgba(0,0,0,.14);
+  border-radius:16px;
+  list-style:none;
+  user-select:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.passport-spoiler > summary:hover{
+  background:rgba(0,0,0,.2);
+  border-color:rgba(255,255,255,.18);
+}
+
+.passport-spoiler > summary::-webkit-details-marker{
+  display:none;
+}
+
+.spoiler-label{
+  min-width:0;
+}
+
+.spoiler-icon{
+  flex:0 0 auto;
+  font-size:18px;
+  line-height:1;
+  color:var(--muted);
+  transform:translateY(-1px);
+  transition:transform .14s ease,color .14s ease;
+}
+
+.passport-spoiler[open] .spoiler-icon{
+  transform:rotate(180deg) translateY(1px);
+  color:#ffe6ac;
+}
+
+.passport-wrap{
+  margin-top:12px;
+}
+
+.sector-breadcrumb,
+.sector-spoiler{
+  min-width:0;
+}
+
+.sector-breadcrumb > summary.button,
+.sector-spoiler > summary{
+  display:inline-flex;
+  align-items:center;
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  white-space:normal;
+  line-height:1.25;
+}
+
+.sector-breadcrumb-panel,
+.sector-spoiler-panel{
+  margin-top:10px;
+  display:grid;
+  gap:8px;
+  padding:12px 14px;
+  border:1px solid rgba(255,255,255,.11);
+  background:rgba(0,0,0,.14);
+  border-radius:16px;
+}
+
+.sector-breadcrumb-row,
+.sector-spoiler-row{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.sector-label{
+  color:var(--muted);
+  font-size:13px;
+}
+
+.sector-value{
+  color:#ffe6ac;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+.sector-breadcrumb-link{
+  justify-content:center;
+  width:fit-content;
+}
+
 .variants {
   max-width: 100%;
   overflow: hidden;
@@ -199,6 +322,11 @@ mark{background:rgba(222,192,125,.82);color:#211804;border-radius:5px;padding:1p
     grid-template-columns: 1fr;
   }
 
+  .page-nav .button {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+
   .action-buttons > * {
     width: 100%;
     justify-content: center;
@@ -208,4 +336,21 @@ mark{background:rgba(222,192,125,.82);color:#211804;border-radius:5px;padding:1p
   .top-actions button {
     width: 100%;
   }
+}
+
+details[open] {
+  margin-top: 18px;
+}
+
+details > summary {
+  cursor: pointer;
+  color: #ffe6ac;
+  font-weight: bold;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.11);
+  background: rgba(0,0,0,.14);
+  border-radius: 16px;
+  margin-bottom: 12px;
+  list-style: none;
+  user-select: none;
 }

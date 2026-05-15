@@ -100,21 +100,48 @@ function saveFavorites(items){localStorage.setItem("babelFavorites",JSON.stringi
 function addFavorite(item){const key=item.n||item.url;const items=getFavorites().filter(x=>(x.n||x.url)!==key);items.unshift({...item,createdAt:new Date().toISOString()});saveFavorites(items);}
 
 function tabs(active){return `<div class="tabs">
-  <a class="button tab ${active==="find"?"active":""}" href="#/">Найти адреса</a>
   <a class="button tab ${active==="encode"?"active":""}" href="#/encode">Кодировать текст</a>
   <a class="button tab ${active==="converter"?"active":""}" href="#/converter">Конвертер</a>
   <a class="button tab ${active==="history"?"active":""}" href="#/history">История</a>
   <a class="button tab ${active==="about"?"active":""}" href="#/about">Как работает</a>
 </div>`;}
-function breadcrumbs(c){c=C(c);return `<div class="breadcrumbs">
-  <a class="button" href="${hallUrl(c)}
+function breadcrumbs(c){
+  c = C(c);
+  return `<div class="breadcrumbs">
+    <details class="sector-breadcrumb">
+      <summary class="button">Сектор ${shortNumber(c.sector)} / Зал ${c.hall}</summary>
+      <div class="sector-breadcrumb-panel">
+        <div class="sector-breadcrumb-row"><span class="sector-label">Сектор</span><span class="mono sector-value">${esc(c.sector)}</span></div>
+        <div class="sector-breadcrumb-row"><span class="sector-label">Зал</span><span class="mono sector-value">${esc(c.hall)}</span></div>
+        <a class="button sector-breadcrumb-link" href="${hallUrl(c)}">Открыть сектор и зал</a>
+      </div>
+    </details>
+    <a class="button" href="${wallUrl(c)}">Стена ${c.wall}</a>
+    <a class="button" href="${shelfUrl(c)}">Полка ${c.shelf}</a>
+    <a class="button" href="${volumeUrl(c)}">Том ${c.volume}</a>
+    <a class="button primary" href="${coordinateUrl(c)}">Лист ${c.page}</a>
+  </div>`;
+}
+
+function shortNumber(value){
+  const s = String(value);
+  if(s.length <= 12) return s;
+  return `${s.slice(0,6)}…${s.slice(-4)}`;
+}
+
+function pageNavPanel(c){
+  const n = coordinatesToNumber(c);
+  return `<div class="page-nav">
+    <a class="button" href="${coordinateUrl(numberToCoordinates(n > 0n ? n - 1n : maxPageNumber() - 1n))}">← страница</a>
+    <a class="button" href="${coordinateUrl(numberToCoordinates((n + 1n) % maxPageNumber()))}">страница →</a>
+  </div>`;
+}
+
 function pageActionPanel(c){
   return `<div class="action-panel">
     <div class="action-group">
       <small class="action-title">Навигация</small>
       <div class="action-buttons">
-        <a class="button" href="${coordinateUrl(numberToCoordinates(coordinatesToNumber(c)>0n?coordinatesToNumber(c)-1n:maxPageNumber()-1n))}">← страница</a>
-        <a class="button" href="${coordinateUrl(numberToCoordinates((coordinatesToNumber(c)+1n)%maxPageNumber()))}">страница →</a>
         <a class="button" href="${volumeUrl(c)}">Том</a>
         <a class="button" href="${shelfUrl(c)}">Полка</a>
         <a class="button" href="${wallUrl(c)}">Стена</a>
@@ -125,29 +152,23 @@ function pageActionPanel(c){
     <div class="action-group">
       <small class="action-title">Ссылки</small>
       <div class="action-buttons">
-        <button id="copyCoordBtn">Координаты</button>
-        <button id="copy64Btn">base64url</button>
-        <button id="copySelBtn">Ссылка на выделение</button>
+        <button id="copyCoordBtn" type="button">Координаты</button>
+        <button id="copy64Btn" type="button">base64url</button>
+        <button id="copySelBtn" type="button">Ссылка на выделение</button>
       </div>
     </div>
 
     <div class="action-group bottom-actions">
       <small class="action-title">Действия со страницей</small>
       <div class="action-buttons">
-        <button id="favoriteBtn">★ В избранное</button>
-        <button id="copyTextBtn">Скопировать текст</button>
-        <button id="roundtripBtn">Самопроверка</button>
-        <button id="downloadBtn">Скачать .txt</button>
+        <button id="favoriteBtn" type="button">★ В избранное</button>
+        <button id="copyTextBtn" type="button">Скопировать текст</button>
+        <button id="roundtripBtn" type="button">Самопроверка</button>
+        <button id="downloadBtn" type="button">Скачать .txt</button>
       </div>
     </div>
   </div>`;
 }
-">Сектор ${c.sector} / Зал ${c.hall}</a>
-  <a class="button" href="${wallUrl(c)}">Стена ${c.wall}</a>
-  <a class="button" href="${shelfUrl(c)}">Полка ${c.shelf}</a>
-  <a class="button" href="${volumeUrl(c)}">Том ${c.volume}</a>
-  <a class="button primary" href="${coordinateUrl(c)}">Лист ${c.page}</a>
-</div>`;}
 
 function renderHome(){
   const params=new URLSearchParams(location.hash.split("?")[1]||"");
@@ -201,13 +222,27 @@ function renderPage(n,params){
   if(n<0n||n>=maxPageNumber())throw new Error("Адрес вне пространства библиотеки.");
   const text=numberToText(n); const c=numberToCoordinates(n); const hl=parseHighlight(params); const title=coordinateTitle(c);
   pushHistory({type:"page",title,n:n.toString(),url:location.hash,coordinates:C(c)});
-  $("#app").innerHTML=`<article class="card">${breadcrumbs(c)}<h1>${esc(title)}</h1>
-    <div class="address"><span class="badge">${VERSION}</span><span class="badge">координаты реальные</span><span class="badge">${ALG.pageLength} символов</span><span class="badge">алфавит ${ALG.alphabet.length}</span></div>
-    ${pageActionPanel(c)}
-    <div class="notice good">Выделение теперь берётся по <code>data-pos</code>, а не через примерный поиск строки.</div>
-    ${passport(n,c)}
-    <div class="pretty-address" style="margin-top:14px"><small>Найти на этой странице</small><div class="row"><input id="pageSearchInput" placeholder="Фраза на этой странице"><button id="pageSearchBtn">Найти</button></div><div id="pageSearchResult"></div></div>
-    <div id="pageText" class="page-text" style="margin-top:18px">${renderTextSpans(text,hl)}</div>
+  $("#app").innerHTML=`<article class="card page-card">${breadcrumbs(c)}
+    <div class="page-header">
+      <h1 class="page-title">Стена ${c.wall} · Полка ${c.shelf} · Том ${c.volume} · Лист ${c.page}</h1>
+      <details class="sector-spoiler">
+        <summary>Сектор ${shortNumber(c.sector)} · Зал ${c.hall}</summary>
+        <div class="sector-spoiler-panel">
+          <div class="sector-spoiler-row"><span class="sector-label">Сектор</span><span class="mono sector-value">${esc(c.sector)}</span></div>
+          <div class="sector-spoiler-row"><span class="sector-label">Зал</span><span class="mono sector-value">${esc(c.hall)}</span></div>
+        </div>
+      </details>
+    </div>
+    ${pageNavPanel(c)}
+    <div id="pageText" class="page-text">${renderTextSpans(text,hl)}</div>
+    <div class="page-lower">
+      <div class="address"><span class="badge">${VERSION}</span><span class="badge">координаты реальные</span><span class="badge">${ALG.pageLength} символов</span><span class="badge">алфавит ${ALG.alphabet.length}</span></div>
+      ${pageActionPanel(c)}
+      <details class="passport-spoiler">
+        <summary><span class="spoiler-label">Паспорт страницы</span><span class="spoiler-icon" aria-hidden="true">⌄</span></summary>
+        <div class="passport-wrap">${passport(n,c)}</div>
+      </details>
+    </div>
   </article>`;
   $("#favoriteBtn").onclick=()=>{addFavorite({title,n:n.toString(),url:location.hash,type:"page"});alert("Добавлено в избранное.");};
   $("#copyTextBtn").onclick=async()=>{await navigator.clipboard.writeText(text);alert("Текст скопирован.");};
@@ -216,7 +251,6 @@ function renderPage(n,params){
   $("#copySelBtn").onclick=async()=>copySelectionLink(c);
   $("#roundtripBtn").onclick=()=>runSelfTest(n,text,c);
   $("#downloadBtn").onclick=()=>downloadText(`${title}\n\n${text}\n\nКоординаты:\n${location.href}\n\nbase64url:\n${location.origin}${location.pathname}${raw64Url(n,hl)}\n`);
-  $("#pageSearchBtn").onclick=()=>{const q=normalizeText($("#pageSearchInput").value);if(!q)return;const pos=text.indexOf(q);if(pos<0){$("#pageSearchResult").innerHTML=`<div class="notice warning">Не найдено на этой странице.</div>`;return;}location.hash=coordinateUrl(c,{start:pos,length:q.length});};
 }
 function passport(n,c){
   const coordHref = `${location.origin}${location.pathname}${coordinateUrl(c)}`;
@@ -226,10 +260,9 @@ function passport(n,c){
   const b64 = numberToB64(n);
   const b64Short = b64.length > 120 ? `${b64.slice(0,120)}…` : b64;
   return `<div class="pretty-address">
-    <small>Паспорт страницы</small>
     <div class="passport-grid">
       <div class="passport-label">Координаты</div>
-      <div class="passport-value">sector ${c.sector} / hall ${c.hall} / wall ${c.wall} / shelf ${c.shelf} / volume ${c.volume} / page ${c.page}</div>
+      <div class="passport-value" style="font-size:clamp(11px,2vw,13px)">sector ${c.sector} / hall ${c.hall} / wall ${c.wall} / shelf ${c.shelf} / volume ${c.volume} / page ${c.page}</div>
 
       <div class="passport-label">Координатная ссылка</div>
       <div class="passport-value">${esc(coordHref)}</div>
@@ -242,7 +275,7 @@ function passport(n,c){
     </div>
 
     <details class="passport-collapsible">
-      <summary>Полные машинные адреса</summary>
+      <summary>Полные машинные адреса раскрыть</summary>
       <div class="passport-grid" style="margin-top:10px">
         <div class="passport-label">Полный base64url</div>
         <div class="passport-value">${esc(b64)}</div>
