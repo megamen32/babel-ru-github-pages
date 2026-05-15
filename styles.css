@@ -27,7 +27,7 @@ body {
 }
 
 .shell {
-  width: min(1180px, calc(100% - 32px));
+  width: min(1220px, calc(100% - 32px));
   margin: 0 auto;
   padding: 24px 0 42px;
 }
@@ -175,7 +175,13 @@ input:focus, textarea:focus, select:focus {
 
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 180px 160px;
+  grid-template-columns: 1fr 150px 160px 150px;
+  gap: 10px;
+}
+
+.coord-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
   gap: 10px;
 }
 
@@ -207,7 +213,7 @@ input:focus, textarea:focus, select:focus {
 .page-text {
   white-space: pre-wrap;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(18px, 2.25vw, 22px);
+  font-size: clamp(18px, 2.1vw, 22px);
   line-height: 1.76;
   color: #f7efe2;
   padding: 24px;
@@ -217,6 +223,13 @@ input:focus, textarea:focus, select:focus {
     linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.025)),
     rgba(0,0,0,.22);
   overflow-wrap: anywhere;
+}
+
+.page-text.strict {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: .01em;
 }
 
 mark {
@@ -259,13 +272,13 @@ mark {
   font-size: 12px;
 }
 
-.variants, .favorites {
+.variants, .favorites, .steps {
   display: grid;
   gap: 12px;
   margin-top: 16px;
 }
 
-.variant, .favorite {
+.variant, .favorite, .step {
   display: grid;
   gap: 8px;
   border: 1px solid var(--line);
@@ -279,11 +292,11 @@ mark {
   background: rgba(222,192,125,.07);
 }
 
-.variant strong, .favorite strong {
+.variant strong, .favorite strong, .step strong {
   color: #ffe6ac;
 }
 
-.variant small, .favorite small {
+.variant small, .favorite small, .step small {
   color: var(--muted);
   line-height: 1.5;
 }
@@ -299,19 +312,6 @@ mark {
   color: #ffe6ac;
   border-color: rgba(222,192,125,.48);
   background: rgba(222,192,125,.13);
-}
-
-.canvas-card {
-  position: fixed;
-  left: -10000px;
-  top: 0;
-  width: 1200px;
-  height: 630px;
-  background: #0b0d12;
-  color: #f7efe2;
-  border: 1px solid #4d4024;
-  padding: 62px;
-  font-family: Georgia, "Times New Roman", serif;
 }
 
 .footer {
@@ -337,7 +337,7 @@ code {
     flex: 1;
   }
 
-  .grid, .form-grid {
+  .grid, .form-grid, .coord-grid {
     grid-template-columns: 1fr;
   }
 }
