@@ -54,3 +54,158 @@ mark{background:rgba(222,192,125,.82);color:#211804;border-radius:5px;padding:1p
 .hall-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
 .footer{margin-top:24px;display:flex;flex-wrap:wrap;gap:12px 22px;color:var(--muted);font-size:13px}code{color:#ffe6ac}
 @media(max-width:900px){.hero{align-items:stretch;flex-direction:column}.top-actions button{flex:1}.grid,.form-grid,.coord-grid{grid-template-columns:1fr}}
+
+
+/* v6 UI fixes */
+.card {
+  overflow: hidden;
+}
+
+.card h1 {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.controls {
+  margin-top: 12px;
+}
+
+.action-panel {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.action-group {
+  border: 1px solid rgba(255,255,255,.11);
+  background: rgba(0,0,0,.14);
+  border-radius: 20px;
+  padding: 12px;
+}
+
+.action-title {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bottom-actions {
+  margin-top: 18px;
+}
+
+.page-tools {
+  margin-top: 18px;
+}
+
+.pretty-address,
+.variant,
+.favorite,
+.history-item,
+.notice,
+.step {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pretty-address .mono,
+.variant .mono,
+.passport-value,
+.chunk {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.address-line {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.passport-grid {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+}
+
+.passport-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.passport-value {
+  color: #ffe6ac;
+  font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+  font-size: 13px;
+}
+
+.passport-collapsible summary {
+  cursor: pointer;
+  color: #ffe6ac;
+  list-style: none;
+}
+
+.passport-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.passport-collapsible summary::after {
+  content: " раскрыть";
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.passport-collapsible[open] summary::after {
+  content: " скрыть";
+}
+
+.variants {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.variant {
+  overflow: hidden;
+}
+
+.variant small {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.variant-preview {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.find-actions {
+  margin-top: 10px;
+}
+
+.find-actions .button,
+.find-actions button {
+  flex: 0 1 auto;
+}
+
+@media (max-width: 700px) {
+  .passport-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .action-buttons > * {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .top-actions button {
+    width: 100%;
+  }
+}

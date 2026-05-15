@@ -107,7 +107,42 @@ function tabs(active){return `<div class="tabs">
   <a class="button tab ${active==="about"?"active":""}" href="#/about">Как работает</a>
 </div>`;}
 function breadcrumbs(c){c=C(c);return `<div class="breadcrumbs">
-  <a class="button" href="${hallUrl(c)}">Сектор ${c.sector} / Зал ${c.hall}</a>
+  <a class="button" href="${hallUrl(c)}
+function pageActionPanel(c){
+  return `<div class="action-panel">
+    <div class="action-group">
+      <small class="action-title">Навигация</small>
+      <div class="action-buttons">
+        <a class="button" href="${coordinateUrl(numberToCoordinates(coordinatesToNumber(c)>0n?coordinatesToNumber(c)-1n:maxPageNumber()-1n))}">← страница</a>
+        <a class="button" href="${coordinateUrl(numberToCoordinates((coordinatesToNumber(c)+1n)%maxPageNumber()))}">страница →</a>
+        <a class="button" href="${volumeUrl(c)}">Том</a>
+        <a class="button" href="${shelfUrl(c)}">Полка</a>
+        <a class="button" href="${wallUrl(c)}">Стена</a>
+        <a class="button" href="${hallUrl(c)}">Зал</a>
+      </div>
+    </div>
+
+    <div class="action-group">
+      <small class="action-title">Ссылки</small>
+      <div class="action-buttons">
+        <button id="copyCoordBtn">Координаты</button>
+        <button id="copy64Btn">base64url</button>
+        <button id="copySelBtn">Ссылка на выделение</button>
+      </div>
+    </div>
+
+    <div class="action-group bottom-actions">
+      <small class="action-title">Действия со страницей</small>
+      <div class="action-buttons">
+        <button id="favoriteBtn">★ В избранное</button>
+        <button id="copyTextBtn">Скопировать текст</button>
+        <button id="roundtripBtn">Самопроверка</button>
+        <button id="downloadBtn">Скачать .txt</button>
+      </div>
+    </div>
+  </div>`;
+}
+">Сектор ${c.sector} / Зал ${c.hall}</a>
   <a class="button" href="${wallUrl(c)}">Стена ${c.wall}</a>
   <a class="button" href="${shelfUrl(c)}">Полка ${c.shelf}</a>
   <a class="button" href="${volumeUrl(c)}">Том ${c.volume}</a>
@@ -126,7 +161,7 @@ function renderHome(){
         <div class="field"><label>Смещение</label><input id="offsetInput" inputmode="numeric" value="${Number.isFinite(offset)?offset:0}"></div>
         <div class="field"><label>Расположение</label><select id="strategyInput">${[["random","разные места"],["center","по центру"],["start","в начале"],["end","в конце"],["quiet","тихое окружение"]].map(([k,l])=>`<option value="${k}" ${k===strategy?"selected":""}>${l}</option>`).join("")}</select></div>
       </div>
-      <div class="row" style="margin-top:10px"><button class="primary" type="submit">Показать варианты</button><button id="nextBatchBtn" type="button">Следующие варианты</button><button id="shareFindBtn" type="button">Скопировать ссылку на результаты</button></div>
+      <div class="row find-actions"><button class="primary" type="submit">Показать варианты</button><button id="nextBatchBtn" type="button">Следующие варианты</button><button id="shareFindBtn" type="button">Скопировать ссылку на результаты</button></div>
     </form><div id="results" class="variants"></div></div>
     <aside class="card"><h2>Открыть координаты</h2>
       <form id="coordForm"><div class="coord-grid">${[["sector","Сектор","1"],["hall","Зал","1"],["wall","Стена","1"],["shelf","Полка","1"],["volume","Том","1"],["page","Лист","1"]].map(([id,l,v])=>`<div class="field"><label>${l}</label><input id="${id}Input" value="${v}" inputmode="numeric"></div>`).join("")}</div><div class="row" style="margin-top:10px"><button class="primary" type="submit">Открыть страницу</button></div></form>
@@ -151,8 +186,8 @@ function renderVariants({phraseRaw,countRaw,strategy,offsetRaw}){
       const n=textToNumber(page.text); const c=numberToCoordinates(n); const range={start:page.position,length:normalized.length};
       const preview=snippetByRange(page.text,range);
       items.push(`<div class="variant"><strong>Вариант ${page.variant} · позиция ${page.position+1}</strong>
-        <small>${highlightByRange(preview,{start:Math.max(0,preview.indexOf(normalized)),length:normalized.length})}</small>
-        <div class="pretty-address"><small>Координаты</small><div class="address-line"><span class="chunk">sector ${c.sector}</span><span class="chunk">hall ${c.hall}</span><span class="chunk">wall ${c.wall}</span><span class="chunk">shelf ${c.shelf}</span><span class="chunk">volume ${c.volume}</span><span class="chunk">page ${c.page}</span></div><small>Компактный base64url</small><div class="mono">${esc(numberToB64(n))}</div></div>
+        <small class="variant-preview">${highlightByRange(preview,{start:Math.max(0,preview.indexOf(normalized)),length:normalized.length})}</small>
+        <div class="pretty-address"><small>Координаты</small><div class="address-line"><span class="chunk">sector ${c.sector}</span><span class="chunk">hall ${c.hall}</span><span class="chunk">wall ${c.wall}</span><span class="chunk">shelf ${c.shelf}</span><span class="chunk">volume ${c.volume}</span><span class="chunk">page ${c.page}</span></div><small>Компактный base64url</small><div class="mono">${esc(numberToB64(n).length > 120 ? numberToB64(n).slice(0,120) + "…" : numberToB64(n))}</div></div>
         <div class="row"><a class="button primary" href="${coordinateUrl(c,range)}">Открыть страницу</a><button data-copy="${esc(coordinateUrl(c,range))}" type="button">Скопировать координаты</button><button data-copy64="${esc(raw64Url(n,range))}" type="button">Скопировать base64url</button><button data-save='${esc(JSON.stringify({title:`${normalized}`,n:n.toString(),url:coordinateUrl(c,range),type:"find"}))}' type="button">Сохранить находку</button></div></div>`);
     }
     results.innerHTML=items.join("");
@@ -168,8 +203,7 @@ function renderPage(n,params){
   pushHistory({type:"page",title,n:n.toString(),url:location.hash,coordinates:C(c)});
   $("#app").innerHTML=`<article class="card">${breadcrumbs(c)}<h1>${esc(title)}</h1>
     <div class="address"><span class="badge">${VERSION}</span><span class="badge">координаты реальные</span><span class="badge">${ALG.pageLength} символов</span><span class="badge">алфавит ${ALG.alphabet.length}</span></div>
-    <div class="controls"><a class="button" href="${coordinateUrl(numberToCoordinates(n>0n?n-1n:maxPageNumber()-1n))}">← страница</a><a class="button" href="${coordinateUrl(numberToCoordinates((n+1n)%maxPageNumber()))}">страница →</a><a class="button" href="${volumeUrl(c)}">Открыть том</a><a class="button" href="${shelfUrl(c)}">Открыть полку</a><a class="button" href="${wallUrl(c)}">Открыть стену</a><a class="button" href="${hallUrl(c)}">Открыть зал</a></div>
-    <div class="controls" style="margin-top:10px"><button id="favoriteBtn">★ В избранное</button><button id="copyTextBtn">Скопировать текст</button><button id="copyCoordBtn">Скопировать координаты</button><button id="copy64Btn">Скопировать base64url</button><button id="copySelBtn">Ссылка на выделение</button><button id="roundtripBtn">Самопроверка</button><button id="downloadBtn">Скачать .txt</button></div>
+    ${pageActionPanel(c)}
     <div class="notice good">Выделение теперь берётся по <code>data-pos</code>, а не через примерный поиск строки.</div>
     ${passport(n,c)}
     <div class="pretty-address" style="margin-top:14px"><small>Найти на этой странице</small><div class="row"><input id="pageSearchInput" placeholder="Фраза на этой странице"><button id="pageSearchBtn">Найти</button></div><div id="pageSearchResult"></div></div>
@@ -184,7 +218,42 @@ function renderPage(n,params){
   $("#downloadBtn").onclick=()=>downloadText(`${title}\n\n${text}\n\nКоординаты:\n${location.href}\n\nbase64url:\n${location.origin}${location.pathname}${raw64Url(n,hl)}\n`);
   $("#pageSearchBtn").onclick=()=>{const q=normalizeText($("#pageSearchInput").value);if(!q)return;const pos=text.indexOf(q);if(pos<0){$("#pageSearchResult").innerHTML=`<div class="notice warning">Не найдено на этой странице.</div>`;return;}location.hash=coordinateUrl(c,{start:pos,length:q.length});};
 }
-function passport(n,c){return `<div class="pretty-address"><small>Паспорт страницы</small><div class="address-line"><span class="chunk">sector ${c.sector}</span><span class="chunk">hall ${c.hall}</span><span class="chunk">wall ${c.wall}</span><span class="chunk">shelf ${c.shelf}</span><span class="chunk">volume ${c.volume}</span><span class="chunk">page ${c.page}</span></div><small>base64url</small><div class="mono">${esc(numberToB64(n))}</div><small>base36</small><div class="address-line">${prettyBase36(n).split("-").map(x=>`<span class="chunk">${esc(x)}</span>`).join("")}</div></div>`;}
+function passport(n,c){
+  const coordHref = `${location.origin}${location.pathname}${coordinateUrl(c)}`;
+  const b64Href = `${location.origin}${location.pathname}${raw64Url(n)}`;
+  const b36 = prettyBase36(n);
+  const b36Short = b36.length > 96 ? `${b36.slice(0,96)}…` : b36;
+  const b64 = numberToB64(n);
+  const b64Short = b64.length > 120 ? `${b64.slice(0,120)}…` : b64;
+  return `<div class="pretty-address">
+    <small>Паспорт страницы</small>
+    <div class="passport-grid">
+      <div class="passport-label">Координаты</div>
+      <div class="passport-value">sector ${c.sector} / hall ${c.hall} / wall ${c.wall} / shelf ${c.shelf} / volume ${c.volume} / page ${c.page}</div>
+
+      <div class="passport-label">Координатная ссылка</div>
+      <div class="passport-value">${esc(coordHref)}</div>
+
+      <div class="passport-label">base64url</div>
+      <div class="passport-value">${esc(b64Short)}</div>
+
+      <div class="passport-label">base36</div>
+      <div class="passport-value">${esc(b36Short)}</div>
+    </div>
+
+    <details class="passport-collapsible">
+      <summary>Полные машинные адреса</summary>
+      <div class="passport-grid" style="margin-top:10px">
+        <div class="passport-label">Полный base64url</div>
+        <div class="passport-value">${esc(b64)}</div>
+        <div class="passport-label">Полный base36</div>
+        <div class="passport-value">${esc(b36)}</div>
+        <div class="passport-label">BigInt</div>
+        <div class="passport-value">${esc(n.toString())}</div>
+      </div>
+    </details>
+  </div>`;
+}
 function copySelectionLink(c){
   const sel=window.getSelection(); if(!sel || sel.rangeCount===0 || sel.toString().length===0){alert("Сначала выдели фрагмент текста на странице.");return;}
   const range=sel.getRangeAt(0); const spans=[...document.querySelectorAll("#pageText .char[data-pos]")].filter(sp=>range.intersectsNode(sp));
