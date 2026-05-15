@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Переход в Библиотеку Вавилона</title>
+  <script>
+    const path = window.location.pathname.replace(/\/index\.html$/, '');
+    const repoBase = path.split('/').slice(0, 2).join('/');
+    const rest = path.slice(repoBase.length);
+    const target = `${window.location.origin}${repoBase}/#${rest}${window.location.search}`;
+    window.location.replace(target);
+  </script>
+</head>
+<body>
+  <p>Переход...</p>
+</body>
+</html>
