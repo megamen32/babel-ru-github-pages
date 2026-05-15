@@ -1,4 +1,4 @@
-name: Deploy Babel v4 to Pages
+name: Deploy Babel v5 to Pages
 
 on:
   push:

@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Русская Библиотека Вавилона</title>
-  <meta name="description" content="Русская Библиотека Вавилона: один алгоритм, координаты, история, тома, полки, base64url." />
+  <meta name="description" content="Русская Библиотека Вавилона: координаты, зал, стена, полка, том, страница, base64url." />
   <meta property="og:title" content="Русская Библиотека Вавилона" />
-  <meta property="og:description" content="Страница восстанавливается из настоящих координат или компактного адреса." />
+  <meta property="og:description" content="Один алгоритм ru1: настоящая координатная библиотека без хранения страниц." />
   <meta property="og:type" content="website" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
@@ -17,13 +17,14 @@
         <span class="brand-mark">БВ</span>
         <span>
           <strong>Русская Библиотека Вавилона</strong>
-          <small>один алгоритм · координаты · base64url · история</small>
+          <small>зал · стена · полка · том · лист</small>
         </span>
       </a>
       <nav class="top-actions">
         <button id="randomBtn" type="button">Случайная страница</button>
         <button id="historyBtn" type="button">История</button>
         <button id="favoritesBtn" type="button">Избранное</button>
+        <button id="converterBtn" type="button">Конвертер</button>
         <button id="copyLinkBtn" type="button">Скопировать ссылку</button>
       </nav>
     </header>
@@ -31,7 +32,7 @@
     <footer class="footer">
       <span>Один алгоритм: <code>ru1</code>.</span>
       <span><code>координаты ⇄ BigInt ⇄ текст</code></span>
-      <span>Raw-адреса: <code>base36</code> и компактный <code>base64url</code>.</span>
+      <span>Страницы не хранятся.</span>
     </footer>
   </div>
   <script src="./app.js"></script>
