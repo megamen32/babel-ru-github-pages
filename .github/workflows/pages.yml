@@ -1,4 +1,4 @@
-name: Deploy real Babel algorithm to Pages
+name: Deploy Babel real algorithm to Pages
 
 on:
   push:

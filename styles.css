@@ -233,13 +233,39 @@ mark {
   word-break: break-all;
 }
 
-.variants {
+.pretty-address {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(222,192,125,.22);
+  background: rgba(222,192,125,.06);
+  border-radius: 20px;
+  padding: 14px;
+}
+
+.address-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.chunk {
+  display: inline-block;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.22);
+  border-radius: 10px;
+  padding: 5px 8px;
+  color: #ffe6ac;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.variants, .favorites {
   display: grid;
   gap: 12px;
   margin-top: 16px;
 }
 
-.variant {
+.variant, .favorite {
   display: grid;
   gap: 8px;
   border: 1px solid var(--line);
@@ -248,18 +274,44 @@ mark {
   padding: 14px;
 }
 
-.variant:hover {
+.variant:hover, .favorite:hover {
   border-color: rgba(222,192,125,.48);
   background: rgba(222,192,125,.07);
 }
 
-.variant strong {
+.variant strong, .favorite strong {
   color: #ffe6ac;
 }
 
-.variant small {
+.variant small, .favorite small {
   color: var(--muted);
   line-height: 1.5;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab.active {
+  color: #ffe6ac;
+  border-color: rgba(222,192,125,.48);
+  background: rgba(222,192,125,.13);
+}
+
+.canvas-card {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1200px;
+  height: 630px;
+  background: #0b0d12;
+  color: #f7efe2;
+  border: 1px solid #4d4024;
+  padding: 62px;
+  font-family: Georgia, "Times New Roman", serif;
 }
 
 .footer {

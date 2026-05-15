@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Русская Библиотека Вавилона</title>
-  <meta name="description" content="Русская Библиотека Вавилона без хранения страниц: обратимое кодирование страницы в адрес." />
+  <meta name="description" content="Русская Библиотека Вавилона: обратимое кодирование страницы в адрес без хранения страниц и индекса." />
   <meta property="og:title" content="Русская Библиотека Вавилона" />
-  <meta property="og:description" content="Страница не хранится: адрес является числом, которое обратимо разворачивается в текст." />
+  <meta property="og:description" content="Адрес — это число страницы. Страница восстанавливается из адреса." />
   <meta property="og:type" content="website" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
@@ -17,11 +17,12 @@
         <span class="brand-mark">БВ</span>
         <span>
           <strong>Русская Библиотека Вавилона</strong>
-          <small>реальный обратимый алгоритм: адрес ⇄ страница</small>
+          <small>реальный алгоритм: страница ⇄ число ⇄ адрес</small>
         </span>
       </a>
       <nav class="top-actions">
         <button id="randomBtn" type="button">Случайная страница</button>
+        <button id="favoritesBtn" type="button">Избранное</button>
         <button id="copyLinkBtn" type="button">Скопировать ссылку</button>
       </nav>
     </header>
@@ -30,9 +31,9 @@
 
     <footer class="footer">
       <span>Страницы не хранятся.</span>
-      <span><code>адрес → число → страница</code></span>
-      <span><code>страница → число → адрес</code></span>
-      <span>Алгоритм версии <code>v1</code> нельзя менять без создания <code>v2</code>.</span>
+      <span><code>адрес → BigInt → текст</code></span>
+      <span><code>текст → BigInt → адрес</code></span>
+      <span>Версии алгоритма зафиксированы в <code>app.js</code>.</span>
     </footer>
   </div>
 
