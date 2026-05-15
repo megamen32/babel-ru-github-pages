@@ -1,4 +1,4 @@
-name: Deploy deterministic Babel library to Pages
+name: Deploy real Babel algorithm to Pages
 
 on:
   push:

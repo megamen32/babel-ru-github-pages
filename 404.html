@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Русская Библиотека Вавилона</title>
-  <meta name="description" content="Детерминированная русская Библиотека Вавилона для GitHub Pages: страницы не хранятся, а однозначно восстанавливаются из ссылки." />
+  <meta name="description" content="Русская Библиотека Вавилона без хранения страниц: обратимое кодирование страницы в адрес." />
   <meta property="og:title" content="Русская Библиотека Вавилона" />
-  <meta property="og:description" content="Страницы не хранятся: URL является адресом и источником восстановления." />
+  <meta property="og:description" content="Страница не хранится: адрес является числом, которое обратимо разворачивается в текст." />
   <meta property="og:type" content="website" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
@@ -17,11 +17,11 @@
         <span class="brand-mark">БВ</span>
         <span>
           <strong>Русская Библиотека Вавилона</strong>
-          <small>страницы не хранятся — они восстанавливаются из ссылки</small>
+          <small>реальный обратимый алгоритм: адрес ⇄ страница</small>
         </span>
       </a>
       <nav class="top-actions">
-        <button id="randomBtn" type="button">Случайный адрес</button>
+        <button id="randomBtn" type="button">Случайная страница</button>
         <button id="copyLinkBtn" type="button">Скопировать ссылку</button>
       </nav>
     </header>
@@ -29,8 +29,10 @@
     <main id="app"></main>
 
     <footer class="footer">
-      <span>GitHub Pages отдаёт только <code>index.html</code>, <code>app.js</code> и <code>styles.css</code>.</span>
-      <span>Текст страницы вычисляется из URL по стабильному алгоритму <code>v1</code>.</span>
+      <span>Страницы не хранятся.</span>
+      <span><code>адрес → число → страница</code></span>
+      <span><code>страница → число → адрес</code></span>
+      <span>Алгоритм версии <code>v1</code> нельзя менять без создания <code>v2</code>.</span>
     </footer>
   </div>
 
