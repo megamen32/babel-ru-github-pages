@@ -1,0 +1,205 @@
+.landing {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.landing-copy,
+.library-vision {
+  min-height: 680px;
+}
+
+.hero-quote,
+.inline-quote {
+  margin: 28px 0;
+  padding: 22px 22px 18px;
+  border-left: 3px solid var(--gold);
+  background: linear-gradient(90deg, rgba(221, 183, 107, 0.12), transparent);
+}
+
+.hero-quote p,
+.inline-quote p {
+  font-size: clamp(1.32rem, 2.2vw, 1.8rem);
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.hero-quote footer,
+.inline-quote footer {
+  color: var(--muted);
+}
+
+.epigraphs {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.epigraphs p {
+  margin: 0;
+}
+
+.cta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.cta-card {
+  min-height: 190px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 22px;
+  border-radius: 26px;
+  border: 1px solid var(--line);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.cta-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+}
+
+.cta-card.primary {
+  background:
+    radial-gradient(circle at top left, rgba(221, 183, 107, 0.18), transparent 40%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.cta-card.secondary {
+  background:
+    radial-gradient(circle at top right, rgba(147, 167, 191, 0.2), transparent 44%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.cta-kicker {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+}
+
+.cta-card strong {
+  font-size: 1.55rem;
+  letter-spacing: -0.03em;
+}
+
+.cta-card small {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.library-vision {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.03), transparent 54%),
+    linear-gradient(180deg, rgba(15, 13, 18, 0.96), rgba(8, 8, 12, 0.96));
+}
+
+.vision-stack {
+  position: relative;
+  min-height: 520px;
+  margin-bottom: 18px;
+}
+
+.hex {
+  position: absolute;
+  width: 168px;
+  height: 188px;
+  clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 18px;
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+  animation: floatHex 7s ease-in-out infinite;
+}
+
+.tone-gold {
+  background: linear-gradient(180deg, rgba(221, 183, 107, 0.18), rgba(221, 183, 107, 0.06));
+  color: #f7dfab;
+}
+
+.tone-mist {
+  background: linear-gradient(180deg, rgba(147, 167, 191, 0.18), rgba(147, 167, 191, 0.06));
+  color: #d8e1ea;
+}
+
+.tone-ember {
+  background: linear-gradient(180deg, rgba(198, 118, 82, 0.24), rgba(198, 118, 82, 0.08));
+  color: #f3c0a8;
+}
+
+.hex-1 { top: 20px; left: 80px; animation-delay: 0s; }
+.hex-2 { top: 124px; left: 238px; animation-delay: -0.8s; }
+.hex-3 { top: 232px; left: 66px; animation-delay: -2s; }
+.hex-4 { top: 268px; left: 324px; animation-delay: -1.4s; }
+.hex-5 { top: 84px; left: 410px; animation-delay: -2.8s; }
+.hex-6 { top: 376px; left: 196px; animation-delay: -3.6s; }
+.hex-7 { top: 426px; left: 24px; animation-delay: -1.2s; }
+
+.vision-depth {
+  position: absolute;
+  inset: auto 10% -6% auto;
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, rgba(221, 183, 107, 0.18), transparent 65%);
+  filter: blur(14px);
+}
+
+.vision-note strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 1.2rem;
+}
+
+@keyframes floatHex {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@media (max-width: 1120px) {
+  .landing {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-copy,
+  .library-vision {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .cta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vision-stack {
+    min-height: 420px;
+  }
+
+  .hex {
+    width: 124px;
+    height: 140px;
+    font-size: 0.88rem;
+  }
+
+  .hex-1 { top: 8px; left: 10px; }
+  .hex-2 { top: 78px; left: 124px; }
+  .hex-3 { top: 156px; left: 0; }
+  .hex-4 { top: 206px; left: 160px; }
+  .hex-5 { top: 36px; left: 232px; }
+  .hex-6 { top: 278px; left: 82px; }
+  .hex-7 { top: 300px; left: 220px; }
+}

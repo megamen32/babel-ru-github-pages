@@ -1,0 +1,53 @@
+.page-layout h1 {
+  font-size: clamp(2rem, 3vw, 3.2rem);
+  line-height: 1.02;
+}
+
+.page-header {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.page-nav {
+  justify-content: flex-end;
+}
+
+.page-text {
+  margin-top: 18px;
+  padding: 24px;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    rgba(0, 0, 0, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: pre-wrap;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.95rem;
+  line-height: 1.62;
+  overflow-wrap: anywhere;
+}
+
+.char.marked {
+  background: rgba(221, 183, 107, 0.78);
+  color: #2b1c0f;
+  border-radius: 4px;
+}
+
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .page-header {
+    flex-direction: column;
+  }
+
+  .page-nav {
+    justify-content: flex-start;
+  }
+}
