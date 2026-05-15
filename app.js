@@ -14,6 +14,8 @@ const ALG = {
 const DEFAULT_VARIANTS = 8;
 const MAX_VARIANTS = 48;
 const ADDRESS_GROUP = 8;
+const PERM_MULT = 1000000007n;
+const PERM_ADD = 982451653n;
 const $ = (sel) => document.querySelector(sel);
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));}
@@ -23,6 +25,25 @@ function rngFrom(text){return mulberry32(fnv1a(text));}
 function normalizeText(raw){const lower=String(raw||"").toLowerCase().replace(/\s+/g," ").trim();let out="";for(const ch of lower){out += ALG.alphabet.includes(ch) ? ch : " ";}return out.replace(/\s+/g," ").trim();}
 function fixedPageText(text){let s=normalizeText(text);if(s.length>ALG.pageLength)s=s.slice(0,ALG.pageLength);return s.padEnd(ALG.pageLength," ");}
 function maxPageNumber(){return BigInt(ALG.alphabet.length)**BigInt(ALG.pageLength);}
+function egcd(a,b){
+  if(b===0n)return [a,1n,0n];
+  const [g,x1,y1]=egcd(b,a%b);
+  return [g,y1,x1-(a/b)*y1];
+}
+function modInv(a,m){
+  const [g,x]=egcd(a,m);
+  if(g!==1n)throw new Error("Нет обратного множителя");
+  return ((x%m)+m)%m;
+}
+function permuteIndex(x){
+  const m=maxPageNumber();
+  return (BigInt(x)*PERM_MULT+PERM_ADD)%m;
+}
+function unpermuteIndex(y){
+  const m=maxPageNumber();
+  const inv=modInv(PERM_MULT,m);
+  return ((((BigInt(y)-PERM_ADD)%m)+m)%m*inv)%m;
+}
 function textToNumber(text){const base=BigInt(ALG.alphabet.length);const fixed=fixedPageText(text);let n=0n;for(const ch of fixed){const d=ALG.alphabet.indexOf(ch);if(d<0)throw new Error(`Символ не входит в алфавит: ${ch}`);n=n*base+BigInt(d);}return n;}
 function numberToText(n){const max=maxPageNumber();let x=BigInt(n);if(x<0n||x>=max)throw new Error("Адрес вне пространства библиотеки.");const base=BigInt(ALG.alphabet.length);const chars=new Array(ALG.pageLength);for(let i=ALG.pageLength-1;i>=0;i--){const d=Number(x%base);chars[i]=ALG.alphabet[d];x=x/base;}return chars.join("");}
 function bigintToBase36(n){return BigInt(n).toString(36);}
@@ -36,7 +57,7 @@ function numberToB64(n){return bytesToBase64Url(bigIntToBytes(n));}
 function b64ToNumber(s){return bytesToBigInt(base64UrlToBytes(s));}
 function prettyBase36(n){const clean=bigintToBase36(n);const chunks=[];for(let i=0;i<clean.length;i+=ADDRESS_GROUP)chunks.push(clean.slice(i,i+ADDRESS_GROUP));return chunks.join("-");}
 
-function numberToCoordinates(n){
+function rawIndexToCoordinates(n){
   let x=BigInt(n);
   const page=(x%ALG.pagesPerVolume)+1n; x/=ALG.pagesPerVolume;
   const volume=(x%ALG.volumesPerShelf)+1n; x/=ALG.volumesPerShelf;
@@ -46,7 +67,7 @@ function numberToCoordinates(n){
   const sector=x+1n;
   return {sector,hall,wall,shelf,volume,page};
 }
-function coordinatesToNumber(c){
+function coordinatesToRawIndex(c){
   const sector=BigInt(c.sector||1),hall=BigInt(c.hall||1),wall=BigInt(c.wall||1),shelf=BigInt(c.shelf||1),volume=BigInt(c.volume||1),page=BigInt(c.page||1);
   if(sector<1n||hall<1n||hall>ALG.hallsPerSector||wall<1n||wall>ALG.wallsPerHall||shelf<1n||shelf>ALG.shelvesPerWall||volume<1n||volume>ALG.volumesPerShelf||page<1n||page>ALG.pagesPerVolume)throw new Error("Координаты вне геометрии библиотеки.");
   let x=sector-1n;
@@ -58,6 +79,8 @@ function coordinatesToNumber(c){
   if(x>=maxPageNumber())throw new Error("Координаты дают число вне пространства страниц.");
   return x;
 }
+function numberToCoordinates(contentNumber){return rawIndexToCoordinates(unpermuteIndex(contentNumber));}
+function coordinatesToNumber(c){return permuteIndex(coordinatesToRawIndex(c));}
 function C(c){return {sector:String(c.sector),hall:String(c.hall),wall:String(c.wall),shelf:String(c.shelf),volume:String(c.volume||1),page:String(c.page||1)};}
 function coordinateUrl(c, hl=null){c=C(c);const q=hl?`?hl=${hl.start}:${hl.length}`:"";return `#/${VERSION}/sector/${c.sector}/hall/${c.hall}/wall/${c.wall}/shelf/${c.shelf}/volume/${c.volume}/page/${c.page}${q}`;}
 function volumeUrl(c){c=C(c);return `#/${VERSION}/sector/${c.sector}/hall/${c.hall}/wall/${c.wall}/shelf/${c.shelf}/volume/${c.volume}`;}
@@ -295,9 +318,10 @@ function copySelectionLink(c){
   navigator.clipboard.writeText(`${location.origin}${location.pathname}${coordinateUrl(c,{start,length:end-start})}`).then(()=>alert("Ссылка на выделенный фрагмент скопирована."));
 }
 function runSelfTest(n,text,c){
-  const againN=textToNumber(text), againC=numberToCoordinates(againN), b64=numberToB64(n), from64=b64ToNumber(b64), from36=base36ToBigInt(bigintToBase36(n));
-  const ok=againN===n && from64===n && from36===n && coordinatesToNumber(c)===n;
-  $("#app").insertAdjacentHTML("afterbegin",`<section class="card" style="margin-bottom:18px"><h2>Самопроверка алгоритма</h2><div class="steps"><div class="step"><strong>1. Координаты → BigInt</strong><small class="mono">${coordinatesToNumber(c).toString()}</small></div><div class="step"><strong>2. BigInt → текст</strong><small>${ALG.pageLength} символов</small></div><div class="step"><strong>3. Текст → BigInt</strong><small class="mono">${againN.toString()}</small></div><div class="step"><strong>4. BigInt → base64url → BigInt</strong><small class="mono">${esc(b64)}</small></div><div class="step"><strong>5. BigInt → base36 → BigInt</strong><small class="mono">${esc(bigintToBase36(n).slice(0,80))}...</small></div></div><div class="notice ${ok?"good":"warning"}">${ok?"Проверка пройдена: координаты, текст, base36/base64url согласованы.":"Проверка не пройдена."}</div></section>`);
+  const normalizedN=textToNumber(text), normalizedText=numberToText(normalizedN), againN=textToNumber(normalizedText), b64=numberToB64(n), from64=b64ToNumber(b64), from36=base36ToBigInt(bigintToBase36(n));
+  const rawIndex=coordinatesToRawIndex(c);
+  const ok=againN===normalizedN && from64===n && from36===n && coordinatesToNumber(c)===n && permuteIndex(rawIndex)===n;
+  $("#app").insertAdjacentHTML("afterbegin",`<section class="card" style="margin-bottom:18px"><h2>Самопроверка алгоритма</h2><div class="steps"><div class="step"><strong>1. Координаты → rawIndex</strong><small class="mono">${rawIndex.toString()}</small></div><div class="step"><strong>2. rawIndex → BigInt</strong><small class="mono">${coordinatesToNumber(c).toString()}</small></div><div class="step"><strong>3. BigInt → текст</strong><small>${ALG.pageLength} символов</small></div><div class="step"><strong>4. Текст → нормализованный BigInt</strong><small class="mono">${normalizedN.toString()}</small></div><div class="step"><strong>5. Нормализованный BigInt → текст → BigInt</strong><small class="mono">${againN.toString()}</small></div><div class="step"><strong>6. BigInt → base64url/base36 → BigInt</strong><small class="mono">${esc(b64)}</small></div></div><div class="notice ${ok?"good":"warning"}">${ok?"Проверка пройдена: rawIndex, координаты, нормализация текста и base36/base64url согласованы.":"Проверка не пройдена."}</div></section>`);
 }
 function renderHall(c){
   coordinatesToNumber({...c,wall:1,shelf:1,volume:1,page:1});
@@ -351,8 +375,9 @@ function renderFavorites(){
 function renderAbout(){
   $("#app").innerHTML=`<section class="card">${tabs("about")}<h1>Как работает</h1>
     <h2>Паспорт библиотеки</h2><div class="pretty-address"><div class="address-line"><span class="chunk">версия ${VERSION}</span><span class="chunk">алфавит ${ALG.alphabet.length}</span><span class="chunk">длина ${ALG.pageLength}</span><span class="chunk">страниц в томе ${ALG.pagesPerVolume}</span><span class="chunk">томов на полке ${ALG.volumesPerShelf}</span><span class="chunk">полок на стене ${ALG.shelvesPerWall}</span><span class="chunk">стен в зале ${ALG.wallsPerHall}</span><span class="chunk">залов в секторе ${ALG.hallsPerSector}</span></div></div>
-    <h2>Координаты настоящие</h2><p>Число страницы делится с остатком на лист, том, полку, стену, зал и сектор. Это не декоративный хеш.</p>
-    <h2>Base36 и base64url</h2><p>Оба формата кодируют одно и то же число страницы. Base64url обычно короче, base36 проще глазами.</p>
+    <h2>Координаты настоящие</h2><p>Координаты идут подряд по реальной геометрии: лист, том, полка, стена, зал, сектор. Это не декоративный хеш.</p>
+    <h2>Перестановка индекса</h2><p>Перед получением текста rawIndex страницы проходит через обратимую перестановку. Поэтому соседние координаты не обязаны давать похожий текст, хотя сама геометрия остаётся последовательной.</p>
+    <h2>Base36 и base64url</h2><p>Оба формата кодируют одно и то же число содержимого страницы. Base64url обычно короче, base36 проще глазами.</p>
     <h2>Ссылка на выделение</h2><p>Каждый символ текста имеет <code>data-pos</code>. Поэтому выделение превращается в точный диапазон <code>?hl=start:length</code>.</p>
   </section>`;
 }
