@@ -761,7 +761,7 @@
             ).join('')}
           </div>
           <div class="msg-input-row">
-            <input type="text" class="msg-input" id="msgSearchInput" placeholder="Что ищешь в бесконечности?" value="${u.esc(q)}">
+            <textarea class="msg-input" id="msgSearchInput" placeholder="Что ищешь в бесконечности? Можно вставить emoji и абзацы." rows="4">${u.esc(q)}</textarea>
             <button class="msg-send-btn" id="msgSearchBtn">🔍</button>
           </div>
         </div>
@@ -786,10 +786,17 @@
 
       function doSearch() {
         const val = (input.value || '').trim();
-        if (val) location.hash = `#/search?q=${encodeURIComponent(val)}&mode=${currentMode}`;
+        if (val) location.hash = `#/search?q=${encodeURIComponent(val)}&mode=${encodeURIComponent(currentMode)}`;
       }
       if (sendBtn) sendBtn.addEventListener('click', doSearch);
-      if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+      if (input) {
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            doSearch();
+          }
+        });
+      }
 
       /* Async search: if query exists, load results via Worker */
       if (q && resultsSlot) {

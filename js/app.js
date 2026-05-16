@@ -27,7 +27,7 @@
       if (parts[1] === 's') {
         /* Coordinate format: /page/s/{sector}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
         pageCoords = {};
-        for (let i = 2; i < parts.length - 1; i += 2) {
+        for (let i = 1; i < parts.length - 1; i += 2) {
           switch (parts[i]) {
             case 's': pageCoords.sector = parts[i + 1]; break;
             case 'h': pageCoords.hall = parts[i + 1]; break;
@@ -175,7 +175,7 @@
       <p class="search-subtitle">Любой текст из ${esc(String(lib.maxPageNumber()).length)} цифр существует в Вавилоне.</p>
       <form class="search-form" id="searchForm">
         <div class="search-input-wrap">
-          <input type="text" class="search-input" id="searchInput" placeholder="Введите любой текст..." value="${esc(q)}" autofocus>
+          <textarea class="search-input" id="searchInput" placeholder="Введите любой текст, включая emoji и абзацы..." rows="5" autofocus>${esc(q)}</textarea>
         </div>
         <div class="filler-selector">
           <span class="filler-label">Окружение:</span>
@@ -210,8 +210,10 @@
     });
     form.addEventListener('submit', e => {
       e.preventDefault();
-      const q = input.value.trim();
-      if (q) location.hash = `#/search?q=${encodeURIComponent(q)}&mode=${currentMode}`;
+      const nextQuery = input.value.trim();
+      if (nextQuery) {
+        location.hash = `#/search?q=${encodeURIComponent(nextQuery)}&mode=${encodeURIComponent(currentMode)}`;
+      }
     });
 
     /* Async search via Worker */

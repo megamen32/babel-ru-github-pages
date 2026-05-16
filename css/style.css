@@ -381,6 +381,7 @@ main#view { flex: 1; padding: 0; }
   color: var(--text); background: var(--bg-card);
   border: 1px solid var(--border); border-radius: var(--radius);
   outline: none; transition: all var(--transition);
+  resize: vertical; min-height: 7.5rem; line-height: 1.5;
 }
 .search-input::placeholder { color: var(--text-muted); }
 .search-input:focus { border-color: var(--accent); box-shadow: var(--accent-glow); }
@@ -855,7 +856,7 @@ main#view { flex: 1; padding: 0; }
 .msg-filler-btn:hover { color: var(--text); }
 .msg-filler-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 
-.msg-input-row { display: flex; gap: 0.4rem; align-items: center; }
+.msg-input-row { display: flex; gap: 0.4rem; align-items: flex-end; }
 .msg-input-btn {
   width: 36px; height: 36px; font-size: 1.1rem;
   background: none; border: none; cursor: pointer;
@@ -867,6 +868,7 @@ main#view { flex: 1; padding: 0; }
   font-size: 0.9rem; color: var(--text);
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: 20px; outline: none; transition: all var(--transition);
+  resize: vertical; min-height: 5.8rem; line-height: 1.45;
 }
 .msg-input::placeholder { color: var(--text-muted); }
 .msg-input:focus { border-color: var(--accent); }

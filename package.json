@@ -1,0 +1,11 @@
+{
+  "name": "babel-ru-github-pages",
+  "private": true,
+  "scripts": {
+    "test:adjacent": "node tests/test_adjacent_similarity.js",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
+  }
+}

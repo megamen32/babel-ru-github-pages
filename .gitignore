@@ -1,4 +1,7 @@
 .DS_Store
 .history/
 .playwright-cli/
+node_modules/
+playwright-report/
+test-results/
 output/playwright/
