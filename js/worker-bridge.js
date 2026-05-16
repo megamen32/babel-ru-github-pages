@@ -100,7 +100,11 @@
       17=Блондинки, 18=Студенческие)
      ═══════════════════════════════════════════════════════════ */
 
-  const JOKE_API = 'http://rzhunemogu.ru/Rand.aspx';
+  /* CORS proxy — rzhunemogu.ru doesn't send CORS headers,
+     and GitHub Pages is HTTPS (mixed content blocks HTTP).
+     Use allorigins.win as a free CORS proxy. */
+  const JOKE_API_RAW = 'http://rzhunemogu.ru/Rand.aspx';
+  const JOKE_API = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(JOKE_API_RAW);
   let jokesCache = [];
   let jokesFetched = false;
   let jokesFetchPromise = null;
@@ -118,18 +122,20 @@
     if (jokesFetched && jokesCache.length > 0) return Promise.resolve(jokesCache);
     if (jokesFetchPromise) return jokesFetchPromise;
 
-    /* Fetch several jokes with random CType for variety */
+    /* Fetch several jokes with random CType for variety.
+       Each joke has its own CType, so each URL is unique -> needs its own proxy URL. */
     const fetchCount = 8;
     const promises = [];
     for (let i = 0; i < fetchCount; i++) {
       const cType = Math.floor(Math.random() * 18) + 1;
+      const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(`${JOKE_API_RAW}?CType=${cType}`);
       promises.push(
-        fetch(`${JOKE_API}?CType=${cType}`)
+        fetch(proxyUrl)
           .then(r => r.text())
           .then(text => {
-            /* API returns plain text, extract content */
+            /* API returns XML/HTML, extract content between tags */
             const content = text
-              .replace(/<[^>]+>/g, '')   /* strip any HTML tags */
+              .replace(/<[^>]+>/g, '')   /* strip any HTML/XML tags */
               .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
               .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
               .replace(/&nbsp;/g, ' ')
