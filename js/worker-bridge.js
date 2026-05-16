@@ -283,11 +283,31 @@
      PUBLIC API
      ═══════════════════════════════════════════════════════════ */
 
+  /* Search across multiple modes simultaneously.
+     Returns { phrase, modes: { [mode]: variant, ... } } — one variant per mode. */
+  function searchMultiMode(phrase, modes) {
+    const modeList = modes || ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+    const promises = modeList.map(mode =>
+      dispatch('search', { phrase, mode, count: 1 })
+        .then(variants => ({ mode, variant: variants[0] || null }))
+        .catch(() => ({ mode, variant: null }))
+    );
+    return Promise.all(promises).then(results => {
+      const byMode = {};
+      for (const r of results) {
+        if (r.variant) byMode[r.mode] = r.variant;
+      }
+      return { phrase, modes: byMode };
+    });
+  }
+
   app.workerBridge = {
     /* Core async operations */
     search(phrase, mode, count) {
       return dispatch('search', { phrase, mode, count: count || 6 });
     },
+
+    searchMultiMode,
 
     getPageData(number) {
       return dispatch('pageData', { number: String(number) });

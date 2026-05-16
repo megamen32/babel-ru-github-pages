@@ -760,7 +760,6 @@
 
     renderSearch(route) {
       const q = route.params.get('q') || '';
-      const mode = route.params.get('mode') || 'empty';
 
       return `
       <section class="t-messenger search-view fade-in">
@@ -773,18 +772,13 @@
             <div class="msg-avatar">📚</div>
             <div class="msg-bubble">
               <div class="msg-name">Библиотекарь</div>
-              <p>Любой текст уже существует. Напиши, что ищешь — я найду координаты.</p>
+              <p>Любой текст уже существует в Вавилоне. Напиши фразу — и я покажу, в каких мирах она может находиться.</p>
               <span class="msg-time">${timeStr()}</span>
             </div>
           </div>
           <div id="searchResultsSlot"></div>
         </div>
         <div class="msg-input-bar">
-          <div class="msg-filler-row">
-            ${['empty', 'dialogue', 'post', 'diary', 'log', 'words', 'noise', 'human'].map(m =>
-              `<button class="msg-filler-btn ${mode === m ? 'active' : ''}" data-mode="${m}">${m === 'empty' ? 'Пустота' : m === 'noise' ? 'Шум' : m === 'words' ? 'Слова' : m === 'dialogue' ? '💬 Диалог' : m === 'post' ? '📱 Пост' : m === 'diary' ? '📔 Дневник' : m === 'log' ? '⌨️ Лог' : '🧑 Человек'}</button>`
-            ).join('')}
-          </div>
           <div class="msg-input-row">
             <textarea class="msg-input" id="msgSearchInput" placeholder="Что ищешь в бесконечности? Можно вставить emoji и абзацы." rows="4">${u.esc(q)}</textarea>
             <button class="msg-send-btn" id="msgSearchBtn">🔍</button>
@@ -798,20 +792,21 @@
       const sendBtn = u.$('#msgSearchBtn');
       const resultsSlot = u.$('#searchResultsSlot');
       const chat = u.$('#msgChat');
-      let currentMode = route.params.get('mode') || 'empty';
       const q = route.params.get('q') || '';
 
-      u.$$('.msg-filler-btn[data-mode]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          u.$$('.msg-filler-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          currentMode = btn.dataset.mode;
-        });
-      });
+      /* Genre definitions for multi-mode results */
+      const GENRE_INFO = {
+        empty:    { icon: '📄', label: 'На пустом листе',   desc: 'Фраза сама по себе, в тишине пустой страницы' },
+        dialogue: { icon: '💬', label: 'В переписке',       desc: 'Фраза внутри чата — между репликами собеседников' },
+        post:     { icon: '📱', label: 'В посте',           desc: 'Фраза в ленте — среди мыслей и тегов' },
+        diary:    { icon: '📔', label: 'В дневнике',        desc: 'Фраза в личной записи — с датой и настроением' },
+        log:      { icon: '⌨️', label: 'В логе',            desc: 'Фраза среди серверных записей и таймстемпов' },
+        words:    { icon: '📖', label: 'Среди слов',        desc: 'Фраза в потоке слов — как на книжной полке' },
+      };
 
       function doSearch() {
         const val = (input.value || '').trim();
-        if (val) location.hash = `#/search?q=${encodeURIComponent(val)}&mode=${encodeURIComponent(currentMode)}`;
+        if (val) location.hash = `#/search?q=${encodeURIComponent(val)}`;
       }
       if (sendBtn) sendBtn.addEventListener('click', doSearch);
       if (input) {
@@ -823,31 +818,50 @@
         });
       }
 
-      /* Async search: if query exists, load results via Worker */
+      /* Async search: if query exists, search across ALL modes */
       if (q && resultsSlot) {
         /* Show typing indicator */
         const typingEl = app.workerBridge.showTyping(chat, 'Библиотекарь');
         /* Show jokes while waiting */
         const jokeTicker = app.workerBridge.startJokeTicker(chat);
 
-        app.workerBridge.search(q, currentMode, 6).then(variants => {
+        app.workerBridge.searchMultiMode(q).then(({ phrase, modes: resultsByMode }) => {
           app.workerBridge.removeTyping(typingEl);
           jokeTicker.stop();
 
-          const resultsHTML = variants.map(v => {
-            const vNumber = BigInt(v.number);
+          const phraseEsc = u.esc(phrase);
+          /* Librarian explains the multiplicity */
+          let html = `
+          <div class="msg msg-them">
+            <div class="msg-avatar">📚</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Библиотекарь</div>
+              <p>Ты ввёл: <strong>${phraseEsc}</strong></p>
+              <p>Эта фраза — не адрес одной страницы. Это дверь в целое <strong>облако страниц</strong>.</p>
+              <p>Она может быть в начале листа или в конце. Вокруг может быть пустота, случайный шум, переписка, дневник — и <em>каждый вариант</em> — это настоящая страница с собственным адресом в библиотеке.</p>
+              <p>Я не могу показать их все — их слишком много. Но вот несколько входов в это множество:</p>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>`;
+
+          /* Render one card per genre */
+          const genreOrder = ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+          for (const mode of genreOrder) {
+            const v = resultsByMode[mode];
+            if (!v) continue;
+            const gi = GENRE_INFO[mode];
             const vCoords = { sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
             const vXY = { x: BigInt(v.xy.x), y: BigInt(v.xy.y) };
             const snippet = u.snippetByRange(v.text, v.range, 60);
-            const phraseEsc = u.esc(v.phrase);
             const snippetEsc = u.esc(snippet);
             const highlightedSnippet = snippetEsc.replace(phraseEsc, `<mark>${phraseEsc}</mark>`);
             const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${v.range.start}:${v.range.length}` });
-            return `
+            html += `
             <div class="msg msg-them">
-              <div class="msg-avatar">🔍</div>
+              <div class="msg-avatar">${gi.icon}</div>
               <div class="msg-bubble">
-                <div class="msg-name">Каталог · Вариант ${v.variant}</div>
+                <div class="msg-name">${gi.label}</div>
+                <p class="msg-genre-desc">${gi.desc}</p>
                 <div class="msg-search-snippet">${highlightedSnippet}</div>
                 <div class="msg-search-coords">
                   <span>X:${fmtXY(vXY.x)}</span>
@@ -861,8 +875,29 @@
                 <span class="msg-time">${timeStr()}</span>
               </div>
             </div>`;
-          }).join('');
-          resultsSlot.innerHTML = resultsHTML;
+          }
+
+          /* Closing message */
+          html += `
+          <div class="msg msg-them">
+            <div class="msg-avatar">📚</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Библиотекарь</div>
+              <p>Каждый вариант — не подделка, а отдельная полная страница с собственным адресом. Одна фраза — множество страниц. Один результат — только один вход в это множество.</p>
+              <details class="msg-details">
+                <summary>Почему так много вариантов?</summary>
+                <div class="msg-details-content">
+                  <p>В библиотеке Вавилона любая фраза встречается не потому, что её кто-то написал, а потому что вокруг неё можно поставить огромное количество разных окружений.</p>
+                  <p>Фраза может стоять в начале страницы, в середине или в конце. Вокруг неё может быть пустота, случайный шум, осмысленный текст, переписка, дневник или код.</p>
+                  <p>Короткая фраза встречается не на одной странице, а в огромном облаке страниц. Чем фраза короче — тем больше это облако.</p>
+                  <p>Поиск в этой библиотеке не отвечает «где эта фраза?». Он отвечает: <em>в каких мирах эта фраза может находиться?</em></p>
+                </div>
+              </details>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>`;
+
+          resultsSlot.innerHTML = html;
           if (chat) chat.scrollTop = chat.scrollHeight;
         }).catch(err => {
           app.workerBridge.removeTyping(typingEl);

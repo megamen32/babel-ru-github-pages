@@ -195,23 +195,15 @@
 
   function renderSearchShared(route) {
     const q = route.params.get('q') || '';
-    const mode = route.params.get('mode') || 'empty';
-    const count = route.params.get('count') || '6';
 
-    const modeLabel = { empty: 'Пустота', noise: 'Шум', words: 'Слова', dialogue: '💬 Диалог', post: '📱 Пост', diary: '📔 Дневник', log: '⌨️ Лог', human: '🧑 Человек' };
+    const genreLabel = { empty: '📄 На пустом листе', noise: '🌫️ Шум', words: '📖 Среди слов', dialogue: '💬 В переписке', post: '📱 В посте', diary: '📔 В дневнике', log: '⌨️ В логе' };
     return `
     <section class="search-view fade-in">
       <h1 class="search-title">Каталог Мира</h1>
-      <p class="search-subtitle">Любой текст из ${esc(String(lib.maxPageNumber()).length)} цифр существует в Вавилоне.</p>
+      <p class="search-subtitle">Любая фраза — дверь в облако страниц. Не одна страница, а множество.</p>
       <form class="search-form" id="searchForm">
         <div class="search-input-wrap">
           <textarea class="search-input" id="searchInput" placeholder="Введите любой текст, включая emoji и абзацы..." rows="5" autofocus>${esc(q)}</textarea>
-        </div>
-        <div class="filler-selector">
-          <span class="filler-label">Окружение:</span>
-          ${['empty', 'dialogue', 'post', 'diary', 'log', 'words', 'noise', 'human'].map(m =>
-            `<button type="button" class="filler-btn ${mode === m ? 'active' : ''}" data-mode="${m}">${modeLabel[m]}</button>`
-          ).join('')}
         </div>
         <button type="submit" class="search-submit">Искать в бесконечности</button>
       </form>
@@ -227,47 +219,63 @@
     const form = $('#searchForm');
     const input = $('#searchInput');
     const resultsSlot = $('#searchResultsSlot');
-    let currentMode = route.params.get('mode') || 'empty';
     const q = route.params.get('q') || '';
-    const count = route.params.get('count') || '6';
 
-    $$('.filler-btn[data-mode]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        $$('.filler-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentMode = btn.dataset.mode;
-      });
-    });
+    /* Genre definitions */
+    const GENRE_INFO = {
+      empty:    { icon: '📄', label: 'На пустом листе',   desc: 'Фраза сама по себе, в тишине пустой страницы' },
+      dialogue: { icon: '💬', label: 'В переписке',       desc: 'Фраза внутри чата — между репликами собеседников' },
+      post:     { icon: '📱', label: 'В посте',           desc: 'Фраза в ленте — среди мыслей и тегов' },
+      diary:    { icon: '📔', label: 'В дневнике',        desc: 'Фраза в личной записи — с датой и настроением' },
+      log:      { icon: '⌨️', label: 'В логе',            desc: 'Фраза среди серверных записей и таймстемпов' },
+      words:    { icon: '📖', label: 'Среди слов',        desc: 'Фраза в потоке слов — как на книжной полке' },
+    };
+
     form.addEventListener('submit', e => {
       e.preventDefault();
       const nextQuery = input.value.trim();
       if (nextQuery) {
-        location.hash = `#/search?q=${encodeURIComponent(nextQuery)}&mode=${encodeURIComponent(currentMode)}`;
+        location.hash = `#/search?q=${encodeURIComponent(nextQuery)}`;
       }
     });
 
-    /* Async search via Worker */
+    /* Async search via Worker — multi-mode */
     if (q && resultsSlot) {
       const bridge = app.workerBridge;
-      /* Start joke ticker while searching */
       const chatContainer = resultsSlot.closest('.msg-chat') || resultsSlot;
       const jokeTicker = bridge.startJokeTicker(chatContainer);
-      bridge.search(q, currentMode, count).then(variants => {
+
+      bridge.searchMultiMode(q).then(({ phrase, modes: resultsByMode }) => {
         jokeTicker.stop();
-        const resultsHTML = variants.map(v => {
+
+        const phraseEscaped = esc(phrase);
+
+        /* Explanation header */
+        let html = `
+        <div class="search-explanation">
+          <h2>Фраза: «${phraseEscaped}»</h2>
+          <p>Эта фраза — не адрес одной страницы. Это дверь в целое <strong>облако страниц</strong>. Она может быть в начале листа или в конце; вокруг — пустота, шум, переписка, дневник. Каждый вариант — настоящая страница с собственным адресом.</p>
+          <p>Вот несколько входов в это множество:</p>
+        </div>`;
+
+        /* Render one card per genre */
+        const genreOrder = ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+        for (const mode of genreOrder) {
+          const v = resultsByMode[mode];
+          if (!v) continue;
+          const gi = GENRE_INFO[mode];
           const vNumber = BigInt(v.number);
           const vCoords = { sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
           const vXY = { x: BigInt(v.xy.x), y: BigInt(v.xy.y) };
           const snippet = app.utils.snippetByRange(v.text, v.range, 80);
-          const phraseEscaped = esc(v.phrase);
           const snippetEscaped = esc(snippet);
           const highlightedSnippet = snippetEscaped.replace(phraseEscaped, `<mark>${phraseEscaped}</mark>`);
           const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${v.range.start}:${v.range.length}` });
           const wanderUrl = `#/wander/x/${themes.fmtXY(vXY.x)}/y/${themes.fmtXY(vXY.y)}`;
-          const modeLabels = { empty: 'Пустота', noise: 'Шум', words: 'Слова' };
-          return `
+          html += `
           <div class="catalog-card">
-            <div class="catalog-variant">Вариант ${v.variant} · ${modeLabels[v.mode]}</div>
+            <div class="catalog-variant">${gi.icon} ${gi.label}</div>
+            <p class="catalog-genre-desc">${gi.desc}</p>
             <div class="catalog-snippet">${highlightedSnippet}</div>
             <div class="catalog-coords">
               <span class="coord-pill">X: ${themes.fmtXY(vXY.x)}</span>
@@ -280,8 +288,23 @@
               <a class="btn-outline" href="${wanderUrl}">Перейти в зал</a>
             </div>
           </div>`;
-        }).join('');
-        resultsSlot.innerHTML = resultsHTML;
+        }
+
+        /* Closing explanation */
+        html += `
+        <div class="search-explanation search-explanation-after">
+          <details class="search-details">
+            <summary>Почему так много вариантов?</summary>
+            <div class="search-details-content">
+              <p>В библиотеке Вавилона любая фраза встречается не потому, что её кто-то написал, а потому что вокруг неё можно поставить огромное количество разных окружений.</p>
+              <p>Фраза может стоять в начале страницы, в середине или в конце. Вокруг неё может быть пустота, случайный шум, осмысленный текст, переписка, дневник или код.</p>
+              <p>Короткая фраза встречается не на одной странице, а в огромном облаке страниц. Чем фраза короче — тем больше это облако.</p>
+              <p>Поиск в этой библиотеке не отвечает «где эта фраза?». Он отвечает: <em>в каких мирах эта фраза может находиться?</em></p>
+            </div>
+          </details>
+        </div>`;
+
+        resultsSlot.innerHTML = html;
       }).catch(err => {
         jokeTicker.stop();
         resultsSlot.innerHTML = `<div class="notice">${esc(err.message)}</div>`;
@@ -316,8 +339,13 @@ bookIndex     = (contentNumber − OFFSET) × I  mod 2^32768</code></pre>
 
       <h2>Обитаемый атлас</h2>
       <p>Абсолютная библиотека остаётся математически честной: любое число ↔ любая страница. Но поверх неё надстроен <em>обитаемый слой</em> — вероятностная карта заселённых районов. Каждая координата (x, y) на гекс-карте определяет стабильный жанр региона: район переписок, район дневников, серверный кластер, книжные полки или пустые залы. Путешественник попадает в районы с разным характером.</p>
-      <p>Поиск поддерживает 8 режимов окружения: Пустота, 💬 Диалог, 📱 Пост, 🔔 Дневник, ⌨️ Лог, Слова, Шум и 🧑 Человек (смесь жанров). Диалог генерирует переписку в формате Telegram с таймстемпами и именами. Дневник — датированные записи от первого лица. Пост — лента соцсети с авторами и тегами. Лог — серверные журналы с ISO-таймстемпами.</p>
+      <p>Диалог генерирует переписку в формате Telegram с таймстемпами и именами. Дневник — датированные записи от первого лица. Пост — лента соцсети с авторами и тегами. Лог — серверные журналы с ISO-таймстемпами.</p>
       <p>Каждая страница автоматически классифицируется: Переписка, Лог, Пост, Дневник, Текст или Шум — с оценкой уверенности. Это не меняет содержимое страницы, но помогает навигации в бесконечности.</p>
+
+      <h2>Фраза — не адрес, а дверь</h2>
+      <p>Когда вы ищете фразу в библиотеке, результат — не одна-единственная страница. Это целое облако страниц. Фраза может стоять в начале листа или в конце; вокруг неё может быть пустота, случайный шум, переписка, дневник, код или любой другой текст. Каждый вариант — настоящая страница с собственным адресом.</p>
+      <p>Поиск показывает не «результат», а несколько входов в это множество: на пустом листе, в переписке, в дневнике, среди слов. Чем короче фраза — тем больше страниц её содержат, и тем шире это облако.</p>
+      <p>Поиск в Вавилоне не отвечает «где эта фраза?». Он отвечает: <em>в каких мирах эта фраза может находиться?</em></p>
 
       <h2>5 визуальных тем</h2>
       <p>Вавилон можно смотреть по-разному. Пять тем меняют не только цвета, но и способ взаимодействия с бесконечной библиотекой:</p>

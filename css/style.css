@@ -407,6 +407,39 @@ main#view { flex: 1; padding: 0; }
 .search-submit:hover { box-shadow: var(--accent-glow); }
 
 .search-results { display: flex; flex-direction: column; gap: 1rem; }
+.search-explanation {
+  padding: 0.8rem 1rem; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  line-height: 1.55;
+}
+.search-explanation h2 {
+  font-family: var(--font-display); font-size: 1.1rem;
+  color: var(--accent); margin: 0 0 0.5rem;
+}
+.search-explanation p {
+  font-size: 0.85rem; color: var(--text-dim); margin: 0 0 0.4rem;
+}
+.search-explanation-after { margin-top: 0.5rem; }
+.search-details {
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+}
+.search-details summary {
+  padding: 0.5rem 0.8rem; font-size: 0.82rem; font-weight: 600;
+  color: var(--accent); cursor: pointer; background: var(--accent-dim);
+  list-style: none; display: flex; align-items: center; gap: 0.3rem;
+}
+.search-details summary::before { content: "▸ "; font-size: 0.75rem; }
+.search-details[open] summary::before { content: "▾ "; }
+.search-details-content {
+  padding: 0.7rem 0.8rem; font-size: 0.8rem; line-height: 1.55; color: var(--text-dim);
+}
+.search-details-content p { margin: 0 0 0.4rem; }
+.search-details-content p:last-child { margin-bottom: 0; }
+.search-details-content em { color: var(--text); font-style: italic; }
+.catalog-genre-desc {
+  font-size: 0.75rem; color: var(--text-dim); margin: 0 0 0.4rem;
+  line-height: 1.4; font-style: italic;
+}
 .catalog-card {
   padding: 1rem; background: var(--bg-card);
   border: 1px solid var(--border); border-radius: var(--radius);
@@ -842,6 +875,46 @@ main#view { flex: 1; padding: 0; }
 .msg-search-snippet mark { background: var(--accent-dim); color: var(--text); padding: 0 2px; border-radius: 2px; }
 .msg-search-coords { display: flex; gap: 0.4rem; font-size: 0.65rem; color: var(--text-dim); margin-bottom: 0.4rem; }
 .msg-search-actions { display: flex; gap: 0.3rem; }
+
+/* Genre description in search results */
+.msg-genre-desc {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin: 0 0 0.3rem;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* Details/summary block for "why so many variants" */
+.msg-details {
+  margin-top: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.msg-details summary {
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  background: var(--accent-dim);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.msg-details summary::before { content: "▸ "; font-size: 0.7rem; }
+.msg-details[open] summary::before { content: "▾ "; }
+.msg-details-content {
+  padding: 0.6rem 0.7rem;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.msg-details-content p { margin: 0 0 0.4rem; }
+.msg-details-content p:last-child { margin-bottom: 0; }
+.msg-details-content em { color: var(--text); font-style: italic; }
 
 /* Input bar */
 .msg-input-bar {
