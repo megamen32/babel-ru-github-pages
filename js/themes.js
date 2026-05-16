@@ -895,6 +895,20 @@
               <span class="msg-time">${timeStr()}</span>
             </div>
           </div>
+          <div class="msg msg-them" id="msgExploreMsg">
+            <div class="msg-avatar">🧭</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Навигатор</div>
+              <div class="page-explore-bar" id="pageExploreBar">
+                <button class="explore-back-btn" id="exploreBackBtn" style="display:none">← Назад</button>
+                <button class="explore-next-btn" id="exploreNextBtn">🔍 Следующая обитаемая</button>
+              </div>
+              <div class="page-distance-map" id="pageDistanceMap">
+                <canvas class="page-distance-canvas" id="pageDistanceCanvas" width="400" height="120"></canvas>
+              </div>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>
         </div>
       </section>`;
     },
@@ -996,6 +1010,170 @@
       if (linkBtn) linkBtn.addEventListener('click', () => {
         u.copyText(location.href, 'Ссылка скопирована');
       });
+
+      /* ---- Explore navigation (messenger style) ---- */
+      const backBtn = u.$('#exploreBackBtn');
+      const nextBtn = u.$('#exploreNextBtn');
+
+      if (backBtn) {
+        try {
+          const history = store.readStore('babelHistory');
+          if (history.length >= 2) {
+            backBtn.style.display = '';
+            backBtn.addEventListener('click', () => {
+              const history2 = store.readStore('babelHistory');
+              if (history2.length >= 2) {
+                location.hash = history2[1].url;
+              }
+            });
+          }
+        } catch {}
+      }
+
+      if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+          nextBtn.disabled = true;
+          const dest = lib.findAnyNextInhabitedPage(Date.now());
+          const destUrl = lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` });
+
+          /* Search animation on messenger bubble text */
+          const bubbleTexts = u.$$('.msg-bubble-page .msg-text');
+          if (bubbleTexts.length > 0) {
+            const alphabet = ALG.alphabet;
+            const duration = 1500;
+            const interval = 50;
+            const totalSteps = Math.floor(duration / interval);
+            let step = 0;
+
+            /* Collect all text nodes from all bubble texts */
+            const allTextNodes = [];
+            bubbleTexts.forEach(el => {
+              const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+              let n;
+              while (n = walker.nextNode()) allTextNodes.push(n);
+            });
+            const totalChars = allTextNodes.reduce((s, tn) => s + tn.textContent.length, 0);
+            const charsPerStep = Math.ceil(totalChars / totalSteps);
+
+            const timer = setInterval(() => {
+              step++;
+              const charsToScramble = step * charsPerStep;
+              let remaining = charsToScramble;
+              for (let i = allTextNodes.length - 1; i >= 0 && remaining > 0; i--) {
+                const tn = allTextNodes[i];
+                const len = tn.textContent.length;
+                if (remaining >= len) {
+                  let s = '';
+                  for (let c = 0; c < len; c++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+                  tn.textContent = s;
+                  remaining -= len;
+                } else {
+                  const start = len - remaining;
+                  const prefix = tn.textContent.slice(0, start);
+                  let suffix = '';
+                  for (let c = 0; c < remaining; c++) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+                  tn.textContent = prefix + suffix;
+                  remaining = 0;
+                }
+              }
+              if (step >= totalSteps) {
+                clearInterval(timer);
+                location.hash = destUrl;
+              }
+            }, interval);
+          } else {
+            location.hash = destUrl;
+          }
+        });
+      }
+
+      /* Distance map for messenger page */
+      const distCanvas = document.getElementById('pageDistanceCanvas');
+      if (distCanvas) {
+        const xy = lib.coordinatesToXY(coords);
+        const cx = Number(xy.x);
+        const cy = Number(xy.y);
+        const ctx = distCanvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const rect = distCanvas.getBoundingClientRect();
+        distCanvas.width = rect.width * dpr;
+        distCanvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        const w = rect.width, h = rect.height;
+
+        const hexSize = 14;
+        const hexW = hexSize * 2;
+        const hexH = hexSize * 1.73;
+        const centerX = w / 2;
+        const centerY = h / 2;
+
+        const currentRegion = lib.classifyRegion(cx, cy);
+        const currentColor = lib.GENRE_COLORS[currentRegion.kind] || '#4e5c6e';
+
+        drawMiniHex(ctx, centerX, centerY, hexSize, currentColor);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.font = '9px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillText(`${currentRegion.icon}`, centerX, centerY - hexSize - 3);
+
+        const hexDirs = [
+          { dq: 0, dr: -1 }, { dq: 1, dr: -1 }, { dq: 1, dr: 0 },
+          { dq: 0, dr: 1 }, { dq: -1, dr: 1 }, { dq: -1, dr: 0 },
+        ];
+        const pixelOffsets = [
+          { dx: 0, dy: -hexH }, { dx: hexW * 0.75, dy: -hexH / 2 },
+          { dx: hexW * 0.75, dy: hexH / 2 }, { dx: 0, dy: hexH },
+          { dx: -hexW * 0.75, dy: hexH / 2 }, { dx: -hexW * 0.75, dy: -hexH / 2 },
+        ];
+
+        let minInhabitedDist = Infinity;
+        for (let i = 0; i < hexDirs.length; i++) {
+          const nx = cx + hexDirs[i].dq;
+          const ny = cy + hexDirs[i].dr;
+          const region = lib.classifyRegion(nx, ny);
+          const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
+          const px = centerX + pixelOffsets[i].dx;
+          const py = centerY + pixelOffsets[i].dy;
+          const isNoise = region.kind === 'noise';
+
+          drawMiniHex(ctx, px, py, hexSize, isNoise ? 'rgba(78,92,110,0.3)' : color);
+          if (!isNoise) {
+            minInhabitedDist = Math.min(minInhabitedDist, 1);
+            ctx.font = '8px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.fillText(region.icon, px, py + 3);
+          }
+        }
+
+        if (minInhabitedDist === Infinity) {
+          for (let dq = -2; dq <= 2; dq++) {
+            for (let dr = -2; dr <= 2; dr++) {
+              if (dq === 0 && dr === 0) continue;
+              if (Math.abs(dq + dr) > 2) continue;
+              const dist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+              if (dist !== 2) continue;
+              const region = lib.classifyRegion(cx + dq, cy + dr);
+              if (region.kind !== 'noise') minInhabitedDist = Math.min(minInhabitedDist, dist);
+            }
+          }
+        }
+
+        ctx.font = '10px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        const distLabel = minInhabitedDist === Infinity
+          ? 'Обитаемых залов рядом нет'
+          : `Ближайший обитаемый зал: ${minInhabitedDist} ${minInhabitedDist === 1 ? 'шаг' : 'шага'}`;
+        ctx.fillText(distLabel, 8, h - 8);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = currentColor;
+        ctx.fillText(currentRegion.label, w - 8, h - 8);
+      }
 
       if (chat) chat.scrollTop = chat.scrollHeight;
     },
@@ -1608,6 +1786,14 @@ ${bookList}
               <span class="term-cmd" id="termLink">🔗</span> ссылка ·
               <a class="term-link" href="#/wander/x/${fmtXY(xy.x)}/y/${fmtXY(xy.y)}/wall/${coords.wall}">зал</a>
             </div>
+            <div class="term-line term-separator">────────────────────────────────────────</div>
+            <div class="term-line term-output-text">
+              <span class="term-cmd" id="termExploreBack" style="display:none">← назад</span>
+              <span class="term-cmd" id="termExploreNext">🔍 следующая обитаемая</span>
+            </div>
+            <div class="page-distance-map" id="pageDistanceMap">
+              <canvas class="page-distance-canvas" id="pageDistanceCanvas" width="400" height="120"></canvas>
+            </div>
           </div>
         </div>
       </section>`;
@@ -1632,6 +1818,165 @@ ${bookList}
       if (linkBtn) linkBtn.addEventListener('click', () => {
         u.copyText(location.href, 'Ссылка скопирована');
       });
+
+      /* ---- Explore navigation (terminal style) ---- */
+      const backCmd = u.$('#termExploreBack');
+      const nextCmd = u.$('#termExploreNext');
+
+      if (backCmd) {
+        try {
+          const history = store.readStore('babelHistory');
+          if (history.length >= 2) {
+            backCmd.style.display = '';
+            backCmd.addEventListener('click', () => {
+              const history2 = store.readStore('babelHistory');
+              if (history2.length >= 2) location.hash = history2[1].url;
+            });
+          }
+        } catch {}
+      }
+
+      if (nextCmd) {
+        nextCmd.addEventListener('click', () => {
+          nextCmd.style.pointerEvents = 'none';
+          nextCmd.textContent = '⏳ поиск…';
+          const dest = lib.findAnyNextInhabitedPage(Date.now());
+          const destUrl = lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` });
+
+          /* Scramble animation on terminal page text */
+          const pageTextEl = u.$('.term-page-text');
+          if (pageTextEl) {
+            const alphabet = ALG.alphabet;
+            const duration = 1500;
+            const interval = 50;
+            const totalSteps = Math.floor(duration / interval);
+            let step = 0;
+            const textNodes = [];
+            const walker = document.createTreeWalker(pageTextEl, NodeFilter.SHOW_TEXT, null);
+            let n;
+            while (n = walker.nextNode()) textNodes.push(n);
+            const totalChars = textNodes.reduce((s, tn) => s + tn.textContent.length, 0);
+            const charsPerStep = Math.ceil(totalChars / totalSteps);
+
+            const timer = setInterval(() => {
+              step++;
+              const charsToScramble = step * charsPerStep;
+              let remaining = charsToScramble;
+              for (let i = textNodes.length - 1; i >= 0 && remaining > 0; i--) {
+                const tn = textNodes[i];
+                const len = tn.textContent.length;
+                if (remaining >= len) {
+                  let s = '';
+                  for (let c = 0; c < len; c++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+                  tn.textContent = s;
+                  remaining -= len;
+                } else {
+                  const start = len - remaining;
+                  const prefix = tn.textContent.slice(0, start);
+                  let suffix = '';
+                  for (let c = 0; c < remaining; c++) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+                  tn.textContent = prefix + suffix;
+                  remaining = 0;
+                }
+              }
+              if (step >= totalSteps) {
+                clearInterval(timer);
+                location.hash = destUrl;
+              }
+            }, interval);
+          } else {
+            location.hash = destUrl;
+          }
+        });
+      }
+
+      /* Distance map for terminal page */
+      const distCanvas = document.getElementById('pageDistanceCanvas');
+      if (distCanvas) {
+        const xy = lib.coordinatesToXY(coords);
+        const cx = Number(xy.x);
+        const cy = Number(xy.y);
+        const ctx = distCanvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const rect = distCanvas.getBoundingClientRect();
+        distCanvas.width = rect.width * dpr;
+        distCanvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        const w = rect.width, h = rect.height;
+
+        const hexSize = 14;
+        const hexW = hexSize * 2;
+        const hexH = hexSize * 1.73;
+        const centerX = w / 2;
+        const centerY = h / 2;
+
+        const currentRegion = lib.classifyRegion(cx, cy);
+        const currentColor = lib.GENRE_COLORS[currentRegion.kind] || '#4e5c6e';
+
+        drawMiniHex(ctx, centerX, centerY, hexSize, currentColor);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#0f0';
+        ctx.fill();
+        ctx.font = '9px Inter, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#0f0';
+        ctx.fillText(`${currentRegion.icon}`, centerX, centerY - hexSize - 3);
+
+        const hexDirs = [
+          { dq: 0, dr: -1 }, { dq: 1, dr: -1 }, { dq: 1, dr: 0 },
+          { dq: 0, dr: 1 }, { dq: -1, dr: 1 }, { dq: -1, dr: 0 },
+        ];
+        const pixelOffsets = [
+          { dx: 0, dy: -hexH }, { dx: hexW * 0.75, dy: -hexH / 2 },
+          { dx: hexW * 0.75, dy: hexH / 2 }, { dx: 0, dy: hexH },
+          { dx: -hexW * 0.75, dy: hexH / 2 }, { dx: -hexW * 0.75, dy: -hexH / 2 },
+        ];
+
+        let minInhabitedDist = Infinity;
+        for (let i = 0; i < hexDirs.length; i++) {
+          const nx = cx + hexDirs[i].dq;
+          const ny = cy + hexDirs[i].dr;
+          const region = lib.classifyRegion(nx, ny);
+          const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
+          const px = centerX + pixelOffsets[i].dx;
+          const py = centerY + pixelOffsets[i].dy;
+          const isNoise = region.kind === 'noise';
+
+          drawMiniHex(ctx, px, py, hexSize, isNoise ? 'rgba(0,255,65,0.12)' : color);
+          if (!isNoise) {
+            minInhabitedDist = Math.min(minInhabitedDist, 1);
+            ctx.font = '8px Inter, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'rgba(0,255,65,0.8)';
+            ctx.fillText(region.icon, px, py + 3);
+          }
+        }
+
+        if (minInhabitedDist === Infinity) {
+          for (let dq = -2; dq <= 2; dq++) {
+            for (let dr = -2; dr <= 2; dr++) {
+              if (dq === 0 && dr === 0) continue;
+              if (Math.abs(dq + dr) > 2) continue;
+              const dist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+              if (dist !== 2) continue;
+              const region = lib.classifyRegion(cx + dq, cy + dr);
+              if (region.kind !== 'noise') minInhabitedDist = Math.min(minInhabitedDist, dist);
+            }
+          }
+        }
+
+        ctx.font = '10px Inter, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(0,255,65,0.6)';
+        const distLabel = minInhabitedDist === Infinity
+          ? 'Обитаемых залов рядом нет'
+          : `Ближайший обитаемый зал: ${minInhabitedDist} ${minInhabitedDist === 1 ? 'шаг' : 'шага'}`;
+        ctx.fillText(distLabel, 8, h - 8);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = currentColor;
+        ctx.fillText(currentRegion.label, w - 8, h - 8);
+      }
     },
 
     renderSearch(route) {
@@ -1768,6 +2113,14 @@ ${highlighted}
         <button class="btn-outline" id="copyTextBtn">Копировать</button>
         <button class="btn-outline" id="copyLinkBtn">Ссылка</button>
       </div>
+
+      <div class="page-explore-bar" id="pageExploreBar">
+        <button class="explore-back-btn" id="exploreBackBtn" style="display:none">← Назад</button>
+        <button class="explore-next-btn" id="exploreNextBtn">🔍 Следующая обитаемая</button>
+      </div>
+      <div class="page-distance-map" id="pageDistanceMap">
+        <canvas class="page-distance-canvas" id="pageDistanceCanvas" width="400" height="120"></canvas>
+      </div>
     </section>`;
   }
 
@@ -1791,6 +2144,198 @@ ${highlighted}
     if (linkBtn) linkBtn.addEventListener('click', () => {
       u.copyText(location.href, 'Ссылка скопирована');
     });
+
+    /* ---- Explore navigation ---- */
+    const backBtn = u.$('#exploreBackBtn');
+    const nextBtn = u.$('#exploreNextBtn');
+
+    /* Back button: show if there's navigation history */
+    if (backBtn) {
+      try {
+        const history = store.readStore('babelHistory');
+        if (history.length >= 2) {
+          backBtn.style.display = '';
+          backBtn.addEventListener('click', () => {
+            const history2 = store.readStore('babelHistory');
+            /* second-to-last = the page before current */
+            if (history2.length >= 2) {
+              location.hash = history2[1].url;
+            }
+          });
+        }
+      } catch {}
+    }
+
+    /* Next Inhabited button: animate + navigate */
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        nextBtn.disabled = true;
+        /* Compute destination first (synchronous, fast) */
+        const dest = lib.findAnyNextInhabitedPage(Date.now());
+        const destUrl = lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` });
+
+        /* Search animation: scramble page text bottom-to-top */
+        const pageTextEl = u.$('.page-text');
+        if (pageTextEl) {
+          const originalHTML = pageTextEl.innerHTML;
+          const alphabet = ALG.alphabet;
+          const duration = 1500;
+          const interval = 50;
+          const totalSteps = Math.floor(duration / interval);
+          let step = 0;
+          /* Collect text nodes for scrambling */
+          const textNodes = [];
+          const walker = document.createTreeWalker(pageTextEl, NodeFilter.SHOW_TEXT, null);
+          let n;
+          while (n = walker.nextNode()) textNodes.push(n);
+          const totalChars = textNodes.reduce((s, tn) => s + tn.textContent.length, 0);
+          const charsPerStep = Math.ceil(totalChars / totalSteps);
+
+          const timer = setInterval(() => {
+            step++;
+            const charsToScramble = step * charsPerStep;
+            let remaining = charsToScramble;
+            /* Scramble from bottom (last text node) upward */
+            for (let i = textNodes.length - 1; i >= 0 && remaining > 0; i--) {
+              const tn = textNodes[i];
+              const len = tn.textContent.length;
+              if (remaining >= len) {
+                /* Scramble entire node */
+                let s = '';
+                for (let c = 0; c < len; c++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+                tn.textContent = s;
+                remaining -= len;
+              } else {
+                /* Partially scramble from end */
+                const start = len - remaining;
+                const prefix = tn.textContent.slice(0, start);
+                let suffix = '';
+                for (let c = 0; c < remaining; c++) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+                tn.textContent = prefix + suffix;
+                remaining = 0;
+              }
+            }
+            if (step >= totalSteps) {
+              clearInterval(timer);
+              location.hash = destUrl;
+            }
+          }, interval);
+        } else {
+          /* No text element to animate, navigate immediately */
+          location.hash = destUrl;
+        }
+      });
+    }
+
+    /* Distance map: draw hex grid showing current hall + neighbors */
+    const distCanvas = document.getElementById('pageDistanceCanvas');
+    if (distCanvas) {
+      const xy = lib.coordinatesToXY(coords);
+      const cx = Number(xy.x);
+      const cy = Number(xy.y);
+      const ctx = distCanvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = distCanvas.getBoundingClientRect();
+      distCanvas.width = rect.width * dpr;
+      distCanvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      const w = rect.width, h = rect.height;
+
+      const hexSize = 14;
+      const hexW = hexSize * 2;
+      const hexH = hexSize * 1.73;
+      const centerX = w / 2;
+      const centerY = h / 2;
+
+      /* Current hall */
+      const currentRegion = lib.classifyRegion(cx, cy);
+      const currentColor = lib.GENRE_COLORS[currentRegion.kind] || '#4e5c6e';
+
+      /* Draw current hex */
+      drawMiniHex(ctx, centerX, centerY, hexSize, currentColor);
+      /* Marker dot */
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      /* Label */
+      ctx.font = '9px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillText(`${currentRegion.icon}`, centerX, centerY - hexSize - 3);
+
+      /* 6 neighbors (axial hex directions) */
+      const hexDirs = [
+        { dq: 0, dr: -1 },  /* N */
+        { dq: 1, dr: -1 },  /* NE */
+        { dq: 1, dr: 0 },   /* SE */
+        { dq: 0, dr: 1 },   /* S */
+        { dq: -1, dr: 1 },  /* SW */
+        { dq: -1, dr: 0 },  /* NW */
+      ];
+      /* Pixel offsets for pointy-top hex neighbors */
+      const pixelOffsets = [
+        { dx: 0, dy: -hexH },                  /* N */
+        { dx: hexW * 0.75, dy: -hexH / 2 },    /* NE */
+        { dx: hexW * 0.75, dy: hexH / 2 },     /* SE */
+        { dx: 0, dy: hexH },                    /* S */
+        { dx: -hexW * 0.75, dy: hexH / 2 },    /* SW */
+        { dx: -hexW * 0.75, dy: -hexH / 2 },   /* NW */
+      ];
+
+      let minInhabitedDist = Infinity;
+      for (let i = 0; i < hexDirs.length; i++) {
+        const nx = cx + hexDirs[i].dq;
+        const ny = cy + hexDirs[i].dr;
+        const region = lib.classifyRegion(nx, ny);
+        const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
+        const px = centerX + pixelOffsets[i].dx;
+        const py = centerY + pixelOffsets[i].dy;
+        const isNoise = region.kind === 'noise';
+
+        drawMiniHex(ctx, px, py, hexSize, isNoise ? 'rgba(78,92,110,0.3)' : color);
+
+        if (!isNoise) {
+          minInhabitedDist = Math.min(minInhabitedDist, 1);
+          /* Genre icon label for non-noise */
+          ctx.font = '8px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = 'rgba(255,255,255,0.8)';
+          ctx.fillText(region.icon, px, py + 3);
+        }
+      }
+
+      /* 2-ring neighbors (distance 2) — check for nearest inhabited */
+      if (minInhabitedDist === Infinity) {
+        for (let dq = -2; dq <= 2; dq++) {
+          for (let dr = -2; dr <= 2; dr++) {
+            if (dq === 0 && dr === 0) continue;
+            if (Math.abs(dq + dr) > 2) continue;
+            const dist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+            if (dist !== 2) continue;
+            const nx = cx + dq, ny = cy + dr;
+            const region = lib.classifyRegion(nx, ny);
+            if (region.kind !== 'noise') {
+              minInhabitedDist = Math.min(minInhabitedDist, dist);
+            }
+          }
+        }
+      }
+
+      /* Distance text */
+      ctx.font = '10px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      const distLabel = minInhabitedDist === Infinity
+        ? 'Обитаемых залов рядом нет'
+        : `Ближайший обитаемый зал: ${minInhabitedDist} ${minInhabitedDist === 1 ? 'шаг' : 'шага'}`;
+      ctx.fillText(distLabel, 8, h - 8);
+
+      /* Current region label */
+      ctx.textAlign = 'right';
+      ctx.fillStyle = currentColor;
+      ctx.fillText(currentRegion.label, w - 8, h - 8);
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════

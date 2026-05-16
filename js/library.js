@@ -771,6 +771,14 @@
       return null;
     },
 
+    /* Find any next inhabited page — pick a random non-noise genre
+       and generate an inhabited page for it. */
+    findAnyNextInhabitedPage(step) {
+      const nonNoiseGenres = REGION_GENRES.filter(g => g.kind !== 'noise');
+      const pick = nonNoiseGenres[Math.floor(Math.random() * nonNoiseGenres.length)];
+      return app.library.generateInhabitedPage(pick.kind, step);
+    },
+
     /* Genre color for map rendering */
     GENRE_COLORS: {
       dialogue: '#5eb5f7',

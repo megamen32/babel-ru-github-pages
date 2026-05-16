@@ -1818,3 +1818,132 @@ main#view { flex: 1; padding: 0; }
     margin: 0 auto;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE EXPLORE BAR — next inhabited + back navigation
+   ═══════════════════════════════════════════════════════════ */
+
+.page-explore-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0 0.25rem;
+}
+
+.explore-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.explore-back-btn:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+  background: var(--bg-card);
+}
+
+.explore-next-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 1.2rem;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: var(--accent-glow);
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+
+.explore-next-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.15) 50%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.explore-next-btn:hover::before {
+  opacity: 1;
+}
+
+.explore-next-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 30px rgba(94, 181, 247, 0.5);
+}
+
+.explore-next-btn:active {
+  transform: translateY(0);
+}
+
+.explore-next-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+  transform: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE DISTANCE MAP — hex grid showing nearby halls
+   ═══════════════════════════════════════════════════════════ */
+
+.page-distance-map {
+  margin-top: 0.75rem;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: rgba(0,0,0,0.2);
+}
+
+.page-distance-canvas {
+  display: block;
+  width: 100%;
+  height: 120px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SEARCH ANIMATION — character scramble keyframes
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes exploreScramble {
+  0% { opacity: 1; filter: blur(0); }
+  50% { opacity: 0.7; filter: blur(0.5px); }
+  100% { opacity: 1; filter: blur(0); }
+}
+
+.page-text.scrambling .page-text,
+.msg-text.scrambling {
+  animation: exploreScramble 0.15s ease infinite;
+}
+
+/* Messenger-specific explore bar adjustments */
+.t-messenger .page-explore-bar {
+  margin-top: 0.5rem;
+}
+
+.t-messenger .page-distance-map {
+  background: transparent;
+}
+
+.t-messenger .explore-next-btn {
+  font-size: 0.8rem;
+  padding: 0.45rem 1rem;
+}
