@@ -129,41 +129,6 @@
     const mode = route.params.get('mode') || 'empty';
     const count = route.params.get('count') || '6';
 
-    let resultsHTML = '';
-    if (q) {
-      try {
-        const variants = lib.createSearchVariants(q, mode, count);
-        resultsHTML = variants.map(v => {
-          const snippet = app.utils.snippetByRange(v.text, v.range, 80);
-          const phraseEscaped = esc(v.phrase);
-          const snippetEscaped = esc(snippet);
-          const highlightedSnippet = snippetEscaped.replace(phraseEscaped, `<mark>${phraseEscaped}</mark>`);
-          const coords = v.coordinates;
-          const xy = v.xy;
-          const pageUrl = app.utils.routeFor(`/page/${lib.numberToB64(v.number)}`, { hl: `${v.range.start}:${v.range.length}` });
-          const wanderUrl = `#/wander/x/${themes.fmtXY(xy.x)}/y/${themes.fmtXY(xy.y)}`;
-          const modeLabels = { empty: 'Пустота', noise: 'Шум', words: 'Слова' };
-          return `
-          <div class="catalog-card">
-            <div class="catalog-variant">Вариант ${v.variant} · ${modeLabels[v.mode]}</div>
-            <div class="catalog-snippet">${highlightedSnippet}</div>
-            <div class="catalog-coords">
-              <span class="coord-pill">X: ${themes.fmtXY(xy.x)}</span>
-              <span class="coord-pill">Y: ${themes.fmtXY(xy.y)}</span>
-              <span class="coord-pill">Том ${coords.volume}</span>
-              <span class="coord-pill">Лист ${coords.page}</span>
-            </div>
-            <div class="catalog-actions">
-              <a class="teleport-btn" href="${pageUrl}">Телепортироваться</a>
-              <a class="btn-outline" href="${wanderUrl}">Перейти в зал</a>
-            </div>
-          </div>`;
-        }).join('');
-      } catch (err) {
-        resultsHTML = `<div class="notice">${esc(err.message)}</div>`;
-      }
-    }
-
     const modeLabel = { empty: 'Пустота', noise: 'Шум', words: 'Слова' };
     return `
     <section class="search-view fade-in">
@@ -182,7 +147,9 @@
         <button type="submit" class="search-submit">Искать в бесконечности</button>
       </form>
       <div class="search-results" id="searchResults">
-        ${resultsHTML || (q ? '' : `<div class="empty-state"><div class="icon">◈</div><p>Введите фразу, чтобы найти её в бесконечной библиотеке</p></div>`)}
+        <div id="searchResultsSlot">
+          ${q ? `<div class="empty-state"><div class="icon babel-spinner-inline">⬡</div><p style="margin-top:0.5rem;animation:babelPulse 1.5s ease-in-out infinite">Вавилон вычисляет…</p></div>` : `<div class="empty-state"><div class="icon">◈</div><p>Введите фразу, чтобы найти её в бесконечной библиотеке</p></div>`}
+        </div>
       </div>
     </section>`;
   }
@@ -190,8 +157,11 @@
   function bindSearchShared(route) {
     const form = $('#searchForm');
     const input = $('#searchInput');
-    if (!form || !input) return;
+    const resultsSlot = $('#searchResultsSlot');
     let currentMode = route.params.get('mode') || 'empty';
+    const q = route.params.get('q') || '';
+    const count = route.params.get('count') || '6';
+
     $$('.filler-btn[data-mode]').forEach(btn => {
       btn.addEventListener('click', () => {
         $$('.filler-btn').forEach(b => b.classList.remove('active'));
@@ -204,6 +174,43 @@
       const q = input.value.trim();
       if (q) location.hash = `#/search?q=${encodeURIComponent(q)}&mode=${currentMode}`;
     });
+
+    /* Async search via Worker */
+    if (q && resultsSlot) {
+      const bridge = app.workerBridge;
+      bridge.search(q, currentMode, count).then(variants => {
+        const resultsHTML = variants.map(v => {
+          const vNumber = BigInt(v.number);
+          const vCoords = { sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
+          const vXY = { x: BigInt(v.xy.x), y: BigInt(v.xy.y) };
+          const snippet = app.utils.snippetByRange(v.text, v.range, 80);
+          const phraseEscaped = esc(v.phrase);
+          const snippetEscaped = esc(snippet);
+          const highlightedSnippet = snippetEscaped.replace(phraseEscaped, `<mark>${phraseEscaped}</mark>`);
+          const pageUrl = app.utils.routeFor(`/page/${lib.numberToB64(vNumber)}`, { hl: `${v.range.start}:${v.range.length}` });
+          const wanderUrl = `#/wander/x/${themes.fmtXY(vXY.x)}/y/${themes.fmtXY(vXY.y)}`;
+          const modeLabels = { empty: 'Пустота', noise: 'Шум', words: 'Слова' };
+          return `
+          <div class="catalog-card">
+            <div class="catalog-variant">Вариант ${v.variant} · ${modeLabels[v.mode]}</div>
+            <div class="catalog-snippet">${highlightedSnippet}</div>
+            <div class="catalog-coords">
+              <span class="coord-pill">X: ${themes.fmtXY(vXY.x)}</span>
+              <span class="coord-pill">Y: ${themes.fmtXY(vXY.y)}</span>
+              <span class="coord-pill">Том ${vCoords.volume}</span>
+              <span class="coord-pill">Лист ${vCoords.page}</span>
+            </div>
+            <div class="catalog-actions">
+              <a class="teleport-btn" href="${pageUrl}">Телепортироваться</a>
+              <a class="btn-outline" href="${wanderUrl}">Перейти в зал</a>
+            </div>
+          </div>`;
+        }).join('');
+        resultsSlot.innerHTML = resultsHTML;
+      }).catch(err => {
+        resultsSlot.innerHTML = `<div class="notice">${esc(err.message)}</div>`;
+      });
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════

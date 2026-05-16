@@ -601,16 +601,12 @@
         return `<div class="msg-chat"><div class="msg msg-them"><div class="msg-bubble"><p>Неверный адрес</p></div></div></div>`;
       }
 
-      const indices = lib.numberToIndices(number);
       const coords = lib.numberToCoordinates(number);
       const xy = lib.coordinatesToXY(coords);
-      const stats = charStats(indices);
-      const pageTextHTML = u.renderPageFromIndices(indices, lib.parseHighlight(route.params));
 
       /* Save history */
       try { store.pushHistory({ url: location.hash, title: lib.pageTitle(coords) }); } catch {}
 
-      /* Page navigation */
       const pageNum = Number(coords.page);
       const totalPages = Number(ALG.pagesPerVolume);
       const prevPage = pageNum > 1
@@ -620,31 +616,6 @@
         ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum + 1)}))}`
         : null;
 
-      /* Break page text into chat-friendly chunks */
-      const fullText = u.indicesToString(indices);
-      const paragraphs = fullText.split('\n').filter(p => p.trim());
-      const bubbleChunks = [];
-      let chunk = '';
-      for (const p of paragraphs) {
-        if (chunk.length + p.length > 600) {
-          if (chunk) bubbleChunks.push(chunk);
-          chunk = p;
-        } else {
-          chunk += (chunk ? '\n' : '') + p;
-        }
-      }
-      if (chunk) bubbleChunks.push(chunk);
-
-      const bubblesHTML = bubbleChunks.map((b, i) => `
-        <div class="msg msg-them">
-          <div class="msg-avatar">${i === 0 ? '📖' : '📜'}</div>
-          <div class="msg-bubble msg-bubble-page">
-            <div class="msg-text">${u.esc(b)}</div>
-            <span class="msg-time">${timeStr()}</span>
-          </div>
-        </div>
-      `).join('');
-
       return `
       <section class="t-messenger page-view fade-in">
         <div class="msg-room-header">
@@ -653,7 +624,7 @@
             <span class="msg-room-title">📖 Том ${coords.volume} · Лист ${pageNum}</span>
             <span class="msg-room-sub">Стена ${coords.wall} · Полка ${coords.shelf}</span>
           </div>
-          <span class="msg-density ${stats.label === 'Читаемая' ? 'msg-d-read' : stats.label === 'Разреженная' ? 'msg-d-sparse' : 'msg-d-noise'}">${stats.label} ${stats.readability}%</span>
+          <span class="msg-density" id="pageDensity"></span>
         </div>
         <div class="msg-chat" id="msgChat">
           <div class="msg msg-them">
@@ -664,8 +635,15 @@
               <span class="msg-time">${timeStr()}</span>
             </div>
           </div>
-          ${bubblesHTML}
-          <div class="msg msg-them">
+          <div id="pageContentSlot">
+            <div class="msg msg-them">
+              <div class="msg-avatar">📚</div>
+              <div class="msg-bubble">
+                <div class="babel-typing-dots"><span></span><span></span><span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="msg msg-them" id="pageNavMsg" style="display:none">
             <div class="msg-avatar">📚</div>
             <div class="msg-bubble">
               <div class="msg-name">Библиотекарь</div>
@@ -693,6 +671,55 @@
       try { number = lib.b64ToNumber(b64); } catch { return; }
       const coords = lib.numberToCoordinates(number);
 
+      const contentSlot = u.$('#pageContentSlot');
+      const navMsg = u.$('#pageNavMsg');
+      const densityEl = u.$('#pageDensity');
+      const chat = u.$('#msgChat');
+
+      /* Async page load via Worker */
+      app.workerBridge.getPageData(String(number)).then(data => {
+        const indices = data.indices;
+        const pageCoords = { sector: BigInt(data.coords.sector), hall: BigInt(data.coords.hall), wall: BigInt(data.coords.wall), shelf: BigInt(data.coords.shelf), volume: BigInt(data.coords.volume), page: BigInt(data.coords.page) };
+        const stats = charStats(indices);
+
+        /* Update density badge */
+        if (densityEl) {
+          densityEl.className = `msg-density ${stats.label === 'Читаемая' ? 'msg-d-read' : stats.label === 'Разреженная' ? 'msg-d-sparse' : 'msg-d-noise'}`;
+          densityEl.textContent = `${stats.label} ${stats.readability}%`;
+        }
+
+        /* Break page text into chat-friendly chunks */
+        const fullText = u.indicesToString(indices);
+        const paragraphs = fullText.split('\n').filter(p => p.trim());
+        const bubbleChunks = [];
+        let chunk = '';
+        for (const p of paragraphs) {
+          if (chunk.length + p.length > 600) {
+            if (chunk) bubbleChunks.push(chunk);
+            chunk = p;
+          } else {
+            chunk += (chunk ? '\n' : '') + p;
+          }
+        }
+        if (chunk) bubbleChunks.push(chunk);
+
+        const bubblesHTML = bubbleChunks.map((b, i) => `
+          <div class="msg msg-them">
+            <div class="msg-avatar">${i === 0 ? '📖' : '📜'}</div>
+            <div class="msg-bubble msg-bubble-page">
+              <div class="msg-text">${u.esc(b)}</div>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>
+        `).join('');
+
+        if (contentSlot) contentSlot.innerHTML = bubblesHTML;
+        if (navMsg) navMsg.style.display = '';
+        if (chat) chat.scrollTop = chat.scrollHeight;
+      }).catch(err => {
+        if (contentSlot) contentSlot.innerHTML = `<div class="msg msg-them"><div class="msg-bubble"><p>Ошибка: ${u.esc(err.message)}</p></div></div>`;
+      });
+
       const favBtn = u.$('#favBtn');
       if (favBtn) favBtn.addEventListener('click', () => {
         store.addFavorite({ url: location.hash, title: lib.pageTitle(coords) });
@@ -710,48 +737,12 @@
         u.copyText(location.href, 'Ссылка скопирована');
       });
 
-      /* Scroll chat to bottom */
-      const chat = u.$('#msgChat');
       if (chat) chat.scrollTop = chat.scrollHeight;
     },
 
     renderSearch(route) {
       const q = route.params.get('q') || '';
       const mode = route.params.get('mode') || 'empty';
-
-      let resultsHTML = '';
-      if (q) {
-        try {
-          const variants = lib.createSearchVariants(q, mode, 6);
-          resultsHTML = variants.map(v => {
-            const snippet = u.snippetByRange(v.text, v.range, 60);
-            const phraseEsc = u.esc(v.phrase);
-            const snippetEsc = u.esc(snippet);
-            const highlightedSnippet = snippetEsc.replace(phraseEsc, `<mark>${phraseEsc}</mark>`);
-            const pageUrl = `#/page/${lib.numberToB64(v.number)}?hl=${v.range.start}:${v.range.length}`;
-            return `
-            <div class="msg msg-them">
-              <div class="msg-avatar">🔍</div>
-              <div class="msg-bubble">
-                <div class="msg-name">Каталог · Вариант ${v.variant}</div>
-                <div class="msg-search-snippet">${highlightedSnippet}</div>
-                <div class="msg-search-coords">
-                  <span>X:${fmtXY(v.xy.x)}</span>
-                  <span>Y:${fmtXY(v.xy.y)}</span>
-                  <span>Т.${v.coordinates.volume}</span>
-                </div>
-                <div class="msg-search-actions">
-                  <a class="msg-qa" href="${pageUrl}">📖 Открыть</a>
-                  <a class="msg-qa" href="#/wander/x/${fmtXY(v.xy.x)}/y/${fmtXY(v.xy.y)}">🏛 Зал</a>
-                </div>
-                <span class="msg-time">${timeStr()}</span>
-              </div>
-            </div>`;
-          }).join('');
-        } catch (err) {
-          resultsHTML = `<div class="msg msg-them"><div class="msg-bubble"><p>Ошибка: ${u.esc(err.message)}</p></div></div>`;
-        }
-      }
 
       return `
       <section class="t-messenger search-view fade-in">
@@ -768,15 +759,7 @@
               <span class="msg-time">${timeStr()}</span>
             </div>
           </div>
-          ${resultsHTML}
-          ${!q ? `<div class="msg msg-them">
-            <div class="msg-avatar">📚</div>
-            <div class="msg-bubble">
-              <div class="msg-name">Библиотекарь</div>
-              <p>Напиши что-нибудь в поле ниже…</p>
-              <span class="msg-time">${timeStr()}</span>
-            </div>
-          </div>` : ''}
+          <div id="searchResultsSlot"></div>
         </div>
         <div class="msg-input-bar">
           <div class="msg-filler-row">
@@ -795,7 +778,10 @@
     bindSearch(route) {
       const input = u.$('#msgSearchInput');
       const sendBtn = u.$('#msgSearchBtn');
+      const resultsSlot = u.$('#searchResultsSlot');
+      const chat = u.$('#msgChat');
       let currentMode = route.params.get('mode') || 'empty';
+      const q = route.params.get('q') || '';
 
       u.$$('.msg-filler-btn[data-mode]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -812,8 +798,59 @@
       if (sendBtn) sendBtn.addEventListener('click', doSearch);
       if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 
-      /* Scroll chat to bottom */
-      const chat = u.$('#msgChat');
+      /* Async search: if query exists, load results via Worker */
+      if (q && resultsSlot) {
+        /* Show typing indicator */
+        const typingEl = app.workerBridge.showTyping(chat, 'Библиотекарь');
+
+        app.workerBridge.search(q, currentMode, 6).then(variants => {
+          removeTyping(typingEl);
+
+          const resultsHTML = variants.map(v => {
+            const vNumber = BigInt(v.number);
+            const vCoords = { sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
+            const vXY = { x: BigInt(v.xy.x), y: BigInt(v.xy.y) };
+            const snippet = u.snippetByRange(v.text, v.range, 60);
+            const phraseEsc = u.esc(v.phrase);
+            const snippetEsc = u.esc(snippet);
+            const highlightedSnippet = snippetEsc.replace(phraseEsc, `<mark>${phraseEsc}</mark>`);
+            const pageUrl = `#/page/${lib.numberToB64(vNumber)}?hl=${v.range.start}:${v.range.length}`;
+            return `
+            <div class="msg msg-them">
+              <div class="msg-avatar">🔍</div>
+              <div class="msg-bubble">
+                <div class="msg-name">Каталог · Вариант ${v.variant}</div>
+                <div class="msg-search-snippet">${highlightedSnippet}</div>
+                <div class="msg-search-coords">
+                  <span>X:${fmtXY(vXY.x)}</span>
+                  <span>Y:${fmtXY(vXY.y)}</span>
+                  <span>Т.${vCoords.volume}</span>
+                </div>
+                <div class="msg-search-actions">
+                  <a class="msg-qa" href="${pageUrl}">📖 Открыть</a>
+                  <a class="msg-qa" href="#/wander/x/${fmtXY(vXY.x)}/y/${fmtXY(vXY.y)}">🏛 Зал</a>
+                </div>
+                <span class="msg-time">${timeStr()}</span>
+              </div>
+            </div>`;
+          }).join('');
+          resultsSlot.innerHTML = resultsHTML;
+          if (chat) chat.scrollTop = chat.scrollHeight;
+        }).catch(err => {
+          removeTyping(typingEl);
+          resultsSlot.innerHTML = `<div class="msg msg-them"><div class="msg-bubble"><p>Ошибка: ${u.esc(err.message)}</p></div></div>`;
+        });
+      } else if (resultsSlot) {
+        resultsSlot.innerHTML = `<div class="msg msg-them">
+          <div class="msg-avatar">📚</div>
+          <div class="msg-bubble">
+            <div class="msg-name">Библиотекарь</div>
+            <p>Напиши что-нибудь в поле ниже…</p>
+            <span class="msg-time">${timeStr()}</span>
+          </div>
+        </div>`;
+      }
+
       if (chat) chat.scrollTop = chat.scrollHeight;
     },
   };
