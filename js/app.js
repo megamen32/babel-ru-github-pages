@@ -187,7 +187,7 @@
       </form>
       <div class="search-results" id="searchResults">
         <div id="searchResultsSlot">
-          ${q ? `<div class="empty-state"><div class="icon babel-spinner-inline">⬡</div><p style="margin-top:0.5rem;animation:babelPulse 1.5s ease-in-out infinite">Вавилон вычисляет…</p></div>` : `<div class="empty-state"><div class="icon">◈</div><p>Введите фразу, чтобы найти её в бесконечной библиотеке</p></div>`}
+          ${q ? `` : `<div class="empty-state"><div class="icon">◈</div><p>Введите фразу, чтобы найти её в бесконечной библиотеке</p></div>`}
         </div>
       </div>
     </section>`;

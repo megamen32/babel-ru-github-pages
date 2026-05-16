@@ -59,35 +59,10 @@
   let loadingEl = null;
   let loadingCount = 0;
 
-  function showLoading() {
-    loadingCount++;
-    if (!loadingEl) {
-      loadingEl = document.createElement('div');
-      loadingEl.className = 'babel-loading-overlay';
-      loadingEl.innerHTML = `
-        <div class="babel-loading-content">
-          <div class="babel-loading-spinner">
-            <div class="babel-spinner-ring"></div>
-            <div class="babel-spinner-hex">⬡</div>
-          </div>
-          <div class="babel-loading-text">Вавилон вычисляет…</div>
-          <div class="babel-loading-sub">Бесконечность требует терпения</div>
-        </div>
-      `;
-      document.body.appendChild(loadingEl);
-    }
-    loadingEl.classList.add('active');
-  }
-
-  function hideLoading() {
-    loadingCount--;
-    if (loadingCount <= 0) {
-      loadingCount = 0;
-      if (loadingEl) {
-        loadingEl.classList.remove('active');
-      }
-    }
-  }
+  /* Loading overlay disabled — jokes + typing indicator in chat
+     already provide feedback. The overlay was blocking joke visibility. */
+  function showLoading() {}
+  function hideLoading() {}
 
   /* ═══════════════════════════════════════════════════════════
      TYPING INDICATOR (for messenger theme)
