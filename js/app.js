@@ -1,6 +1,7 @@
 (() => {
   const app = window.BabelApp;
   const { esc, $, $$, highlightByRange, snippetByRange, renderPageSpans, copyText, downloadText, routeFor } = app.utils;
+  const ALG = app.config.ALG;
   const lib = app.library;
   const store = app.storage;
 
