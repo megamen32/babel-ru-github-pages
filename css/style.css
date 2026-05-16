@@ -910,6 +910,15 @@ main#view { flex: 1; padding: 0; }
   margin: 0.55rem 0 0.65rem;
   padding: 0.2rem 0;
 }
+.tg-page-thread {
+  margin-top: 0.8rem;
+}
+.msg-dialogue-page .msg-avatar {
+  background: linear-gradient(135deg, rgba(110,198,255,0.24), rgba(115,224,255,0.1));
+}
+.msg-dialogue-page .msg-bubble-telegram-search {
+  width: min(100%, 860px);
+}
 .tg-preview-msg {
   display: flex;
   align-items: flex-end;

@@ -187,6 +187,36 @@
       </div>`;
   }
 
+  function renderDialoguePageThread(text, phrase) {
+    const messages = parseTelegramDialogue(text, phrase);
+    if (!messages.length) return '';
+
+    const previewHTML = messages.map((message) => `
+      <div class="tg-preview-msg">
+        <div class="tg-preview-avatar" style="--tg-avatar-color:${message.color}">${u.esc(message.avatar)}</div>
+        <div class="tg-preview-bubble">
+          <div class="tg-preview-name" style="color:${message.color}">${u.esc(message.name)}</div>
+          <div class="tg-preview-text">${message.bodyHTML}</div>
+          <div class="tg-preview-meta">
+            <span class="tg-preview-time">${u.esc(message.time)}</span>
+          </div>
+        </div>
+      </div>`).join('');
+
+    return `
+      <div class="msg msg-them msg-dialogue-card msg-dialogue-page">
+        <div class="msg-avatar">💬</div>
+        <div class="msg-bubble msg-bubble-telegram-search">
+          <div class="msg-name">Переписка на листе</div>
+          <p class="msg-genre-desc">Открытый лист показан как цепочка сообщений, а не как сплошной текстовый блок.</p>
+          <div class="tg-preview-thread tg-page-thread">
+            ${previewHTML}
+          </div>
+          <span class="msg-time">${timeStr()}</span>
+        </div>
+      </div>`;
+  }
+
   /* Character stats from indices */
   function charStats(indices) {
     let s = { cyrillic: 0, latin: 0, spaces: 0, digits: 0, punctuation: 0, emoji: 0 };
@@ -873,6 +903,7 @@
       if (!route.pageNumber) return;
       const number = route.pageNumber;
       const coords = lib.numberToCoordinates(number);
+      const highlight = lib.parseHighlight(route.params);
 
       const contentSlot = u.$('#pageContentSlot');
       const navMsg = u.$('#pageNavMsg');
@@ -884,18 +915,30 @@
         const indices = data.indices;
         const pageCoords = { sector: BigInt(data.coords.sector), hall: BigInt(data.coords.hall), wall: BigInt(data.coords.wall), shelf: BigInt(data.coords.shelf), volume: BigInt(data.coords.volume), page: BigInt(data.coords.page) };
         const stats = charStats(indices);
+        const fullText = u.indicesToString(indices);
+        const highlightPhrase = highlight
+          ? fullText.slice(highlight.start, highlight.start + highlight.length).trim()
+          : '';
+        const classification = lib.classifyPageText(fullText);
 
         /* Update density badge — show genre classification */
         if (densityEl) {
-          const classification = lib.classifyPageText(u.indicesToString(indices));
           densityEl.className = `msg-density ${stats.label === 'Читаемая' ? 'msg-d-read' : stats.label === 'Разреженная' ? 'msg-d-sparse' : 'msg-d-noise'}`;
           densityEl.textContent = `${classification.label} ${Math.round(classification.score * 100)}%`;
+        }
+
+        if (classification.kind === 'dialogue') {
+          if (contentSlot) {
+            contentSlot.innerHTML = renderDialoguePageThread(fullText, highlightPhrase);
+          }
+          if (navMsg) navMsg.style.display = '';
+          if (chat) chat.scrollTop = 0;
+          return;
         }
 
         /* Render page text as chat messages — \n is a line break
            INSIDE the bubble (like a real messenger), NOT a new post.
            Only split into separate bubbles if text exceeds ~2000 chars. */
-        const fullText = u.indicesToString(indices);
         const MAX_BUBBLE = 2000;
         const bubbleChunks = [];
         if (fullText.length <= MAX_BUBBLE) {

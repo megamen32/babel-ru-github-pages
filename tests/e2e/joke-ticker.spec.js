@@ -111,4 +111,18 @@ test.describe('joke ticker', () => {
     await expect(thread.locator('.tg-preview-time').first()).toContainText(/(AM|PM)/);
     await expect(thread.locator('mark').first()).toContainText('логика');
   });
+
+  test('opens dialogue pages as telegram-like chat threads instead of plain text blocks', async ({ page }) => {
+    await page.goto('/#/search?q=%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B0');
+
+    const openLink = page.locator('.msg-dialogue-card .msg-search-actions .msg-qa[href*="#/page/"]').first();
+    await expect(openLink).toBeVisible({ timeout: 15000 });
+    await openLink.click();
+
+    const pageThread = page.locator('.msg-dialogue-page .tg-page-thread');
+    await expect(pageThread).toBeVisible();
+    await expect(pageThread.locator('.tg-preview-msg')).toHaveCount(5);
+    await expect(page.locator('.msg-dialogue-page .msg-name')).toContainText('Переписка на листе');
+    await expect(page.locator('.msg-bubble-page')).toHaveCount(0);
+  });
 });
