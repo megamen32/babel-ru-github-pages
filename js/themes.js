@@ -89,6 +89,104 @@
     return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
   }
 
+  const TELEGRAM_NAME_COLORS = ['#6ec6ff', '#ff7ab6', '#73e0ff', '#9cff8b', '#ffd166', '#c8a1ff'];
+
+  function telegramAvatarLetter(name) {
+    const normalized = String(name || '').trim();
+    return normalized ? normalized[0].toUpperCase() : '•';
+  }
+
+  function telegramNameColor(name) {
+    return TELEGRAM_NAME_COLORS[u.fnv1a(String(name || 'telegram')) % TELEGRAM_NAME_COLORS.length];
+  }
+
+  function highlightSearchText(text, phrase) {
+    const source = String(text || '');
+    const target = String(phrase || '').trim();
+    if (!target) return u.esc(source);
+    const lowerSource = source.toLowerCase();
+    const lowerTarget = target.toLowerCase();
+    const index = lowerSource.indexOf(lowerTarget);
+    if (index < 0) return u.esc(source);
+    const end = index + target.length;
+    return `${u.esc(source.slice(0, index))}<mark>${u.esc(source.slice(index, end))}</mark>${u.esc(source.slice(end))}`;
+  }
+
+  function parseTelegramDialogue(text, phrase) {
+    const rawLines = String(text || '').split('\n');
+    const parsed = [];
+    let offset = 0;
+
+    for (const rawLine of rawLines) {
+      const line = rawLine.trim();
+      const start = offset;
+      offset += rawLine.length + 1;
+      if (!line) continue;
+
+      const match = line.match(/^\[(.+?)\]\s*([^:]+):\s*(.*)$/);
+      if (match) {
+        const meta = match[1];
+        const name = match[2].trim();
+        const body = match[3].trim();
+        const timeMatch = meta.match(/(\d{1,2}:\d{2}\s*(?:am|pm))/i);
+        parsed.push({
+          name,
+          body,
+          time: timeMatch ? timeMatch[1].toUpperCase() : meta,
+          lineStart: start,
+        });
+      } else if (parsed.length) {
+        parsed[parsed.length - 1].body += `\n${line}`;
+      }
+    }
+
+    const phraseLower = String(phrase || '').toLowerCase();
+    const focusIndex = parsed.findIndex((message) => message.body.toLowerCase().includes(phraseLower));
+    const startIndex = focusIndex <= 1 ? 0 : Math.max(0, focusIndex - 2);
+    const visible = parsed.slice(startIndex, startIndex + 5);
+
+    return visible.map((message) => ({
+      ...message,
+      avatar: telegramAvatarLetter(message.name),
+      color: telegramNameColor(message.name),
+      bodyHTML: highlightSearchText(message.body, phrase).replace(/\n/g, '<br>'),
+    }));
+  }
+
+  function renderDialogueSearchPreview(variant, pageUrl) {
+    const messages = parseTelegramDialogue(variant.text, variant.phrase);
+    if (!messages.length) return null;
+
+    const previewHTML = messages.map((message) => `
+      <div class="tg-preview-msg">
+        <div class="tg-preview-avatar" style="--tg-avatar-color:${message.color}">${u.esc(message.avatar)}</div>
+        <div class="tg-preview-bubble">
+          <div class="tg-preview-name" style="color:${message.color}">${u.esc(message.name)}</div>
+          <div class="tg-preview-text">${message.bodyHTML}</div>
+          <div class="tg-preview-meta">
+            <span class="tg-preview-time">${u.esc(message.time)}</span>
+          </div>
+        </div>
+      </div>`).join('');
+
+    return `
+      <div class="msg msg-them msg-dialogue-card">
+        <div class="msg-avatar">💬</div>
+        <div class="msg-bubble msg-bubble-telegram-search">
+          <div class="msg-name">В переписке</div>
+          <p class="msg-genre-desc">Фраза внутри настоящей чатовой сцены — как в Telegram.</p>
+          <div class="tg-preview-thread">
+            ${previewHTML}
+          </div>
+          <div class="msg-search-actions">
+            <a class="msg-qa" href="${pageUrl}">📖 Открыть</a>
+            <a class="msg-qa" href="#/wander/x/${fmtXY(BigInt(variant.xy.x))}/y/${fmtXY(BigInt(variant.xy.y))}">🏛 Зал</a>
+          </div>
+          <span class="msg-time">${timeStr()}</span>
+        </div>
+      </div>`;
+  }
+
   /* Character stats from indices */
   function charStats(indices) {
     let s = { cyrillic: 0, latin: 0, spaces: 0, digits: 0, punctuation: 0, emoji: 0 };
@@ -979,10 +1077,17 @@
             const gi = GENRE_INFO[mode];
             const vCoords = { sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
             const vXY = { x: BigInt(v.xy.x), y: BigInt(v.xy.y) };
+            const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${v.range.start}:${v.range.length}` });
+            if (mode === 'dialogue') {
+              const dialoguePreview = renderDialogueSearchPreview(v, pageUrl);
+              if (dialoguePreview) {
+                html += dialoguePreview;
+                continue;
+              }
+            }
             const snippet = u.snippetByRange(v.text, v.range, 60);
             const snippetEsc = u.esc(snippet);
             const highlightedSnippet = snippetEsc.replace(phraseEsc, `<mark>${phraseEsc}</mark>`);
-            const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${v.range.start}:${v.range.length}` });
             html += `
             <div class="msg msg-them">
               <div class="msg-avatar">${gi.icon}</div>

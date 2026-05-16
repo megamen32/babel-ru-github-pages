@@ -100,4 +100,15 @@ test.describe('joke ticker', () => {
     expect(Math.abs(metrics.scrollTop - metrics.userTop)).toBeLessThan(160);
     expect(metrics.scrollTop).toBeLessThan(metrics.maxScrollTop);
   });
+
+  test('renders dialogue search results as telegram-like message bubbles', async ({ page }) => {
+    await page.goto('/#/search?q=%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B0');
+
+    const thread = page.locator('.tg-preview-thread').first();
+    await expect(thread).toBeVisible();
+    await expect(thread.locator('.tg-preview-msg')).toHaveCount(5);
+    await expect(thread.locator('.tg-preview-name').first()).toContainText(/[А-Яа-яЁё]/);
+    await expect(thread.locator('.tg-preview-time').first()).toContainText(/(AM|PM)/);
+    await expect(thread.locator('mark').first()).toContainText('логика');
+  });
 });

@@ -767,7 +767,10 @@ main#view { flex: 1; padding: 0; }
 
 .msg-chat {
   flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
-  padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;
+  padding: 0.85rem 0.9rem; display: flex; flex-direction: column; gap: 0.55rem;
+  background:
+    radial-gradient(circle at top left, rgba(68, 110, 154, 0.18), transparent 28%),
+    linear-gradient(180deg, #0f1723 0%, #111926 100%);
 }
 
 .msg-date-divider {
@@ -775,23 +778,32 @@ main#view { flex: 1; padding: 0; }
   padding: 0.5rem 0;
 }
 
-.msg { display: flex; gap: 0.4rem; max-width: 85%; animation: msgSlideIn 0.3s ease; }
+.msg { display: flex; gap: 0.45rem; max-width: 88%; animation: msgSlideIn 0.3s ease; }
 .msg-them { align-self: flex-start; }
 .msg-us { align-self: flex-end; flex-direction: row-reverse; }
 
-.msg-avatar { font-size: 1.3rem; flex-shrink: 0; margin-top: 0.25rem; }
+.msg-avatar {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; flex-shrink: 0; margin-top: auto;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(110,198,255,0.18), rgba(110,198,255,0.06));
+  border: 1px solid rgba(110,198,255,0.18);
+  color: #dff4ff;
+}
 
 .msg-bubble {
-  padding: 0.5rem 0.75rem;
-  background: var(--bg-card);
-  border-radius: 12px 12px 12px 4px;
-  border: 1px solid var(--border);
+  padding: 0.62rem 0.82rem 0.5rem;
+  background: #1b2a3a;
+  border-radius: 18px 18px 18px 6px;
+  border: 1px solid rgba(255,255,255,0.03);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.18);
   max-width: 100%;
   word-wrap: break-word; overflow-wrap: break-word;
 }
 .msg-us .msg-bubble {
-  background: var(--accent2);
-  border-radius: 12px 12px 4px 12px;
+  background: linear-gradient(180deg, #2d4e68 0%, #254761 100%);
+  border-radius: 18px 18px 6px 18px;
   color: #fff;
 }
 .msg-bubble-page {
@@ -804,10 +816,10 @@ main#view { flex: 1; padding: 0; }
   overflow-wrap: break-word;
 }
 
-.msg-name { font-size: 0.65rem; font-weight: 600; color: var(--accent); margin-bottom: 0.2rem; }
-.msg-text { font-size: 0.9rem; line-height: 1.5; }
+.msg-name { font-size: 0.7rem; font-weight: 700; color: #6ec6ff; margin-bottom: 0.22rem; }
+.msg-text { font-size: 0.96rem; line-height: 1.45; }
 .msg-text strong { color: var(--accent); }
-.msg-time { font-size: 0.55rem; color: var(--text-muted); display: block; text-align: right; margin-top: 0.2rem; }
+.msg-time { font-size: 0.72rem; color: #7f94a8; display: block; text-align: right; margin-top: 0.25rem; }
 .msg-search-count {
   margin: 0.55rem 0;
   padding: 0.55rem 0.65rem;
@@ -884,6 +896,73 @@ main#view { flex: 1; padding: 0; }
 .msg-search-snippet mark { background: var(--accent-dim); color: var(--text); padding: 0 2px; border-radius: 2px; }
 .msg-search-coords { display: flex; gap: 0.4rem; font-size: 0.65rem; color: var(--text-dim); margin-bottom: 0.4rem; }
 .msg-search-actions { display: flex; gap: 0.3rem; }
+.msg-bubble-telegram-search {
+  min-width: min(100%, 620px);
+  padding-bottom: 0.65rem;
+}
+.msg-dialogue-card .msg-avatar {
+  background: linear-gradient(135deg, rgba(110,198,255,0.22), rgba(255,122,182,0.10));
+}
+.tg-preview-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0.55rem 0 0.65rem;
+  padding: 0.2rem 0;
+}
+.tg-preview-msg {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+  max-width: 100%;
+}
+.tg-preview-avatar {
+  --tg-avatar-color: #6ec6ff;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--tg-avatar-color) 88%, white 12%), color-mix(in srgb, var(--tg-avatar-color) 55%, black 45%));
+  box-shadow: 0 8px 20px rgba(0,0,0,0.22);
+}
+.tg-preview-bubble {
+  max-width: min(100%, 720px);
+  padding: 0.72rem 0.92rem 0.45rem;
+  border-radius: 22px 22px 22px 8px;
+  background: #1b2a3a;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.2);
+}
+.tg-preview-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-bottom: 0.22rem;
+}
+.tg-preview-text {
+  font-size: 0.96rem;
+  line-height: 1.45;
+  color: #edf4fa;
+}
+.tg-preview-text mark {
+  background: rgba(110, 198, 255, 0.22);
+  color: #fff;
+  border-radius: 4px;
+  padding: 0 2px;
+}
+.tg-preview-meta {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.18rem;
+}
+.tg-preview-time {
+  font-size: 0.72rem;
+  color: #8096ab;
+}
 
 /* Genre description in search results */
 .msg-genre-desc {
