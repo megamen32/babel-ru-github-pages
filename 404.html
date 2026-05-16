@@ -1,40 +1,14 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Русская Библиотека Вавилона</title>
-  <meta name="description" content="Русская Библиотека Вавилона: координаты, зал, стена, полка, том, страница, base64url." />
-  <meta property="og:title" content="Русская Библиотека Вавилона" />
-  <meta property="og:description" content="Один алгоритм ru1: настоящая координатная библиотека без хранения страниц." />
-  <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="./styles.css" />
+  <meta charset="UTF-8">
+  <script>
+    // Redirect to index.html with hash for SPA routing
+    var path = window.location.pathname.replace(/^\/[^/]+/, '');
+    window.location.replace(window.location.origin + window.location.pathname.split('/').slice(0, -1).join('/') + '/#' + path);
+  </script>
 </head>
 <body>
-  <div class="shell">
-    <header class="hero">
-      <a class="brand" href="./#/">
-        <span class="brand-mark">БВ</span>
-        <span>
-          <strong>Русская Библиотека Вавилона</strong>
-          <small>зал · стена · полка · том · лист</small>
-        </span>
-      </a>
-      <nav class="top-actions">
-        <button id="randomBtn" type="button">Случайная страница</button>
-        <button id="historyBtn" type="button">История</button>
-        <button id="favoritesBtn" type="button">Избранное</button>
-        <button id="converterBtn" type="button">Конвертер</button>
-        <button id="copyLinkBtn" type="button">Скопировать ссылку</button>
-      </nav>
-    </header>
-    <main id="app"></main>
-    <footer class="footer">
-      <span>Один алгоритм: <code>ru1</code>.</span>
-      <span><code>координаты ⇄ BigInt ⇄ текст</code></span>
-      <span>Страницы не хранятся.</span>
-    </footer>
-  </div>
-  <script src="./app.js"></script>
+  <p>Перенаправление в Вавилон...</p>
 </body>
 </html>

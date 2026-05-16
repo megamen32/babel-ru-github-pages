@@ -21,5 +21,9 @@
       items.unshift({ ...item, createdAt: new Date().toISOString() });
       app.storage.writeStore("babelFavorites", items, 100);
     },
+    removeFavorite(url) {
+      const items = app.storage.readStore("babelFavorites").filter((entry) => entry.url !== url);
+      app.storage.writeStore("babelFavorites", items, 100);
+    },
   };
 })();

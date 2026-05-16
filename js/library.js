@@ -110,6 +110,72 @@
     return value;
   }
 
+  /* ---- XY Coordinate System (Szudzik pairing) ---- */
+
+  function szudzikPair(x, y) {
+    const a = x >= 0 ? 2 * x : -2 * x - 1;
+    const b = y >= 0 ? 2 * y : -2 * y - 1;
+    return a >= b ? a * a + a + b : b * b + a;
+  }
+
+  /* BigInt integer square root (Newton's method) */
+  function bigSqrt(n) {
+    if (n < 0n) throw new Error("sqrt of negative");
+    if (n < 2n) return n;
+    let x = n;
+    let y = (x + 1n) / 2n;
+    while (y < x) {
+      x = y;
+      y = (x + n / x) / 2n;
+    }
+    return x;
+  }
+
+  function szudzikUnpair(n) {
+    const bn = BigInt(n);
+    const m = bigSqrt(bn);
+    let a, b;
+    if (bn - m * m < m) {
+      a = bn - m * m;
+      b = m;
+    } else {
+      a = m;
+      b = bn - m * m - m;
+    }
+    const x = a % 2n === 0n ? a / 2n : -(a + 1n) / 2n;
+    const y = b % 2n === 0n ? b / 2n : -(b + 1n) / 2n;
+    return { x, y };
+  }
+
+  function xyToHallXY(x, y) {
+    const linear = szudzikPair(x, y);
+    const sector = BigInt(Math.floor(linear / 20)) + 1n;
+    const hall = BigInt(linear % 20) + 1n;
+    return { sector, hall };
+  }
+
+  function hallToXY(sector, hall) {
+    const linear = (BigInt(sector) - 1n) * 20n + (BigInt(hall) - 1n);
+    return szudzikUnpair(linear);
+  }
+
+  function xyToCoordinates(x, y, wall, shelf, volume, page) {
+    const { sector, hall } = xyToHallXY(x, y);
+    return {
+      sector, hall,
+      wall: BigInt(wall || 1),
+      shelf: BigInt(shelf || 1),
+      volume: BigInt(volume || 1),
+      page: BigInt(page || 1),
+    };
+  }
+
+  function coordinatesToXY(coords) {
+    return hallToXY(coords.sector, coords.hall);
+  }
+
+  /* ---- Filler Generation ---- */
+
   function createWordFiller(seed, length) {
     const rng = rngFrom(seed);
     const chunks = [];
@@ -148,6 +214,8 @@
     return clamp(Math.floor(rng() * Math.max(1, maxPosition + 1)), 0, maxPosition);
   }
 
+  /* ---- Public API ---- */
+
   app.library = {
     maxPageNumber,
     permuteIndex(index) {
@@ -172,6 +240,50 @@
     pageTitle(coordinates) {
       return `Сектор ${coordinates.sector} · Зал ${coordinates.hall} · Стена ${coordinates.wall} · Полка ${coordinates.shelf} · Том ${coordinates.volume} · Лист ${coordinates.page}`;
     },
+
+    /* XY Coordinate System */
+    xyToCoordinates,
+    coordinatesToXY,
+    xyToHallXY,
+    hallToXY,
+    szudzikPair,
+    szudzikUnpair,
+
+    /* Get the blind spine text for a volume (first ~25 chars of page 1) */
+    getBookSpine(x, y, wall, shelf, volume) {
+      try {
+        const coords = xyToCoordinates(x, y, wall, shelf, volume, 1);
+        const number = app.library.coordinatesToNumber(coords);
+        const text = numberToText(number);
+        const trimmed = text.trimStart();
+        if (trimmed.length === 0) return "";
+        return trimmed.slice(0, 25);
+      } catch {
+        return "";
+      }
+    },
+
+    /* Get page content by XY coordinates */
+    getPageByXY(x, y, wall, shelf, volume, page) {
+      const coords = xyToCoordinates(x, y, wall, shelf, volume, page);
+      const number = app.library.coordinatesToNumber(coords);
+      const text = numberToText(number);
+      return { number, text, coordinates: coords };
+    },
+
+    /* Check if a spine text looks like noise or has readable content */
+    classifySpine(spineText) {
+      if (!spineText) return "empty";
+      if (spineText.trim().length === 0) return "empty";
+      // Look for word-like patterns: sequences of 3+ consecutive Cyrillic letters
+      const wordPattern = /[абвгдеёжзийклмнопрстуфхцчшщъыьэюя]{3,}/gi;
+      const words = spineText.match(wordPattern);
+      if (words && words.length >= 1 && words.some(w => w.length >= 4)) return "text";
+      if (words && words.length >= 2) return "text";
+      return "noise";
+    },
+
+    /* Encoding helpers */
     bytesToBase64Url(bytes) {
       let binary = "";
       for (const byte of bytes) {
@@ -261,10 +373,13 @@
         }
         const text = chars.join("");
         const number = textToNumber(text);
+        const coords = app.library.numberToCoordinates(number);
+        const xy = coordinatesToXY(coords);
         variants.push({
           mode,
           number,
-          coordinates: app.library.numberToCoordinates(number),
+          coordinates: coords,
+          xy,
           phrase,
           position,
           text,
@@ -277,6 +392,11 @@
     randomPageNumber() {
       const text = createNoiseFiller(`${Date.now()}:${Math.random()}`, ALG.pageLength);
       return textToNumber(text);
+    },
+    randomHallXY() {
+      const x = Math.floor(Math.random() * 2000) - 1000;
+      const y = Math.floor(Math.random() * 2000) - 1000;
+      return { x, y };
     },
     parseAnyAddress(raw, kind) {
       const value = String(raw || "").trim();

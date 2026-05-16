@@ -6,6 +6,9 @@
     $(selector) {
       return document.querySelector(selector);
     },
+    $$(selector) {
+      return document.querySelectorAll(selector);
+    },
     esc(value) {
       return String(value).replace(/[&<>"']/g, (char) => (
         { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]

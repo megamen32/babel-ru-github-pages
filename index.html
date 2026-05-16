@@ -1,35 +1,42 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Библиотека Вавилона</title>
-  <meta
-    name="description"
-    content="Художественная русская Библиотека Вавилона: прогулка по залам, поиск страниц и отдельная страница с алгоритмом и доказательством."
-  />
-  <meta property="og:title" content="Библиотека Вавилона" />
-  <meta
-    property="og:description"
-    content="Главная как вход в библиотеку: прогулка по шестигранным залам, поиск страниц и объяснение алгоритма."
-  />
-  <meta property="og:type" content="website" />
-  <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="./styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Вавилон — Гексагональная Бесконечность</title>
+  <meta name="description" content="Библиотека Вавилона: блуждай по бесконечным шестигранным залам, ищи любой текст во вселенной.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬡</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <script defer src="./js/config.js"></script>
-  <script defer src="./js/utils.js"></script>
-  <script defer src="./js/library.js"></script>
-  <script defer src="./js/storage.js"></script>
-  <script defer src="./js/views/common.js"></script>
-  <script defer src="./js/views/home.js"></script>
-  <script defer src="./js/views/search.js"></script>
-  <script defer src="./js/views/library.js"></script>
-  <script defer src="./js/views/page.js"></script>
-  <script defer src="./js/views/about.js"></script>
-  <script defer src="./js/views/utility.js"></script>
-  <script defer src="./js/router.js"></script>
-  <script defer src="./js/main.js"></script>
+  <div class="bg-atmosphere"></div>
+  <div class="scanlines"></div>
+  <div class="particles" id="particles"></div>
+  <div class="shell" id="shell">
+    <header class="site-header">
+      <a class="brand" href="#/">
+        <span class="brand-icon">В</span>
+        <span>Вавилон</span>
+      </a>
+      <nav class="top-nav" id="topNav">
+        <a href="#/">Главная</a>
+        <a href="#/wander/x/0/y/0">Блуждание</a>
+        <a href="#/search">Каталог</a>
+        <a href="#/about">Алгоритм</a>
+        <a href="#/favorites">Избранное</a>
+      </nav>
+    </header>
+    <main id="view"></main>
+    <footer class="site-footer">
+      <p class="borges">Вселенная, которую другие называют Библиотекой…</p>
+      <p style="margin-top:0.5rem">900 символов · 50 букв · Бесконечность</p>
+    </footer>
+  </div>
+
+  <script defer src="js/config.js"></script>
+  <script defer src="js/utils.js"></script>
+  <script defer src="js/library.js"></script>
+  <script defer src="js/storage.js"></script>
+  <script defer src="js/app.js"></script>
 </body>
 </html>
