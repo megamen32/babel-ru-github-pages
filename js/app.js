@@ -152,7 +152,6 @@
     const parts = route.parts;
     let x = 0, y = 0, wall = 1;
 
-    // Parse from URL: #/wander/x/451/y/-78 or #/wander/x/0/y/0/wall/2
     for (let i = 1; i < parts.length; i += 2) {
       if (parts[i] === "x") x = parseInt(parts[i + 1]) || 0;
       if (parts[i] === "y") y = parseInt(parts[i + 1]) || 0;
@@ -160,13 +159,24 @@
     }
 
     wanderState = { x, y, wall };
-
     const hallInfo = lib.xyToHallXY(x, y);
 
-    let shelvesHTML = "";
-    for (let s = 1; s <= 5; s++) {
-      shelvesHTML += renderShelf(x, y, wall, s);
-    }
+    // Adjacent walls for side panels
+    const leftWall = wall > 1 ? wall - 1 : 4;
+    const rightWall = wall < 4 ? wall + 1 : 1;
+
+    // Build shelves for back wall (main)
+    const backShelves = [];
+    for (let s = 1; s <= 5; s++) backShelves.push(renderWallShelves(x, y, wall, s));
+
+    // Build mini-shelves for side walls (just 3 visible)
+    const leftShelves = [];
+    for (let s = 1; s <= 3; s++) leftShelves.push(renderMiniShelves(x, y, leftWall, s));
+    const rightShelves = [];
+    for (let s = 1; s <= 3; s++) rightShelves.push(renderMiniShelves(x, y, rightWall, s));
+
+    // Hall hue based on coordinates
+    const hallHue = ((x * 73 + y * 137 + wall * 51) % 360 + 360) % 360;
 
     return `
     <section class="wander fade-in">
@@ -183,6 +193,50 @@
         </div>
       </div>
 
+      <!-- 3D Hexagonal Room -->
+      <div class="hex-room" style="--room-hue: ${hallHue};">
+        <!-- Ceiling -->
+        <div class="hex-ceiling">
+          <div class="ceiling-light"></div>
+        </div>
+
+        <!-- Left corridor -->
+        <div class="hex-corridor hex-corridor-left">
+          <div class="corridor-depth"></div>
+          <div class="corridor-depth cd-2"></div>
+        </div>
+
+        <!-- Right corridor -->
+        <div class="hex-corridor hex-corridor-right">
+          <div class="corridor-depth"></div>
+          <div class="corridor-depth cd-2"></div>
+        </div>
+
+        <!-- Left wall (angled) -->
+        <div class="hex-wall hex-wall-left">
+          <div class="wall-label">Стена ${leftWall}</div>
+          ${leftShelves.join("")}
+        </div>
+
+        <!-- Back wall (main, flat) -->
+        <div class="hex-wall hex-wall-back">
+          <div class="wall-label wall-label-active">Стена ${wall}</div>
+          ${backShelves.join("")}
+        </div>
+
+        <!-- Right wall (angled) -->
+        <div class="hex-wall hex-wall-right">
+          <div class="wall-label">Стена ${rightWall}</div>
+          ${rightShelves.join("")}
+        </div>
+
+        <!-- Floor -->
+        <div class="hex-floor">
+          <div class="floor-grid"></div>
+        </div>
+      </div>
+
+      <!-- Wall selector tabs -->
       <div class="wall-tabs">
         <button class="wall-tab ${wall === 1 ? 'active' : ''}" data-wall="1">Стена I</button>
         <button class="wall-tab ${wall === 2 ? 'active' : ''}" data-wall="2">Стена II</button>
@@ -190,8 +244,9 @@
         <button class="wall-tab ${wall === 4 ? 'active' : ''}" data-wall="4">Стена IV</button>
       </div>
 
+      <!-- Full shelf list (below room) -->
       <div class="shelves" id="shelvesContainer">
-        ${shelvesHTML}
+        ${backShelves.join("")}
       </div>
 
       <div class="wander-actions">
@@ -201,7 +256,7 @@
     </section>`;
   }
 
-  function renderShelf(x, y, wall, shelf) {
+  function renderWallShelves(x, y, wall, shelf) {
     let spines = "";
     for (let v = 1; v <= 32; v++) {
       const spineText = lib.getBookSpine(x, y, wall, shelf, v);
@@ -221,6 +276,19 @@
         ${spines}
       </div>
     </div>`;
+  }
+
+  function renderMiniShelves(x, y, wall, shelf) {
+    // Show only first 12 books for side walls (smaller)
+    let spines = "";
+    for (let v = 1; v <= 12; v++) {
+      const spineText = lib.getBookSpine(x, y, wall, shelf, v);
+      const classification = lib.classifySpine(spineText);
+      const cls = classification === "noise" ? "noise" : (classification === "text" ? "has-text" : "");
+      const pageUrl = `#/page/${lib.numberToB64(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, shelf, v, 1)))}`;
+      spines += `<a class="mini-spine ${cls}" href="${pageUrl}" title="Том ${v}"></a>`;
+    }
+    return `<div class="mini-shelf">${spines}</div>`;
   }
 
   function bindWander(route) {
