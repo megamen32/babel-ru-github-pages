@@ -808,6 +808,15 @@ main#view { flex: 1; padding: 0; }
 .msg-text { font-size: 0.9rem; line-height: 1.5; }
 .msg-text strong { color: var(--accent); }
 .msg-time { font-size: 0.55rem; color: var(--text-muted); display: block; text-align: right; margin-top: 0.2rem; }
+.msg-search-count {
+  margin: 0.55rem 0;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
 
 .msg-quick-actions { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
 .msg-qa {

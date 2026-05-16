@@ -861,6 +861,16 @@
 
     renderSearch(route) {
       const q = route.params.get('q') || '';
+      const normalizedQuery = q ? u.normalizeText(q) : '';
+      const userMessageHTML = normalizedQuery ? `
+          <div class="msg msg-us" id="searchUserMessage">
+            <div class="msg-avatar">🙂</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Ты</div>
+              <p class="msg-text">${escWithBR(normalizedQuery)}</p>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>` : '';
 
       return `
       <section class="t-messenger search-view fade-in">
@@ -877,6 +887,7 @@
               <span class="msg-time">${timeStr()}</span>
             </div>
           </div>
+          ${userMessageHTML}
           <div id="searchResultsSlot"></div>
         </div>
         <div class="msg-input-bar">
@@ -897,6 +908,7 @@
       let isActive = true;
       let typingEl = null;
       let jokeTicker = null;
+      const userMessage = u.$('#searchUserMessage');
 
       /* Genre definitions for multi-mode results */
       const GENRE_INFO = {
@@ -912,6 +924,11 @@
         const val = (input.value || '').trim();
         if (val) location.hash = `#/search?q=${encodeURIComponent(val)}`;
       }
+      function keepUserMessageInView() {
+        if (userMessage) {
+          userMessage.scrollIntoView({ block: 'start', behavior: 'auto' });
+        }
+      }
       if (sendBtn) sendBtn.addEventListener('click', doSearch);
       if (input) {
         input.addEventListener('keydown', (event) => {
@@ -924,10 +941,12 @@
 
       /* Async search: if query exists, search across ALL modes */
       if (q && resultsSlot) {
+        const cloud = u.describeSearchCloud(q);
         /* Show typing indicator */
         typingEl = app.workerBridge.showTyping(chat, 'Библиотекарь');
         /* Show jokes while waiting */
         jokeTicker = app.workerBridge.startJokeTicker(chat, { seedText: q });
+        requestAnimationFrame(keepUserMessageInView);
 
         app.workerBridge.searchMultiMode(q).then(({ phrase, modes: resultsByMode }) => {
           if (!isActive) return;
@@ -935,15 +954,18 @@
           jokeTicker.stop();
 
           const phraseEsc = u.esc(phrase);
+          const countLine = cloud.exactCount
+            ? `<p class="msg-search-count">Для этой фразы подходит ровно <strong>${u.esc(cloud.exactCount)}</strong> вариантов страниц.</p>`
+            : `<p class="msg-search-count">Для этой фразы подходит <strong>${u.esc(cloud.formula)}</strong>, то есть <strong>${u.esc(cloud.binaryFormula)}</strong> вариантов. Это ${u.esc(cloud.scientific)} и примерно ${cloud.digits.toLocaleString('ru-RU')} цифр.</p>`;
           /* Librarian explains the multiplicity */
           let html = `
           <div class="msg msg-them">
             <div class="msg-avatar">📚</div>
             <div class="msg-bubble">
               <div class="msg-name">Библиотекарь</div>
-              <p>Ты ввёл: <strong>${phraseEsc}</strong></p>
               <p>Эта фраза — не адрес одной страницы. Это дверь в целое <strong>облако страниц</strong>.</p>
               <p>Она может быть в начале листа или в конце. Вокруг может быть пустота, случайный шум, переписка, дневник — и <em>каждый вариант</em> — это настоящая страница с собственным адресом в библиотеке.</p>
+              ${countLine}
               <p>Я не могу показать их все — их слишком много. Но вот несколько входов в это множество:</p>
               <span class="msg-time">${timeStr()}</span>
             </div>
@@ -1003,12 +1025,13 @@
           </div>`;
 
           resultsSlot.innerHTML = html;
-          if (chat) chat.scrollTop = chat.scrollHeight;
+          keepUserMessageInView();
         }).catch(err => {
           if (!isActive) return;
           app.workerBridge.removeTyping(typingEl);
           jokeTicker.stop();
           resultsSlot.innerHTML = `<div class="msg msg-them"><div class="msg-bubble"><p>Ошибка: ${u.esc(err.message)}</p></div></div>`;
+          keepUserMessageInView();
         });
       } else if (resultsSlot) {
         resultsSlot.innerHTML = `<div class="msg msg-them">
@@ -1020,8 +1043,6 @@
           </div>
         </div>`;
       }
-
-      if (chat) chat.scrollTop = chat.scrollHeight;
 
       return function cleanupMessengerSearch() {
         isActive = false;

@@ -82,7 +82,6 @@
       </div>
     `;
     container.appendChild(typingEl);
-    container.scrollTop = container.scrollHeight;
     return typingEl;
   }
 
@@ -100,6 +99,7 @@
   let jokesFetched = false;
   let jokesFetchPromise = null;
   let jokesCacheKey = '';
+  const FORISMATIC_URL = 'http://api.forismatic.com/api/1.0/?method=getQuote&format=json&lang=ru';
 
   const JOKE_OPENERS = [
     'Библиотекарь шепчет',
@@ -134,6 +134,52 @@
     '— Остальное делает арифметика.',
     '— Дальше остаётся только открыть том.',
   ];
+
+  function isLocalHttpContext() {
+    const host = window.location.hostname;
+    return window.location.protocol === 'http:' || host === 'localhost' || host === '127.0.0.1';
+  }
+
+  function buildForismaticUrls() {
+    const urls = [];
+    if (isLocalHttpContext()) urls.push(FORISMATIC_URL);
+    urls.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(FORISMATIC_URL)}`);
+    urls.push(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(FORISMATIC_URL)}`);
+    return urls;
+  }
+
+  function parseForismaticQuotePayload(text) {
+    const normalized = String(text || '').replace(/^\uFEFF/, '').trim();
+    const data = JSON.parse(normalized);
+    const quoteText = String(data.quoteText || '').trim();
+    const quoteAuthor = String(data.quoteAuthor || '').trim();
+    if (!quoteText) return null;
+
+    return {
+      label: 'Цитата',
+      text: quoteAuthor ? `${quoteText}\n— ${quoteAuthor}` : quoteText,
+    };
+  }
+
+  function fetchForismaticQuote(signal) {
+    const urls = buildForismaticUrls();
+
+    function tryUrl(index) {
+      if (index >= urls.length) return Promise.resolve(null);
+      return fetch(urls[index], { signal })
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.text();
+        })
+        .then(parseForismaticQuotePayload)
+        .catch((error) => {
+          if (error && error.name === 'AbortError') throw error;
+          return tryUrl(index + 1);
+        });
+    }
+
+    return tryUrl(0);
+  }
 
   function normalizeJokeSeed(seedText) {
     return String(seedText || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -196,16 +242,30 @@
     let transitionTimeoutId = null;
     let jokeEl = null;
     let stopped = false;
+    let jokes = [];
+    const quoteController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+
+    function renderJoke(joke) {
+      if (!jokeEl || !joke) return;
+      const textEl = jokeEl.querySelector('.babel-joke-text');
+      const nameEl = jokeEl.querySelector('.msg-name');
+      const avatarEl = jokeEl.querySelector('.msg-avatar');
+      if (textEl) textEl.innerHTML = escJoke(joke.text);
+      if (nameEl) nameEl.textContent = `${joke.label || 'Анекдот'} пока ждёшь`;
+      if (avatarEl) avatarEl.textContent = joke.label === 'Цитата' ? '🧠' : '😂';
+    }
 
     function stop() {
       stopped = true;
       if (intervalId) clearInterval(intervalId);
       if (transitionTimeoutId) clearTimeout(transitionTimeoutId);
+      if (quoteController) quoteController.abort();
       if (jokeEl && jokeEl.parentNode) jokeEl.parentNode.removeChild(jokeEl);
     }
 
-    fetchJokes(seedText).then(jokes => {
-      if (stopped || !container.isConnected || !jokes.length) return;
+    fetchJokes(seedText).then((initialJokes) => {
+      if (stopped || !container.isConnected || !initialJokes.length) return;
+      jokes = initialJokes.slice();
       jokeEl = document.createElement('div');
       jokeEl.className = 'msg msg-them babel-joke-msg';
       const joke = jokes[0];
@@ -218,7 +278,6 @@
         </div>
       `;
       container.appendChild(jokeEl);
-      container.scrollTop = container.scrollHeight;
 
       intervalId = setInterval(() => {
         if (stopped || !container.isConnected || !jokeEl || !jokeEl.isConnected) {
@@ -234,14 +293,24 @@
           transitionTimeoutId = setTimeout(() => {
             if (stopped || !container.isConnected || !jokeEl || !jokeEl.isConnected) return;
             const j = jokes[jokeIndex];
-            textEl.innerHTML = escJoke(j.text);
             if (nameEl) nameEl.textContent = `${j.label || 'Анекдот'} пока ждёшь`;
             if (avatarEl) avatarEl.textContent = j.label === 'Цитата' ? '🧠' : '😂';
+            textEl.innerHTML = escJoke(j.text);
             textEl.style.opacity = '1';
-            container.scrollTop = container.scrollHeight;
           }, 300);
         }
       }, 4000);
+
+      return fetchForismaticQuote(quoteController ? quoteController.signal : undefined).then((remoteQuote) => {
+        if (!remoteQuote || stopped || !jokeEl || !jokeEl.isConnected) return;
+        jokes.unshift(remoteQuote);
+        jokeIndex = 0;
+        renderJoke(remoteQuote);
+      }).catch((error) => {
+        if (error && error.name !== 'AbortError') {
+          console.warn('Forismatic quote fetch failed:', error);
+        }
+      });
     });
 
     return {

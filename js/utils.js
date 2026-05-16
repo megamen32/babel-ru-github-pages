@@ -81,6 +81,32 @@
       // Convert back and collapse spaces
       return app.utils.indicesToString(indices).replace(/ +/g, " ").trim();
     },
+    searchPhraseLength(raw) {
+      const normalized = app.utils.normalizeText(raw);
+      return app.utils.tokenizeText(normalized).length;
+    },
+    describeSearchCloud(raw) {
+      const normalized = app.utils.normalizeText(raw);
+      const phraseLength = app.utils.tokenizeText(normalized).length;
+      const freeSlots = Math.max(0, ALG.pageLength - phraseLength);
+      const bitExponent = freeSlots * 8;
+      const decimalExponent = bitExponent * Math.log10(2);
+      const digits = freeSlots === 0 ? 1 : Math.floor(decimalExponent) + 1;
+      const exactCount = freeSlots <= 8 ? (1n << (8n * BigInt(freeSlots))).toString() : null;
+
+      return {
+        normalized,
+        phraseLength,
+        freeSlots,
+        bitExponent,
+        digits,
+        exactCount,
+        pageLength: ALG.pageLength,
+        formula: `256^(${ALG.pageLength} - ${phraseLength})`,
+        binaryFormula: `2^${bitExponent}`,
+        scientific: freeSlots === 0 ? '1' : `≈ 10^${decimalExponent.toFixed(2)}`,
+      };
+    },
     shortNumber(value) {
       const stringValue = String(value);
       return stringValue.length <= 12 ? stringValue : `${stringValue.slice(0, 6)}…${stringValue.slice(-4)}`;
