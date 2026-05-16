@@ -710,6 +710,29 @@
     randomHallXY() {
       return { x: Math.floor(Math.random() * 2000) - 1000, y: Math.floor(Math.random() * 2000) - 1000 };
     },
+
+    /* Find a random hall that belongs to a specific genre region */
+    findRandomHallOfGenre(kind, maxTries) {
+      const limit = maxTries || 200;
+      for (let i = 0; i < limit; i++) {
+        const x = Math.floor(Math.random() * 2000) - 1000;
+        const y = Math.floor(Math.random() * 2000) - 1000;
+        if (classifyRegion(x, y).kind === kind) return { x, y };
+      }
+      /* Fallback: return any random hall */
+      return { x: Math.floor(Math.random() * 2000) - 1000, y: Math.floor(Math.random() * 2000) - 1000 };
+    },
+
+    /* Genre color for map rendering */
+    GENRE_COLORS: {
+      dialogue: '#5eb5f7',
+      diary: '#e84670',
+      post: '#1d9bf0',
+      log: '#00ff41',
+      text: '#c4956a',
+      noise: '#4e5c6e',
+    },
+
     parseAnyAddress(raw, kind) {
       const value = String(raw || "").trim();
       if (!value) throw new Error("Нечего распознавать.");

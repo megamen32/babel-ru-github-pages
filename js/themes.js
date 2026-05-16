@@ -118,6 +118,24 @@
     return result.trim() || 'пустая страница';
   }
 
+  /* Draw a hexagon on canvas (for mini wander map) */
+  function drawMiniHex(ctx, cx, cy, size, color) {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.PI / 3 * i - Math.PI / 6;
+      const x = cx + size * Math.cos(angle);
+      const y = cy + size * Math.sin(angle);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
   /* ═══════════════════════════════════════════════════════════
      THEME 1: BOOKSHELF
      ═══════════════════════════════════════════════════════════ */
@@ -141,6 +159,16 @@
             <span class="bk-card-icon">🔍</span>
             <h2>Каталог</h2>
             <p>Найди любой текст во вселенной</p>
+          </a>
+          <a class="bk-card" href="#/atlas">
+            <span class="bk-card-icon">🗺️</span>
+            <h2>Атлас</h2>
+            <p>Путешествуй по жанрам библиотеки</p>
+          </a>
+          <a class="bk-card" href="#/page/random">
+            <span class="bk-card-icon">🎲</span>
+            <h2>Случайная</h2>
+            <p>Открой случайную страницу</p>
           </a>
         </div>
         <blockquote class="bk-quote">
@@ -211,6 +239,7 @@
         <div class="bk-actions">
           <button class="bk-btn" id="randomHallBtn">🎲 Случайный зал</button>
           <a class="bk-btn-outline" href="#/search">🔍 Искать текст</a>
+          <a class="bk-btn-outline" href="#/atlas">🗺️ Атлас</a>
         </div>
       </section>`;
     },
@@ -222,6 +251,8 @@
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
       }
+      /* Track visit on wander map */
+      store.pushWanderVisit(x, y);
       u.$$('.bk-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
@@ -267,6 +298,16 @@
             <span class="cosmos-card-icon">🔭</span>
             <h2>Поиск</h2>
             <p>Найди любой текст в бесконечности</p>
+          </a>
+          <a class="cosmos-card" href="#/atlas">
+            <span class="cosmos-card-icon">🗺️</span>
+            <h2>Атлас</h2>
+            <p>Путешествуй по жанрам</p>
+          </a>
+          <a class="cosmos-card" href="#/page/random">
+            <span class="cosmos-card-icon">🎲</span>
+            <h2>Случайная</h2>
+            <p>Случайная страница</p>
           </a>
         </div>
         <blockquote class="cosmos-quote">
@@ -378,6 +419,7 @@
         <div class="cosmos-actions">
           <button class="cosmos-btn" id="randomHallBtn">🎲 Случайный зал</button>
           <a class="cosmos-btn-outline" href="#/search">🔭 Искать</a>
+          <a class="cosmos-btn-outline" href="#/atlas">🗺️ Атлас</a>
         </div>
       </section>`;
     },
@@ -389,6 +431,8 @@
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
       }
+      /* Track visit on wander map */
+      store.pushWanderVisit(x, y);
       u.$$('.cosmos-hex-cell[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
@@ -437,6 +481,7 @@
               <div class="msg-quick-actions">
                 <a class="msg-qa" href="#/wander">🏛 Блуждать по залам</a>
                 <a class="msg-qa" href="#/search">🔍 Искать текст</a>
+                <a class="msg-qa" href="#/atlas">🗺️ Атлас жанров</a>
                 <a class="msg-qa" href="#/page/random">🎲 Случайная страница</a>
               </div>
               <span class="msg-time">${timeStr()}</span>
@@ -526,7 +571,8 @@
       <section class="t-messenger wander fade-in">
         <div class="msg-room-header">
           <span class="msg-room-title">📚 Зал X:${x} Y:${y}</span>
-          <span class="msg-room-sub">${lib.classifyRegion(x, y).icon} ${lib.classifyRegion(x, y).label} · Сектор ${hallInfo.sector}</span>
+          <a class="genre-badge" href="#/atlas" style="color:${lib.GENRE_COLORS[lib.classifyRegion(x, y).kind]};border-color:${lib.GENRE_COLORS[lib.classifyRegion(x, y).kind]}40;background:${lib.GENRE_COLORS[lib.classifyRegion(x, y).kind]}15">${lib.classifyRegion(x, y).icon} ${lib.classifyRegion(x, y).label}</a>
+          <span class="msg-room-sub">Сектор ${hallInfo.sector}</span>
         </div>
         <div class="msg-chat" id="msgChat">
           ${chatHTML}
@@ -537,6 +583,17 @@
               <p>Куда идём? Выбери стену или направление:</p>
               <div class="msg-wall-row">${wallTabsHTML}</div>
               <div class="msg-nav-row">${navHTML}</div>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>
+          <div class="msg msg-them">
+            <div class="msg-avatar">🗺️</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Карта блужданий</div>
+              <p>Вы посетили <strong>${store.getVisitedCount()}</strong> ${store.getVisitedCount() === 1 ? 'зал' : store.getVisitedCount() < 5 ? 'зала' : 'залов'}. <a href="#/atlas" style="color:var(--accent)">Открыть атлас →</a></p>
+              <div class="wander-minimap">
+                <canvas class="wander-minimap-canvas" id="wanderMiniMap" width="400" height="200"></canvas>
+              </div>
               <span class="msg-time">${timeStr()}</span>
             </div>
           </div>
@@ -556,6 +613,8 @@
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
       }
+      /* Track visit on wander map */
+      store.pushWanderVisit(x, y);
       /* Navigation buttons */
       u.$$('.msg-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -601,6 +660,48 @@
       /* Scroll chat to bottom */
       const chat = u.$('#msgChat');
       if (chat) chat.scrollTop = chat.scrollHeight;
+
+      /* Draw mini wander map */
+      const miniMapCanvas = document.getElementById('wanderMiniMap');
+      if (miniMapCanvas) {
+        const ctx = miniMapCanvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const rect = miniMapCanvas.getBoundingClientRect();
+        miniMapCanvas.width = rect.width * dpr;
+        miniMapCanvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        const w = rect.width, h = rect.height;
+        const visited = store.getVisitedCoords();
+        if (visited.length > 0) {
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          for (const v of visited) { if (v.x < minX) minX = v.x; if (v.x > maxX) maxX = v.x; if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y; }
+          minX -= 1; maxX += 1; minY -= 1; maxY += 1;
+          const rangeX = maxX - minX + 1, rangeY = maxY - minY + 1;
+          const hexSize = Math.min(w / (rangeX * 2 + 1), h / (rangeY * 1.73 + 1), 20);
+          const hexW = hexSize * 2, hexH = hexSize * 1.73;
+          const totalW = rangeX * hexW * 0.75 + hexW * 0.25, totalH = rangeY * hexH + hexH * 0.5;
+          const offsetX = (w - totalW) / 2, offsetY = (h - totalH) / 2;
+          ctx.globalAlpha = 0.1;
+          for (let gy = minY; gy <= maxY; gy++) for (let gx = minX; gx <= maxX; gx++) {
+            const cx = offsetX + (gx - minX) * hexW * 0.75 + hexW * 0.5;
+            const cy = offsetY + (gy - minY) * hexH + ((gx - minX) % 2 === 0 ? hexH * 0.5 : hexH);
+            drawMiniHex(ctx, cx, cy, hexSize * 0.85, '#555');
+          }
+          ctx.globalAlpha = 1;
+          for (const v of visited) {
+            const region = lib.classifyRegion(v.x, v.y);
+            const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
+            const cx = offsetX + (v.x - minX) * hexW * 0.75 + hexW * 0.5;
+            const cy = offsetY + (v.y - minY) * hexH + ((v.x - minX) % 2 === 0 ? hexH * 0.5 : hexH);
+            drawMiniHex(ctx, cx, cy, hexSize * 0.85, color);
+          }
+        } else {
+          ctx.fillStyle = '#4e5c6e';
+          ctx.font = '11px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('Начните блуждать...', w / 2, h / 2);
+        }
+      }
     },
 
     renderPage(route) {

@@ -25,5 +25,45 @@
       const items = app.storage.readStore("babelFavorites").filter((entry) => entry.url !== url);
       app.storage.writeStore("babelFavorites", items, 100);
     },
+
+    /* ═══════════════════════════════════════════════════════════
+       WANDER MAP — efficient object-based tracking of visited halls
+       ═══════════════════════════════════════════════════════════ */
+
+    /* Read the wander map as an object { "x,y": { x, y, ts } } */
+    readWanderMap() {
+      try {
+        return JSON.parse(localStorage.getItem("babelWanderMap") || "{}");
+      } catch {
+        return {};
+      }
+    },
+
+    /* Save a wander visit (fast, deduped by key) */
+    pushWanderVisit(x, y) {
+      const map = app.storage.readWanderMap();
+      const key = `${x},${y}`;
+      if (!map[key]) {
+        map[key] = { x, y, ts: Date.now() };
+        try { localStorage.setItem("babelWanderMap", JSON.stringify(map)); } catch {}
+      }
+    },
+
+    /* Get all visited coordinates as an array */
+    getVisitedCoords() {
+      const map = app.storage.readWanderMap();
+      return Object.values(map);
+    },
+
+    /* Get count of visited halls */
+    getVisitedCount() {
+      const map = app.storage.readWanderMap();
+      return Object.keys(map).length;
+    },
+
+    /* Clear the wander map */
+    clearWanderMap() {
+      try { localStorage.removeItem("babelWanderMap"); } catch {}
+    },
   };
 })();

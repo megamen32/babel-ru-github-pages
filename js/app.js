@@ -26,6 +26,7 @@
     let pageB64 = null;
     let isOldCoordFormat = false; // for redirect to new format
     if (parts[0] === 'wander') name = 'wander';
+    else if (parts[0] === 'atlas') name = 'atlas';
     else if (parts[0] === 'search') name = 'search';
     else if (parts[0] === 'page') {
       name = 'page';
@@ -51,6 +52,7 @@
         pageB64 = parts[1];
       }
     }
+    else if (parts[0] === 'atlas') name = 'atlas';
     else if (parts[0] === 'about') name = 'about';
     else if (parts[0] === 'favorites') name = 'favorites';
     return { name, parts, params, pageCoords, pageB64, isOldCoordFormat };
@@ -87,6 +89,11 @@
         case 'home': {
           view.innerHTML = renderer.renderHome();
           keepCleanup(renderer.bindHome ? renderer.bindHome() : null);
+          break;
+        }
+        case 'atlas': {
+          view.innerHTML = themes.renderAtlas();
+          themes.bindAtlas();
           break;
         }
         case 'wander': {
@@ -159,6 +166,11 @@
           else keepCleanup(themes.bindSharedPage(route));
           break;
         }
+        case 'atlas': {
+          view.innerHTML = renderAtlas();
+          bindAtlas();
+          break;
+        }
         case 'about': {
           view.innerHTML = renderAbout();
           break;
@@ -187,6 +199,7 @@
         (name === 'home' && href === '#/') ||
         (name === 'wander' && href.includes('wander')) ||
         (name === 'search' && href.includes('search')) ||
+        (name === 'atlas' && href.includes('atlas')) ||
         (name === 'about' && href.includes('about')) ||
         (name === 'favorites' && href.includes('favorites'))
       );
@@ -411,6 +424,181 @@ bookIndex     = (contentNumber − OFFSET) × I  mod 2^32768</code></pre>
         if (favs[idx]) { store.removeFavorite(favs[idx].url); navigate(); }
       });
     });
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     ATLAS VIEW (shared)
+     ═══════════════════════════════════════════════════════════ */
+
+  const GENRE_DESCRIPTIONS = {
+    dialogue: 'Район переписок — здесь страницы полны диалогами. Таймстемпы, имена, реплики собеседников. Как будто ты подслушиваешь чужой чат.',
+    diary: 'Район дневников — личные записи с датами и настроением. Кто-то описывает свои дни, кто-то — свои сны. Интимная территория библиотеки.',
+    post: 'Район постов — лента коротких сообщений с авторами и тегами. Мысли, наблюдения, афоризмы — как бесконечная соцсеть.',
+    log: 'Серверный кластер — машинные записи, таймстемпы, уровни ошибок. Здесь обитает техническая душа библиотеки.',
+    text: 'Книжные полки — поток осмысленных слов. Классический текст, как в настоящей книге. Самый читаемый район.',
+    noise: 'Пустые залы — случайный шум, бессмысленные символы. Большинство залов библиотеки именно такие. Тишина и хаос.',
+  };
+
+  function renderAtlas() {
+    const genres = lib.REGION_GENRES;
+    const visitedCount = store.getVisitedCount();
+    const genreCards = genres.map(g => {
+      const pct = Math.round(g.weight * 100);
+      const desc = GENRE_DESCRIPTIONS[g.kind] || g.label;
+      const color = lib.GENRE_COLORS[g.kind] || '#4e5c6e';
+      return `
+      <div class="atlas-card" data-genre="${g.kind}">
+        <div class="atlas-card-header">
+          <span class="atlas-icon" style="background:${color}20;color:${color}">${g.icon}</span>
+          <div class="atlas-card-info">
+            <h3 class="atlas-card-title">${g.label}</h3>
+            <span class="atlas-card-pct" style="color:${color}">${pct}% библиотеки</span>
+          </div>
+        </div>
+        <p class="atlas-card-desc">${desc}</p>
+        <div class="atlas-card-bar">
+          <div class="atlas-card-bar-fill" style="width:${pct}%;background:${color}"></div>
+        </div>
+        <div class="atlas-card-actions">
+          <button class="atlas-go-btn" data-kind="${g.kind}" style="background:${color}">Перейти в ${g.label.toLowerCase()}</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    /* Mini wanderings map */
+    const mapSection = `
+    <div class="atlas-map-section">
+      <h2 class="atlas-section-title">🗺️ Карта блужданий</h2>
+      <p class="atlas-section-desc">Вы посетили <strong>${visitedCount}</strong> ${visitedCount === 1 ? 'зал' : visitedCount < 5 ? 'зала' : 'залов'}. Каждый зал на карте окрашен по жанру региона.</p>
+      <div class="atlas-map-container">
+        <canvas class="atlas-map-canvas" id="atlasMapCanvas" width="600" height="400"></canvas>
+      </div>
+      <div class="atlas-map-legend">
+        ${genres.map(g => `<span class="atlas-legend-item"><span class="atlas-legend-dot" style="background:${lib.GENRE_COLORS[g.kind]}"></span>${g.icon} ${g.label}</span>`).join('')}
+      </div>
+      ${visitedCount > 0 ? '<button class="atlas-clear-btn" id="atlasClearBtn">Очистить карту</button>' : ''}
+    </div>`;
+
+    return `
+    <section class="atlas-view fade-in">
+      <div class="atlas-header">
+        <h1 class="atlas-title">🗺️ Обитаемый атлас</h1>
+        <p class="atlas-subtitle">Библиотека разделена на регионы по жанрам. Каждый зал принадлежит определённому району — выбери, куда хочешь попасть.</p>
+      </div>
+      <div class="atlas-grid">${genreCards}</div>
+      ${mapSection}
+    </section>`;
+  }
+
+  function bindAtlas() {
+    /* Genre go buttons */
+    $$('.atlas-go-btn[data-kind]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const kind = btn.dataset.kind;
+        const { x, y } = lib.findRandomHallOfGenre(kind);
+        store.pushWanderVisit(x, y);
+        location.hash = `#/wander/x/${x}/y/${y}`;
+      });
+    });
+
+    /* Clear map button */
+    const clearBtn = $('#atlasClearBtn');
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      if (confirm('Очистить карту блужданий? Это действие нельзя отменить.')) {
+        store.clearWanderMap();
+        navigate();
+      }
+    });
+
+    /* Draw mini wanderings map */
+    const canvas = document.getElementById('atlasMapCanvas');
+    if (canvas) drawWanderMap(canvas);
+  }
+
+  /* Draw hex-based wander map on canvas */
+  function drawWanderMap(canvas) {
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const w = rect.width;
+    const h = rect.height;
+
+    const visited = store.getVisitedCoords();
+    if (visited.length === 0) {
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#4e5c6e';
+      ctx.font = '14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Пока нет посещённых залов', w / 2, h / 2);
+      ctx.font = '12px Inter, sans-serif';
+      ctx.fillText('Начните блуждать по залам, чтобы они появились на карте', w / 2, h / 2 + 24);
+      return;
+    }
+
+    /* Calculate bounds */
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const v of visited) {
+      if (v.x < minX) minX = v.x;
+      if (v.x > maxX) maxX = v.x;
+      if (v.y < minY) minY = v.y;
+      if (v.y > maxY) maxY = v.y;
+    }
+    /* Add padding */
+    const pad = 2;
+    minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+
+    const rangeX = maxX - minX + 1;
+    const rangeY = maxY - minY + 1;
+
+    /* Hex cell size */
+    const hexSize = Math.min(w / (rangeX * 1.5 + 1), h / (rangeY * 1.73 + 1), 28);
+    const hexW = hexSize * 2;
+    const hexH = hexSize * 1.73;
+
+    /* Offset to center */
+    const totalW = rangeX * hexW * 0.75 + hexW * 0.25;
+    const totalH = rangeY * hexH + hexH * 0.5;
+    const offsetX = (w - totalW) / 2;
+    const offsetY = (h - totalH) / 2;
+
+    /* Draw unvisited cells (dim) */
+    ctx.globalAlpha = 0.1;
+    for (let gy = minY; gy <= maxY; gy++) {
+      for (let gx = minX; gx <= maxX; gx++) {
+        const cx = offsetX + (gx - minX) * hexW * 0.75 + hexW * 0.5;
+        const cy = offsetY + (gy - minY) * hexH + ((gx - minX) % 2 === 0 ? hexH * 0.5 : hexH) + hexH * 0.5 - hexH * 0.5;
+        drawHex(ctx, cx, cy, hexSize * 0.9, '#333');
+      }
+    }
+
+    /* Draw visited cells */
+    ctx.globalAlpha = 1;
+    for (const v of visited) {
+      const region = lib.classifyRegion(v.x, v.y);
+      const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
+      const cx = offsetX + (v.x - minX) * hexW * 0.75 + hexW * 0.5;
+      const cy = offsetY + (v.y - minY) * hexH + ((v.x - minX) % 2 === 0 ? hexH * 0.5 : hexH) + hexH * 0.5 - hexH * 0.5;
+      drawHex(ctx, cx, cy, hexSize * 0.9, color);
+    }
+  }
+
+  function drawHex(ctx, cx, cy, size, color) {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.PI / 3 * i - Math.PI / 6;
+      const x = cx + size * Math.cos(angle);
+      const y = cy + size * Math.sin(angle);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
   }
 
   /* ═══════════════════════════════════════════════════════════
