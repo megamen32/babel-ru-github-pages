@@ -25,3 +25,5 @@ npm install --save-exact --save-dev typescript @types/react @types/node
 [03:18:20.043] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
 [03:42:58.251] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
 [03:42:58.253] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:43:58.339] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:43:58.342] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
