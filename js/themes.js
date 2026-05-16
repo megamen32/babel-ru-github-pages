@@ -100,6 +100,180 @@
     return TELEGRAM_NAME_COLORS[u.fnv1a(String(name || 'telegram')) % TELEGRAM_NAME_COLORS.length];
   }
 
+  /* ═══════════════════════════════════════════════════════════
+     ODOMETER ANIMATION — page text flips like a base-256 counter
+     ═══════════════════════════════════════════════════════════
+     When scanning for the next inhabited page, the visible page
+     text changes character by character from right to left,
+     exactly like a real counter incrementing in base-256:
+     last char cycles through alphabet, wraps → second-to-last
+     advances, and so on.  No fixed duration — runs as long as
+     the scan takes.  Low priority via requestIdleCallback. */
+
+  function startOdometerAnimation(textNodes, alphabet) {
+    let cancelled = false;
+    let resolveDone;
+    const done = new Promise(r => { resolveDone = r; });
+
+    /* Build a flat char array over all text nodes.
+       Each entry: { node, charIdx } — which text node and which
+       character position inside that node's textContent.
+       We use Array.from() to correctly handle multi-code-unit
+       characters (emoji) in the alphabet. */
+    const chars = [];
+    for (const node of textNodes) {
+      const codePoints = Array.from(node.textContent);
+      for (let i = 0; i < codePoints.length; i++) {
+        chars.push({ node, charIdx: i, codePoints });
+      }
+    }
+    if (chars.length === 0) { resolveDone(); return { cancel() {}, done }; }
+
+    /* Cursor starts at the last character and moves left */
+    let cursor = chars.length - 1;
+
+    /* Each character has a current alphabet index.
+       If the current char isn't in the alphabet, default to 0 (space). */
+    const charIndices = new Int16Array(chars.length);
+    for (let i = 0; i < chars.length; i++) {
+      const ch = chars[i].codePoints[chars[i].charIdx];
+      const idx = alphabet.indexOf(ch);
+      charIndices[i] = idx >= 0 ? idx : 0;
+    }
+
+    /* Advance the character at `pos` by 1 in the alphabet.
+       Returns true if it wrapped (need to carry to next position). */
+    function advance(pos) {
+      charIndices[pos] = (charIndices[pos] + 1) % alphabet.length;
+      const ch = alphabet[charIndices[pos]];
+      const entry = chars[pos];
+      entry.codePoints[entry.charIdx] = ch;
+      entry.node.textContent = entry.codePoints.join('');
+      return charIndices[pos] === 0; /* wrapped */
+    }
+
+    /* How many positions to advance per animation tick.
+       Advances a burst of steps for visual speed, then yields. */
+    const STEPS_PER_TICK = 3;
+    const TICK_MS = 30; /* ms between ticks */
+
+    function tick() {
+      if (cancelled) { resolveDone(); return; }
+
+      for (let s = 0; s < STEPS_PER_TICK; s++) {
+        if (cursor < 0) { cursor = chars.length - 1; } /* restart from right */
+        const wrapped = advance(cursor);
+        if (wrapped) {
+          /* Carry: move cursor left to next significant position */
+          cursor--;
+        }
+        /* If cursor went past the beginning, just reset —
+           the scan will stop us soon anyway */
+        if (cursor < 0) break;
+      }
+
+      /* Schedule next tick at low priority */
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(tick, { timeout: TICK_MS + 15 });
+      } else {
+        setTimeout(tick, TICK_MS);
+      }
+    }
+
+    /* Start immediately */
+    tick();
+
+    return {
+      cancel() { cancelled = true; resolveDone(); },
+      done,
+    };
+  }
+
+  /* Chunked scan for next inhabited page.
+     Scans a few pages at a time, yielding to the UI between
+     chunks so the odometer animation can run.  Resolves with
+     the best result found (same shape as findNextInhabitedFromCoords). */
+  function findNextInhabitedChunked(coords) {
+    return new Promise((resolve, reject) => {
+      try {
+        const number = lib.coordinatesToNumber(coords);
+        const CHUNK = 5;        /* pages per chunk */
+        const MAX_SCAN = 100;
+        const THRESHOLD = 0.35;
+        const start = BigInt(number);
+        const maxNum = lib.maxPageNumber();
+
+        let bestResult = null;
+        let bestScore = 0;
+        let i = 1;
+
+        function scanChunk() {
+          const limit = Math.min(i + CHUNK - 1, MAX_SCAN);
+
+          for (; i <= limit; i++) {
+            const offsets = [BigInt(i), -BigInt(i)];
+            for (const offset of offsets) {
+              const candidateNumber = start + offset;
+              if (candidateNumber < 0n || candidateNumber >= maxNum) continue;
+
+              try {
+                const indices = lib.numberToIndices(candidateNumber);
+                const text = lib.indicesToString(indices);
+                const detection = lib.detectRussianText(text);
+
+                if (detection.score > bestScore) {
+                  bestScore = detection.score;
+                  const rawIdx = lib.unpermuteIndex(candidateNumber);
+                  const c = lib.rawIndexToCoordinates(rawIdx);
+                  let xy = { x: 0n, y: 0n };
+                  try { xy = lib.coordinatesToXY(c); } catch {}
+
+                  bestResult = {
+                    number: candidateNumber,
+                    coords: c,
+                    coordinates: c,
+                    xy,
+                    text,
+                    detection,
+                    scanned: i,
+                    offset: Number(offset),
+                    regionGenre: {
+                      kind: detection.kind,
+                      label: detection.label,
+                      icon: detection.kind === 'russian' ? '📖'
+                          : detection.kind === 'sparse' ? '🌫️' : '🔇',
+                    },
+                    scanDistance: Math.abs(Number(offset)),
+                  };
+                }
+
+                if (detection.score >= THRESHOLD) {
+                  resolve(bestResult);
+                  return;
+                }
+              } catch { continue; }
+            }
+          }
+
+          if (i > MAX_SCAN) {
+            if (bestResult) {
+              bestResult.belowThreshold = true;
+              resolve(bestResult);
+            } else {
+              resolve(null);
+            }
+            return;
+          }
+
+          /* Yield to UI then scan next chunk */
+          setTimeout(scanChunk, 0);
+        }
+
+        scanChunk();
+      } catch (err) { reject(err); }
+    });
+  }
+
   function highlightSearchText(text, phrase) {
     const source = String(text || '');
     const target = String(phrase || '').trim();
@@ -1209,60 +1383,35 @@
       if (nextBtn) {
         nextBtn.addEventListener('click', () => {
           nextBtn.disabled = true;
-          const dest = lib.findNextInhabitedFromCoords(coords, Date.now());
-          if (!dest) { nextBtn.disabled = false; return; }
-          const destUrl = dest.range
-            ? lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` })
-            : lib.coordsToPageUrl(dest.coordinates);
+          nextBtn.textContent = '⏳ сканирую…';
 
-          /* Search animation on messenger bubble text */
+          /* Collect text nodes from messenger bubble text for odometer */
           const bubbleTexts = u.$$('.msg-bubble-page .msg-text');
-          if (bubbleTexts.length > 0) {
-            const alphabet = ALG.alphabet;
-            const duration = 1500;
-            const interval = 50;
-            const totalSteps = Math.floor(duration / interval);
-            let step = 0;
+          const allTextNodes = [];
+          bubbleTexts.forEach(el => {
+            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+            let n;
+            while (n = walker.nextNode()) allTextNodes.push(n);
+          });
 
-            /* Collect all text nodes from all bubble texts */
-            const allTextNodes = [];
-            bubbleTexts.forEach(el => {
-              const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-              let n;
-              while (n = walker.nextNode()) allTextNodes.push(n);
-            });
-            const totalChars = allTextNodes.reduce((s, tn) => s + tn.textContent.length, 0);
-            const charsPerStep = Math.ceil(totalChars / totalSteps);
+          /* Start odometer animation on page text (runs until scan completes) */
+          const anim = allTextNodes.length > 0
+            ? startOdometerAnimation(allTextNodes, ALG.alphabet)
+            : null;
 
-            const timer = setInterval(() => {
-              step++;
-              const charsToScramble = step * charsPerStep;
-              let remaining = charsToScramble;
-              for (let i = allTextNodes.length - 1; i >= 0 && remaining > 0; i--) {
-                const tn = allTextNodes[i];
-                const len = tn.textContent.length;
-                if (remaining >= len) {
-                  let s = '';
-                  for (let c = 0; c < len; c++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
-                  tn.textContent = s;
-                  remaining -= len;
-                } else {
-                  const start = len - remaining;
-                  const prefix = tn.textContent.slice(0, start);
-                  let suffix = '';
-                  for (let c = 0; c < remaining; c++) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
-                  tn.textContent = prefix + suffix;
-                  remaining = 0;
-                }
-              }
-              if (step >= totalSteps) {
-                clearInterval(timer);
-                location.hash = destUrl;
-              }
-            }, interval);
-          } else {
+          /* Start chunked scan — yields to UI between chunks */
+          findNextInhabitedChunked(coords).then(dest => {
+            if (anim) anim.cancel();
+            if (!dest) { nextBtn.disabled = false; nextBtn.textContent = '🔍 Следующая обитаемая'; return; }
+            const destUrl = dest.range
+              ? lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` })
+              : lib.coordsToPageUrl(dest.coordinates);
             location.hash = destUrl;
-          }
+          }).catch(() => {
+            if (anim) anim.cancel();
+            nextBtn.disabled = false;
+            nextBtn.textContent = '🔍 Следующая обитаемая';
+          });
         });
       }
 
@@ -1942,57 +2091,35 @@ ${bookList}
       if (nextCmd) {
         nextCmd.addEventListener('click', () => {
           nextCmd.style.pointerEvents = 'none';
-          nextCmd.textContent = '⏳ поиск…';
-          const dest = lib.findNextInhabitedFromCoords(coords, Date.now());
-          if (!dest) { nextCmd.style.pointerEvents = ''; nextCmd.textContent = '🔍 next inhabited'; return; }
-          const destUrl = dest.range
-            ? lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` })
-            : lib.coordsToPageUrl(dest.coordinates);
+          nextCmd.textContent = '⏳ сканирую…';
 
-          /* Scramble animation on terminal page text */
+          /* Collect text nodes from terminal page text for odometer */
           const pageTextEl = u.$('.term-page-text');
+          const textNodes = [];
           if (pageTextEl) {
-            const alphabet = ALG.alphabet;
-            const duration = 1500;
-            const interval = 50;
-            const totalSteps = Math.floor(duration / interval);
-            let step = 0;
-            const textNodes = [];
             const walker = document.createTreeWalker(pageTextEl, NodeFilter.SHOW_TEXT, null);
             let n;
             while (n = walker.nextNode()) textNodes.push(n);
-            const totalChars = textNodes.reduce((s, tn) => s + tn.textContent.length, 0);
-            const charsPerStep = Math.ceil(totalChars / totalSteps);
-
-            const timer = setInterval(() => {
-              step++;
-              const charsToScramble = step * charsPerStep;
-              let remaining = charsToScramble;
-              for (let i = textNodes.length - 1; i >= 0 && remaining > 0; i--) {
-                const tn = textNodes[i];
-                const len = tn.textContent.length;
-                if (remaining >= len) {
-                  let s = '';
-                  for (let c = 0; c < len; c++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
-                  tn.textContent = s;
-                  remaining -= len;
-                } else {
-                  const start = len - remaining;
-                  const prefix = tn.textContent.slice(0, start);
-                  let suffix = '';
-                  for (let c = 0; c < remaining; c++) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
-                  tn.textContent = prefix + suffix;
-                  remaining = 0;
-                }
-              }
-              if (step >= totalSteps) {
-                clearInterval(timer);
-                location.hash = destUrl;
-              }
-            }, interval);
-          } else {
-            location.hash = destUrl;
           }
+
+          /* Start odometer animation (runs until scan completes) */
+          const anim = textNodes.length > 0
+            ? startOdometerAnimation(textNodes, ALG.alphabet)
+            : null;
+
+          /* Start chunked scan — yields to UI between chunks */
+          findNextInhabitedChunked(coords).then(dest => {
+            if (anim) anim.cancel();
+            if (!dest) { nextCmd.style.pointerEvents = ''; nextCmd.textContent = '🔍 next inhabited'; return; }
+            const destUrl = dest.range
+              ? lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` })
+              : lib.coordsToPageUrl(dest.coordinates);
+            location.hash = destUrl;
+          }).catch(() => {
+            if (anim) anim.cancel();
+            nextCmd.style.pointerEvents = '';
+            nextCmd.textContent = '🔍 next inhabited';
+          });
         });
       }
 
@@ -2194,67 +2321,39 @@ ${highlighted}
       } catch {}
     }
 
-    /* Next Inhabited button: animate + navigate */
+    /* Next Inhabited button: odometer animation + chunked scan */
     if (nextBtn) {
       nextBtn.addEventListener('click', () => {
         nextBtn.disabled = true;
-        /* Compute destination first (synchronous, fast) — position-aware */
-        const dest = lib.findNextInhabitedFromCoords(coords, Date.now());
-        if (!dest) { nextBtn.disabled = false; return; }
-        const destUrl = dest.range
-          ? lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` })
-          : lib.coordsToPageUrl(dest.coordinates);
+        nextBtn.textContent = '⏳ сканирую…';
 
-        /* Search animation: scramble page text bottom-to-top */
+        /* Collect text nodes from page text for odometer */
         const pageTextEl = u.$('.page-text');
+        const textNodes = [];
         if (pageTextEl) {
-          const originalHTML = pageTextEl.innerHTML;
-          const alphabet = ALG.alphabet;
-          const duration = 1500;
-          const interval = 50;
-          const totalSteps = Math.floor(duration / interval);
-          let step = 0;
-          /* Collect text nodes for scrambling */
-          const textNodes = [];
           const walker = document.createTreeWalker(pageTextEl, NodeFilter.SHOW_TEXT, null);
           let n;
           while (n = walker.nextNode()) textNodes.push(n);
-          const totalChars = textNodes.reduce((s, tn) => s + tn.textContent.length, 0);
-          const charsPerStep = Math.ceil(totalChars / totalSteps);
-
-          const timer = setInterval(() => {
-            step++;
-            const charsToScramble = step * charsPerStep;
-            let remaining = charsToScramble;
-            /* Scramble from bottom (last text node) upward */
-            for (let i = textNodes.length - 1; i >= 0 && remaining > 0; i--) {
-              const tn = textNodes[i];
-              const len = tn.textContent.length;
-              if (remaining >= len) {
-                /* Scramble entire node */
-                let s = '';
-                for (let c = 0; c < len; c++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
-                tn.textContent = s;
-                remaining -= len;
-              } else {
-                /* Partially scramble from end */
-                const start = len - remaining;
-                const prefix = tn.textContent.slice(0, start);
-                let suffix = '';
-                for (let c = 0; c < remaining; c++) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
-                tn.textContent = prefix + suffix;
-                remaining = 0;
-              }
-            }
-            if (step >= totalSteps) {
-              clearInterval(timer);
-              location.hash = destUrl;
-            }
-          }, interval);
-        } else {
-          /* No text element to animate, navigate immediately */
-          location.hash = destUrl;
         }
+
+        /* Start odometer animation (runs until scan completes) */
+        const anim = textNodes.length > 0
+          ? startOdometerAnimation(textNodes, ALG.alphabet)
+          : null;
+
+        /* Start chunked scan — yields to UI between chunks */
+        findNextInhabitedChunked(coords).then(dest => {
+          if (anim) anim.cancel();
+          if (!dest) { nextBtn.disabled = false; nextBtn.textContent = '🔍 Следующая обитаемая'; return; }
+          const destUrl = dest.range
+            ? lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` })
+            : lib.coordsToPageUrl(dest.coordinates);
+          location.hash = destUrl;
+        }).catch(() => {
+          if (anim) anim.cancel();
+          nextBtn.disabled = false;
+          nextBtn.textContent = '🔍 Следующая обитаемая';
+        });
       });
     }
 
