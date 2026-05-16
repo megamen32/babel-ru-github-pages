@@ -1,10 +1,14 @@
 (() => {
   const app = window.BabelApp = window.BabelApp || {};
   app.config = {
-    VERSION: "ru2",
+    VERSION: "ru3",
     ALG: {
-      label: "ru2",
-      alphabet: " абвгдеёжзийклмнопрстуфхцчшщъыьэюя.,!?;:—«»()0123456789",
+      label: "ru3",
+      /* 64-character alphabet = base-2^6 = bitwise operations
+         Each character is exactly 6 bits, making text↔number conversion
+         a simple bit-shift operation instead of expensive BigInt division.
+         Order: space first (index 0), then letters, digits, punctuation, extras. */
+      alphabet: " абвгдежзийклмнопрстуфхцчшщъыьэюяё0123456789.,!?;:—-«»()…·↑↓←→*/",
       pageLength: 900,
       lineWidth: 90,
       pagesPerVolume: 410n,
