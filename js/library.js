@@ -253,6 +253,28 @@
       return `Сектор ${coordinates.sector} · Зал ${coordinates.hall} · Стена ${coordinates.wall} · Полка ${coordinates.shelf} · Том ${coordinates.volume} · Лист ${coordinates.page}`;
     },
 
+    /* Coordinate-based page URL: #/page/s/{sector}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
+    coordsToPageUrl(coords, params) {
+      const c = {
+        sector: BigInt(coords.sector || 1),
+        hall: BigInt(coords.hall || 1),
+        wall: BigInt(coords.wall || 1),
+        shelf: BigInt(coords.shelf || 1),
+        volume: BigInt(coords.volume || 1),
+        page: BigInt(coords.page || 1),
+      };
+      const base = `#/page/s/${c.sector}/h/${c.hall}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}`;
+      if (params) {
+        const qs = new URLSearchParams(params).toString();
+        return `${base}?${qs}`;
+      }
+      return base;
+    },
+
+    randomPageCoords() {
+      return app.library.numberToCoordinates(app.library.randomPageNumber());
+    },
+
     xyToCoordinates, coordinatesToXY, xyToHallXY, hallToXY, szudzikPair, szudzikUnpair,
 
     getBookSpine(x, y, wall, shelf, volume) {

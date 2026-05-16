@@ -116,47 +116,73 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
-     ANEKDOT.RU — Jokes while searching!
+     RZHUNEMOGU.RU — Jokes while searching!
+     CType 1-18 = different joke categories
+     (1=Анекдоты, 2=Стишки, 3=Истории, 4=Афоризмы, 5=Цитаты,
+      6=Тосты, 7=Анекдоты(18+), 8=Стишки(18+), 9=Афоризмы(18+),
+      10=Цитаты(18+), 11=Тосты(18+), 12=Реклама, 13=Компьютер,
+      14=Программистские, 15=Чёрный юмор, 16=В мире животных,
+      17=Блондинки, 18=Студенческие)
      ═══════════════════════════════════════════════════════════ */
 
-  const ANEKDOT_RSS = 'https://www.anekdot.ru/rss/export_bestday.xml';
+  const JOKE_API = 'http://rzhunemogu.ru/Rand.aspx';
   let jokesCache = [];
   let jokesFetched = false;
   let jokesFetchPromise = null;
 
+  /* CType descriptions for display */
+  const CTYPE_LABELS = {
+    1: 'Анекдот', 2: 'Стишок', 3: 'История', 4: 'Афоризм',
+    5: 'Цитата', 6: 'Тост', 7: 'Анекдот', 8: 'Стишок',
+    9: 'Афоризм', 10: 'Цитата', 11: 'Тост', 12: 'Реклама',
+    13: 'Компьютерный', 14: 'Программистский', 15: 'Чёрный юмор',
+    16: 'Животные', 17: 'Блондинки', 18: 'Студенческий',
+  };
+
   function fetchJokes() {
-    if (jokesFetched) return Promise.resolve(jokesCache);
+    if (jokesFetched && jokesCache.length > 0) return Promise.resolve(jokesCache);
     if (jokesFetchPromise) return jokesFetchPromise;
-    jokesFetchPromise = fetch(ANEKDOT_RSS)
-      .then(r => r.text())
-      .then(xml => {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(xml, 'text/xml');
-        const items = doc.querySelectorAll('item');
-        const jokes = [];
-        items.forEach(item => {
-          const desc = item.querySelector('description');
-          if (desc && desc.textContent.trim()) {
-            const text = desc.textContent.trim()
-              .replace(/<br\s*\/?>/gi, '\n')
+
+    /* Fetch several jokes with random CType for variety */
+    const fetchCount = 8;
+    const promises = [];
+    for (let i = 0; i < fetchCount; i++) {
+      const cType = Math.floor(Math.random() * 18) + 1;
+      promises.push(
+        fetch(`${JOKE_API}?CType=${cType}`)
+          .then(r => r.text())
+          .then(text => {
+            /* API returns plain text, extract content */
+            const content = text
+              .replace(/<[^>]+>/g, '')   /* strip any HTML tags */
               .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-              .replace(/&amp;/g, '&').replace(/&quot;/g, '"');
-            jokes.push(text);
-          }
-        });
-        jokesCache = jokes;
-        jokesFetched = true;
-        return jokes;
-      })
-      .catch(() => {
+              .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+              .replace(/&nbsp;/g, ' ')
+              .trim();
+            if (content.length > 5) {
+              return { text: content, label: CTYPE_LABELS[cType] || 'Юмор' };
+            }
+            return null;
+          })
+          .catch(() => null)
+      );
+    }
+
+    jokesFetchPromise = Promise.all(promises).then(results => {
+      const jokes = results.filter(r => r !== null);
+      if (jokes.length === 0) {
         jokesCache = [
-          'Библиотека бесконечна, а анекдоты всё равно конечны.',
-          'Вавилон считает. Анекдоты загружаются. Жизнь прекрасна.',
-          'Каждый анекдот уже существует в библиотеке. И каждый раз — на другой странице.',
+          { text: 'Библиотека бесконечна, а анекдоты всё равно конечны.', label: 'Библиотекарь' },
+          { text: 'Вавилон считает. Анекдоты загружаются. Жизнь прекрасна.', label: 'Библиотекарь' },
+          { text: 'Каждый анекдот уже существует в библиотеке. И каждый раз — на другой странице.', label: 'Библиотекарь' },
         ];
-        jokesFetched = true;
-        return jokesCache;
-      });
+      } else {
+        jokesCache = jokes;
+      }
+      jokesFetched = true;
+      return jokesCache;
+    });
+
     return jokesFetchPromise;
   }
 
@@ -168,15 +194,20 @@
     let intervalId = null;
     let jokeEl = null;
 
+    /* Reset cache so each search gets fresh jokes */
+    jokesFetched = false;
+    jokesFetchPromise = null;
+
     fetchJokes().then(jokes => {
       if (!jokes.length) return;
       jokeEl = document.createElement('div');
       jokeEl.className = 'msg msg-them babel-joke-msg';
+      const joke = jokes[0];
       jokeEl.innerHTML = `
         <div class="msg-avatar">😂</div>
         <div class="msg-bubble">
-          <div class="msg-name">Анекдот пока ждёшь</div>
-          <div class="babel-joke-text">${escJoke(jokes[0])}</div>
+          <div class="msg-name">${escJoke(joke.label || 'Анекдот')} пока ждёшь</div>
+          <div class="babel-joke-text">${escJoke(joke.text)}</div>
         </div>
       `;
       container.appendChild(jokeEl);
@@ -185,10 +216,13 @@
       intervalId = setInterval(() => {
         jokeIndex = (jokeIndex + 1) % jokes.length;
         const textEl = jokeEl.querySelector('.babel-joke-text');
+        const nameEl = jokeEl.querySelector('.msg-name');
         if (textEl) {
           textEl.style.opacity = '0';
           setTimeout(() => {
-            textEl.innerHTML = escJoke(jokes[jokeIndex]);
+            const j = jokes[jokeIndex];
+            textEl.innerHTML = escJoke(j.text);
+            if (nameEl) nameEl.textContent = `${escJoke(j.label || 'Анекдот')} пока ждёшь`;
             textEl.style.opacity = '1';
             container.scrollTop = container.scrollHeight;
           }, 300);

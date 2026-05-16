@@ -156,13 +156,13 @@
 
       /* Shelves with book spines */
       let shelvesHTML = '';
-      for (let s = 1; s <= ALG.shelvesPerWall; s++) {
+      for (let s = 1; s <= Number(ALG.shelvesPerWall); s++) {
         let spines = '';
-        for (let v = 1; v <= ALG.volumesPerShelf; v++) {
+        for (let v = 1; v <= Number(ALG.volumesPerShelf); v++) {
           const spineText = lib.getBookSpine(x, y, wall, s, v);
           const cls = lib.classifySpine(spineText);
           const display = u.esc(spineText || 'пусто');
-          const pageUrl = `#/page/${lib.numberToB64(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, s, v, 1)))}`;
+          const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(x, y, wall, s, v, 1));
           spines += `<a class="bk-spine ${cls === 'text' ? 'bk-has-text' : cls === 'noise' ? 'bk-noise' : ''}" href="${pageUrl}" title="Том ${v}">${display}</a>`;
         }
         shelvesHTML += `
@@ -340,11 +340,11 @@
 
       /* Shelves */
       let shelvesHTML = '';
-      for (let s = 1; s <= ALG.shelvesPerWall; s++) {
+      for (let s = 1; s <= Number(ALG.shelvesPerWall); s++) {
         let books = '';
-        for (let v = 1; v <= ALG.volumesPerShelf; v++) {
+        for (let v = 1; v <= Number(ALG.volumesPerShelf); v++) {
           const spineText = lib.getBookSpine(x, y, wall, s, v);
-          const pageUrl = `#/page/${lib.numberToB64(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, s, v, 1)))}`;
+          const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(x, y, wall, s, v, 1));
           books += `<a class="cosmos-book" href="${pageUrl}">Т.${v}</a>`;
         }
         shelvesHTML += `<div class="cosmos-shelf"><span class="cosmos-shelf-num">П.${s}</span>${books}</div>`;
@@ -462,16 +462,16 @@
       });
 
       /* Show book spines as message */
-      for (let s = 1; s <= ALG.shelvesPerWall; s++) {
+      for (let s = 1; s <= Number(ALG.shelvesPerWall); s++) {
         const spines = [];
-        for (let v = 1; v <= Math.min(ALG.volumesPerShelf, 8); v++) {
+        for (let v = 1; v <= Math.min(Number(ALG.volumesPerShelf), 8); v++) {
           const spineText = lib.getBookSpine(x, y, wall, s, v);
           const cls = lib.classifySpine(spineText);
-          if (cls === 'text') spines.push(`<a class="msg-book-link" href="#/page/${lib.numberToB64(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, s, v, 1)))}">📖 Том ${v}: ${u.esc(spineText.slice(0, 30))}</a>`);
+          if (cls === 'text') spines.push(`<a class="msg-book-link" href="${lib.coordsToPageUrl(lib.xyToCoordinates(x, y, wall, s, v, 1))}">📖 Том ${v}: ${u.esc(spineText.slice(0, 30))}</a>`);
           else if (cls === 'noise') spines.push(`<span class="msg-book-noise">📕 Том ${v}</span>`);
           else spines.push(`<span class="msg-book-empty">📄 Том ${v}</span>`);
         }
-        const more = ALG.volumesPerShelf > 8 ? `<span class="msg-book-more">…и ещё ${ALG.volumesPerShelf - 8}</span>` : '';
+        const more = ALG.volumesPerShelf > 8n ? `<span class="msg-book-more">…и ещё ${Number(ALG.volumesPerShelf) - 8}</span>` : '';
         messages.push({
           type: 'them',
           name: 'Библиотекарь',
@@ -593,14 +593,9 @@
     },
 
     renderPage(route) {
-      const b64 = route.parts[1];
-      if (!b64) return `<div class="msg-chat"><div class="msg msg-them"><div class="msg-bubble"><p>Страница не указана</p></div></div></div>`;
+      if (!route.pageNumber) return `<div class="msg-chat"><div class="msg msg-them"><div class="msg-bubble"><p>Страница не указана</p></div></div></div>`;
 
-      let number;
-      try { number = lib.b64ToNumber(b64); } catch {
-        return `<div class="msg-chat"><div class="msg msg-them"><div class="msg-bubble"><p>Неверный адрес</p></div></div></div>`;
-      }
-
+      const number = route.pageNumber;
       const coords = lib.numberToCoordinates(number);
       const xy = lib.coordinatesToXY(coords);
 
@@ -610,10 +605,10 @@
       const pageNum = Number(coords.page);
       const totalPages = Number(ALG.pagesPerVolume);
       const prevPage = pageNum > 1
-        ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum - 1)}))}`
+        ? lib.coordsToPageUrl({...coords, page: BigInt(pageNum - 1)})
         : null;
       const nextPage = pageNum < totalPages
-        ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum + 1)}))}`
+        ? lib.coordsToPageUrl({...coords, page: BigInt(pageNum + 1)})
         : null;
 
       return `
@@ -665,10 +660,8 @@
     },
 
     bindPage(route) {
-      const b64 = route.parts[1];
-      if (!b64) return;
-      let number;
-      try { number = lib.b64ToNumber(b64); } catch { return; }
+      if (!route.pageNumber) return;
+      const number = route.pageNumber;
       const coords = lib.numberToCoordinates(number);
 
       const contentSlot = u.$('#pageContentSlot');
@@ -806,7 +799,7 @@
         const jokeTicker = app.workerBridge.startJokeTicker(chat);
 
         app.workerBridge.search(q, currentMode, 6).then(variants => {
-          removeTyping(typingEl);
+          app.workerBridge.removeTyping(typingEl);
           jokeTicker.stop();
 
           const resultsHTML = variants.map(v => {
@@ -817,7 +810,7 @@
             const phraseEsc = u.esc(v.phrase);
             const snippetEsc = u.esc(snippet);
             const highlightedSnippet = snippetEsc.replace(phraseEsc, `<mark>${phraseEsc}</mark>`);
-            const pageUrl = `#/page/${lib.numberToB64(vNumber)}?hl=${v.range.start}:${v.range.length}`;
+            const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${v.range.start}:${v.range.length}` });
             return `
             <div class="msg msg-them">
               <div class="msg-avatar">🔍</div>
@@ -840,7 +833,7 @@
           resultsSlot.innerHTML = resultsHTML;
           if (chat) chat.scrollTop = chat.scrollHeight;
         }).catch(err => {
-          removeTyping(typingEl);
+          app.workerBridge.removeTyping(typingEl);
           jokeTicker.stop();
           resultsSlot.innerHTML = `<div class="msg msg-them"><div class="msg-bubble"><p>Ошибка: ${u.esc(err.message)}</p></div></div>`;
         });
@@ -873,7 +866,7 @@
         const data = lib.getPageByXY(rx, ry, 1, 1, 1, 1);
         const stats = charStats(data.indices);
         const snippet = pageSnippet(data.indices, 120);
-        const pageUrl = `#/page/${lib.numberToB64(data.number)}`;
+        const pageUrl = lib.coordsToPageUrl(data.coordinates);
         posts += `
         <article class="feed-post">
           <div class="feed-post-header">
@@ -935,11 +928,11 @@
 
       /* All books on current wall as feed posts */
       let posts = '';
-      for (let v = 1; v <= Math.min(ALG.volumesPerShelf, 16); v++) {
+      for (let v = 1; v <= Math.min(Number(ALG.volumesPerShelf), 16); v++) {
         const data = lib.getPageByXY(x, y, wall, 1, v, 1);
         const stats = charStats(data.indices);
         const snippet = pageSnippet(data.indices, 150);
-        const pageUrl = `#/page/${lib.numberToB64(data.number)}`;
+        const pageUrl = lib.coordsToPageUrl(data.coordinates);
         posts += `
         <article class="feed-post">
           <div class="feed-post-header">
@@ -1133,10 +1126,10 @@
 
       /* Book listing */
       let bookList = '';
-      for (let v = 1; v <= Math.min(ALG.volumesPerShelf, 10); v++) {
+      for (let v = 1; v <= Math.min(Number(ALG.volumesPerShelf), 10); v++) {
         const spineText = lib.getBookSpine(x, y, wall, 1, v);
         const stats = charStats(lib.numberToIndices(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, 1, v, 1))));
-        const pageUrl = `#/page/${lib.numberToB64(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, 1, v, 1)))}`;
+        const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(x, y, wall, 1, v, 1));
         const label = spineText ? u.esc(spineText.slice(0, 30)) : '(пусто)';
         bookList += `<a class="term-link" href="${pageUrl}">Том ${v}</a> [${stats.label}] ${label}<br>`;
       }
@@ -1151,7 +1144,7 @@
             </div>
             <div class="term-line term-output-text">
 Сектор ${hallInfo.sector} · Зал ${hallInfo.hall} · Стена ${wall}<br>
-Полка 1 — ${Math.min(ALG.volumesPerShelf, 10)} из ${ALG.volumesPerShelf} томов:<br><br>
+Полка 1 — ${Math.min(Number(ALG.volumesPerShelf), 10)} из ${ALG.volumesPerShelf} томов:<br><br>
 ${bookList}
             </div>
             <div class="term-line term-output-text">
@@ -1222,10 +1215,9 @@ ${bookList}
     },
 
     renderPage(route) {
-      const b64 = route.parts[1];
-      if (!b64) return `<div class="term-screen"><div class="term-output"><div class="term-line term-output-text">Страница не указана</div></div></div>`;
+      if (!route.pageNumber) return `<div class="term-screen"><div class="term-output"><div class="term-line term-output-text">Страница не указана</div></div></div>`;
       let number;
-      try { number = lib.b64ToNumber(b64); } catch {
+      try { number = route.pageNumber; } catch {
         return `<div class="term-screen"><div class="term-output"><div class="term-line term-output-text">Неверный адрес</div></div></div>`;
       }
       const indices = lib.numberToIndices(number);
@@ -1238,8 +1230,8 @@ ${bookList}
 
       const pageNum = Number(coords.page);
       const totalPages = Number(ALG.pagesPerVolume);
-      const prevUrl = pageNum > 1 ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum - 1)}))}` : null;
-      const nextUrl = pageNum < totalPages ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum + 1)}))}` : null;
+      const prevUrl = pageNum > 1 ? lib.coordsToPageUrl({...coords, page: BigInt(pageNum - 1)}) : null;
+      const nextUrl = pageNum < totalPages ? lib.coordsToPageUrl({...coords, page: BigInt(pageNum + 1)}) : null;
 
       /* Show text in terminal style */
       const lines = text.split('\n');
@@ -1273,10 +1265,9 @@ ${bookList}
     },
 
     bindPage(route) {
-      const b64 = route.parts[1];
-      if (!b64) return;
+      if (!route.pageNumber) return;
       let number;
-      try { number = lib.b64ToNumber(b64); } catch { return; }
+      try { number = route.pageNumber; } catch { return; }
       const coords = lib.numberToCoordinates(number);
 
       const favBtn = u.$('#termFav');
@@ -1305,7 +1296,7 @@ ${bookList}
           resultsHTML = variants.map(v => {
             const snippet = u.snippetByRange(v.text, v.range, 50);
             const highlighted = u.esc(snippet).replace(u.esc(v.phrase), `<mark>${u.esc(v.phrase)}</mark>`);
-            const pageUrl = `#/page/${lib.numberToB64(v.number)}?hl=${v.range.start}:${v.range.length}`;
+            const pageUrl = lib.coordsToPageUrl(v.coordinates, { hl: `${v.range.start}:${v.range.length}` });
             return `<div class="term-line term-output-text">
 [${v.variant}] <a class="term-link" href="${pageUrl}">X:${fmtXY(v.xy.x)} Y:${fmtXY(v.xy.y)} Т.${v.coordinates.volume}</a>
 ${highlighted}
@@ -1349,11 +1340,10 @@ ${highlighted}
      ═══════════════════════════════════════════════════════════ */
 
   function sharedPageRender(route, themeClass) {
-    const b64 = route.parts[1];
-    if (!b64) return `<div class="${themeClass}"><div class="notice">Страница не указана</div></div>`;
+    if (!route.pageNumber) return `<div class="${themeClass}"><div class="notice">Страница не указана</div></div>`;
 
     let number;
-    try { number = lib.b64ToNumber(b64); } catch {
+    try { number = route.pageNumber; } catch {
       return `<div class="${themeClass}"><div class="notice">Неверный адрес страницы</div></div>`;
     }
 
@@ -1368,10 +1358,10 @@ ${highlighted}
     const pageNum = Number(coords.page);
     const totalPages = Number(ALG.pagesPerVolume);
     const prevPage = pageNum > 1
-      ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum - 1)}))}`
+      ? lib.coordsToPageUrl({...coords, page: BigInt(pageNum - 1)})
       : null;
     const nextPage = pageNum < totalPages
-      ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum + 1)}))}`
+      ? lib.coordsToPageUrl({...coords, page: BigInt(pageNum + 1)})
       : null;
 
     try { store.pushHistory({ url: location.hash, title: lib.pageTitle(coords) }); } catch {}
@@ -1433,10 +1423,9 @@ ${highlighted}
   }
 
   function bindSharedPage(route) {
-    const b64 = route.parts[1];
-    if (!b64) return;
+    if (!route.pageNumber) return;
     let number;
-    try { number = lib.b64ToNumber(b64); } catch { return; }
+    try { number = route.pageNumber; } catch { return; }
     const coords = lib.numberToCoordinates(number);
 
     const favBtn = u.$('#favBtn');

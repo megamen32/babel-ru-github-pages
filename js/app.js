@@ -18,12 +18,32 @@
     const parts = path.split('/').filter(Boolean);
     const params = new URLSearchParams(query || '');
     let name = 'home';
+    let pageCoords = null;
+    let pageB64 = null;
     if (parts[0] === 'wander') name = 'wander';
     else if (parts[0] === 'search') name = 'search';
-    else if (parts[0] === 'page') name = 'page';
+    else if (parts[0] === 'page') {
+      name = 'page';
+      if (parts[1] === 's') {
+        /* Coordinate format: /page/s/{sector}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
+        pageCoords = {};
+        for (let i = 2; i < parts.length - 1; i += 2) {
+          switch (parts[i]) {
+            case 's': pageCoords.sector = parts[i + 1]; break;
+            case 'h': pageCoords.hall = parts[i + 1]; break;
+            case 'w': pageCoords.wall = parts[i + 1]; break;
+            case 'sh': pageCoords.shelf = parts[i + 1]; break;
+            case 'v': pageCoords.volume = parts[i + 1]; break;
+            case 'p': pageCoords.page = parts[i + 1]; break;
+          }
+        }
+      } else if (parts[1] && parts[1] !== 'random') {
+        pageB64 = parts[1];
+      }
+    }
     else if (parts[0] === 'about') name = 'about';
     else if (parts[0] === 'favorites') name = 'favorites';
-    return { name, parts, params };
+    return { name, parts, params, pageCoords, pageB64 };
   }
 
   function navigate() {
@@ -77,10 +97,29 @@
         case 'page': {
           /* Handle /page/random → redirect to random page */
           if (route.parts[1] === 'random') {
-            const randNum = lib.randomPageNumber();
-            location.hash = `#/page/${lib.numberToB64(randNum)}`;
+            const randCoords = lib.randomPageCoords();
+            location.hash = lib.coordsToPageUrl(randCoords);
             return;
           }
+
+          /* Resolve page number from either coordinate URL or legacy base64 */
+          try {
+            if (route.pageCoords) {
+              route.pageNumber = lib.coordinatesToNumber(route.pageCoords);
+            } else if (route.pageB64) {
+              /* Legacy base64 URL — resolve and redirect to coordinate URL */
+              const number = lib.b64ToNumber(route.pageB64);
+              const coords = lib.numberToCoordinates(number);
+              const hl = route.params.get('hl');
+              const params = hl ? { hl } : undefined;
+              location.replace(lib.coordsToPageUrl(coords, params));
+              return;
+            }
+          } catch (err) {
+            view.innerHTML = `<div class="section-shell"><div class="notice">Ошибка: ${esc(err.message)}</div></div>`;
+            return;
+          }
+
           view.innerHTML = renderer.renderPage(route);
           if (renderer.bindPage) renderer.bindPage(route);
           else themes.bindSharedPage(route);
@@ -191,7 +230,7 @@
           const phraseEscaped = esc(v.phrase);
           const snippetEscaped = esc(snippet);
           const highlightedSnippet = snippetEscaped.replace(phraseEscaped, `<mark>${phraseEscaped}</mark>`);
-          const pageUrl = app.utils.routeFor(`/page/${lib.numberToB64(vNumber)}`, { hl: `${v.range.start}:${v.range.length}` });
+          const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${v.range.start}:${v.range.length}` });
           const wanderUrl = `#/wander/x/${themes.fmtXY(vXY.x)}/y/${themes.fmtXY(vXY.y)}`;
           const modeLabels = { empty: 'Пустота', noise: 'Шум', words: 'Слова' };
           return `
