@@ -802,9 +802,12 @@
       if (q && resultsSlot) {
         /* Show typing indicator */
         const typingEl = app.workerBridge.showTyping(chat, 'Библиотекарь');
+        /* Show jokes while waiting */
+        const jokeTicker = app.workerBridge.startJokeTicker(chat);
 
         app.workerBridge.search(q, currentMode, 6).then(variants => {
           removeTyping(typingEl);
+          jokeTicker.stop();
 
           const resultsHTML = variants.map(v => {
             const vNumber = BigInt(v.number);
@@ -838,6 +841,7 @@
           if (chat) chat.scrollTop = chat.scrollHeight;
         }).catch(err => {
           removeTyping(typingEl);
+          jokeTicker.stop();
           resultsSlot.innerHTML = `<div class="msg msg-them"><div class="msg-bubble"><p>Ошибка: ${u.esc(err.message)}</p></div></div>`;
         });
       } else if (resultsSlot) {

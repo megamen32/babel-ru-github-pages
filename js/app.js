@@ -178,7 +178,11 @@
     /* Async search via Worker */
     if (q && resultsSlot) {
       const bridge = app.workerBridge;
+      /* Start joke ticker while searching */
+      const chatContainer = resultsSlot.closest('.msg-chat') || resultsSlot;
+      const jokeTicker = bridge.startJokeTicker(chatContainer);
       bridge.search(q, currentMode, count).then(variants => {
+        jokeTicker.stop();
         const resultsHTML = variants.map(v => {
           const vNumber = BigInt(v.number);
           const vCoords = { sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
@@ -208,6 +212,7 @@
         }).join('');
         resultsSlot.innerHTML = resultsHTML;
       }).catch(err => {
+        jokeTicker.stop();
         resultsSlot.innerHTML = `<div class="notice">${esc(err.message)}</div>`;
       });
     }
@@ -297,6 +302,9 @@ bookIndex     = (contentNumber − OFFSET) × I  mod 2^32768</code></pre>
   function init() {
     /* Apply saved theme immediately */
     themes.setTheme(themes.getTheme());
+
+    /* Pre-load dictionary from internet in background */
+    app.config.ensureWordBank();
 
     /* First render */
     navigate();

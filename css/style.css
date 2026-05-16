@@ -1209,3 +1209,28 @@ main#view { flex: 1; padding: 0; }
   0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
   30% { opacity: 1; transform: scale(1.1); }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   JOKE TICKER — Анекдоты пока ждёшь
+   ═══════════════════════════════════════════════════════════ */
+
+.babel-joke-msg {
+  animation: msgSlideIn 0.4s ease;
+}
+.babel-joke-msg .msg-bubble {
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.2);
+  border-left: 3px solid var(--yellow);
+}
+.babel-joke-msg .msg-name {
+  color: var(--yellow);
+  font-size: 0.6rem;
+}
+.babel-joke-text {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text);
+  transition: opacity 0.3s ease;
+  max-height: 200px;
+  overflow: hidden;
+}

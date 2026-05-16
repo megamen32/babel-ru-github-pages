@@ -1,6 +1,6 @@
 /* ============================================
    ВАВИЛОН — Worker Bridge
-   Promise-based API + loading overlay
+   Promise-based API + loading overlay + jokes
    ============================================ */
 
 (() => {
@@ -116,6 +116,100 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
+     ANEKDOT.RU — Jokes while searching!
+     ═══════════════════════════════════════════════════════════ */
+
+  const ANEKDOT_RSS = 'https://www.anekdot.ru/rss/export_bestday.xml';
+  let jokesCache = [];
+  let jokesFetched = false;
+  let jokesFetchPromise = null;
+
+  function fetchJokes() {
+    if (jokesFetched) return Promise.resolve(jokesCache);
+    if (jokesFetchPromise) return jokesFetchPromise;
+    jokesFetchPromise = fetch(ANEKDOT_RSS)
+      .then(r => r.text())
+      .then(xml => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xml, 'text/xml');
+        const items = doc.querySelectorAll('item');
+        const jokes = [];
+        items.forEach(item => {
+          const desc = item.querySelector('description');
+          if (desc && desc.textContent.trim()) {
+            const text = desc.textContent.trim()
+              .replace(/<br\s*\/?>/gi, '\n')
+              .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+              .replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+            jokes.push(text);
+          }
+        });
+        jokesCache = jokes;
+        jokesFetched = true;
+        return jokes;
+      })
+      .catch(() => {
+        jokesCache = [
+          'Библиотека бесконечна, а анекдоты всё равно конечны.',
+          'Вавилон считает. Анекдоты загружаются. Жизнь прекрасна.',
+          'Каждый анекдот уже существует в библиотеке. И каждый раз — на другой странице.',
+        ];
+        jokesFetched = true;
+        return jokesCache;
+      });
+    return jokesFetchPromise;
+  }
+
+  /* Show rotating jokes in a container while search runs */
+  function startJokeTicker(container) {
+    if (!container) return { stop() {} };
+
+    let jokeIndex = 0;
+    let intervalId = null;
+    let jokeEl = null;
+
+    fetchJokes().then(jokes => {
+      if (!jokes.length) return;
+      jokeEl = document.createElement('div');
+      jokeEl.className = 'msg msg-them babel-joke-msg';
+      jokeEl.innerHTML = `
+        <div class="msg-avatar">😂</div>
+        <div class="msg-bubble">
+          <div class="msg-name">Анекдот пока ждёшь</div>
+          <div class="babel-joke-text">${escJoke(jokes[0])}</div>
+        </div>
+      `;
+      container.appendChild(jokeEl);
+      container.scrollTop = container.scrollHeight;
+
+      intervalId = setInterval(() => {
+        jokeIndex = (jokeIndex + 1) % jokes.length;
+        const textEl = jokeEl.querySelector('.babel-joke-text');
+        if (textEl) {
+          textEl.style.opacity = '0';
+          setTimeout(() => {
+            textEl.innerHTML = escJoke(jokes[jokeIndex]);
+            textEl.style.opacity = '1';
+            container.scrollTop = container.scrollHeight;
+          }, 300);
+        }
+      }, 4000);
+    });
+
+    return {
+      stop() {
+        if (intervalId) clearInterval(intervalId);
+        if (jokeEl && jokeEl.parentNode) jokeEl.parentNode.removeChild(jokeEl);
+      }
+    };
+  }
+
+  function escJoke(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+  }
+
+  /* ═══════════════════════════════════════════════════════════
      PUBLIC API
      ═══════════════════════════════════════════════════════════ */
 
@@ -162,6 +256,10 @@
     hideLoading,
     showTyping,
     removeTyping,
+
+    /* Jokes */
+    fetchJokes,
+    startJokeTicker,
 
     /* Check if bridge is available (workers supported) */
     isAvailable() {
