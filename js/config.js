@@ -19,7 +19,7 @@
 
      English letters with visual overlap (A=А, E=Е, K=К, M=М,
      O=О, C=С, T=Т, X=Х) are kept as separate entries because
-     we have room. Search maps them to Russian automatically. */
+     we have room. They are NOT auto-mapped to Russian for speed. */
 
   const ALPHABET = [
     /*  0 */ " ",
@@ -80,18 +80,10 @@
       source: "«Вавилонская библиотека»",
     },
     INTRO: "Вавилон — это не про шифры. Это про оцепенение, когда ты стоишь в бесконечном зале, тянешь наугад пыльную книгу с полки, и там — дневник твоей смерти. Или рецепт борща. Или просто шум.",
-    WORD_BANK: [
+    /* 10000 русских слов — загружается из отдельного файла */
+    WORD_BANK: typeof RUSSIAN_WORDS !== 'undefined' ? RUSSIAN_WORDS : [
       "архив", "книга", "сумрак", "пыль", "каталог", "лестница", "галерея", "полка",
       "переплет", "тишина", "страж", "лампа", "письмо", "зеркало", "индекс", "том",
-      "лист", "коридор", "узор", "шёпот", "словарь", "лабиринт", "шестигранник",
-      "предел", "слово", "рукопись", "описание", "число", "перестановка", "алфавит",
-      "формула", "ночь", "свет", "порог", "перила", "символ", "строка", "координата",
     ],
-    /* English letters that look identical to Russian (lowercase).
-       Search normalizes these to Russian counterparts automatically. */
-    VISUAL_OVERLAP: {
-      "a": "а", "e": "е", "k": "к", "m": "м",
-      "o": "о", "c": "с", "t": "т", "x": "х",
-    },
   };
 })();

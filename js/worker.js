@@ -5,6 +5,9 @@
 
 'use strict';
 
+/* Load 10000 Russian words into this.RUSSIAN_WORDS */
+try { importScripts('russian-words.js'); } catch(e) { console.warn('Worker: russian-words.js not found, using fallback'); }
+
 /* ═══════════════════════════════════════════════════════════
    ALPHABET — 256 characters = 2^8
    ═══════════════════════════════════════════════════════════ */
@@ -52,11 +55,6 @@ for (let i = 0; i < ALPHABET.length; i++) {
   charToIndex.set(ALPHABET[i], i);
 }
 
-const VISUAL_OVERLAP = {
-  "a": "а", "e": "е", "k": "к", "m": "м",
-  "o": "о", "c": "с", "t": "т", "x": "х",
-};
-
 const ALG = {
   label: "ru5",
   alphabet: ALPHABET,
@@ -68,12 +66,10 @@ const ALG = {
   hallsPerSector: 20n,
 };
 
-const WORD_BANK = [
+/* Russian word bank — loaded from dictionary file */
+const WORD_BANK = typeof RUSSIAN_WORDS !== 'undefined' ? RUSSIAN_WORDS : [
   "архив", "книга", "сумрак", "пыль", "каталог", "лестница", "галерея", "полка",
   "переплет", "тишина", "страж", "лампа", "письмо", "зеркало", "индекс", "том",
-  "лист", "коридор", "узор", "шёпот", "словарь", "лабиринт", "шестигранник",
-  "предел", "слово", "рукопись", "описание", "число", "перестановка", "алфавит",
-  "формула", "ночь", "свет", "порог", "перила", "символ", "строка", "координата",
 ];
 
 const SEARCH_VARIANTS_DEFAULT = 6;
@@ -161,7 +157,7 @@ function indicesToString(indices) {
 function normalizeText(raw) {
   let text = String(raw || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   text = text.toLowerCase().replace(/[ \t]+/g, " ").trim();
-  text = text.replace(/[aekmoctx]/g, ch => VISUAL_OVERLAP[ch] || ch);
+  // No VISUAL_OVERLAP mapping — kept as separate alphabet entries for speed.
   const indices = tokenizeText(text);
   return indicesToString(indices).replace(/ +/g, " ").trim();
 }

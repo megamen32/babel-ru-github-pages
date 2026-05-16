@@ -73,11 +73,9 @@
       return app.utils.mulberry32(app.utils.fnv1a(text));
     },
     normalizeText(raw) {
-      const OVERLAP = app.config.VISUAL_OVERLAP;
       let text = String(raw || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
       text = text.toLowerCase().replace(/[ \t]+/g, " ").trim();
-      // Map visually-overlapping English letters to their Russian counterparts
-      text = text.replace(/[aekmoctx]/g, ch => OVERLAP[ch] || ch);
+      // No more VISUAL_OVERLAP mapping — kept as separate alphabet entries.
       // Tokenize — unknowns become space (index 0)
       const indices = app.utils.tokenizeText(text);
       // Convert back and collapse spaces
