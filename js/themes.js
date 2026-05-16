@@ -265,11 +265,31 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
-     JOURNEY MAP — horizontal timeline of visited positions
+     JOURNEY MAP — 2D wandering trail with real coordinates
      ═══════════════════════════════════════════════════════════
-     Shows WHERE YOU'VE BEEN and HOW FAR YOU JUMPED.
-     Left = oldest, Right = current position.
-     Gap between nodes = log(distance), colored by genre. */
+     Shows WHERE YOU'VE BEEN in 2D space.
+     Points positioned by real x,y coordinates (scaled to fit).
+     Lines show trajectory. Current position highlighted.
+     For large jumps, distance is compressed (log scale) but
+     direction is preserved. */
+
+  function safeNum(v) {
+    /* Convert BigInt or string to a finite Number, or 0 */
+    if (v == null) return 0;
+    if (typeof v === 'bigint') {
+      const s = String(v);
+      /* For very large BigInt, use a hash-like approach: take first and last digits */
+      if (s.length > 15) {
+        /* Fallback: use modular arithmetic for a stable numeric representation */
+        const prefix = s.slice(0, 10);
+        const suffix = s.slice(-5);
+        return Number(prefix) * 1e5 + Number(suffix);
+      }
+      return Number(v);
+    }
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
 
   function drawJourneyMap(canvas) {
     const ctx = canvas.getContext('2d');
@@ -289,89 +309,161 @@
       return;
     }
 
-    /* The journey array has items: { x, y, genre, dist, ts }
-       dist = hex distance from previous step (0 for first step) */
+    /* Convert journey points to numeric x,y */
+    const points = journey.map(step => ({
+      x: safeNum(step.x),
+      y: safeNum(step.y),
+      genre: step.genre || '',
+      dist: safeNum(step.dist),
+      labelX: step.x,
+      labelY: step.y,
+    }));
 
-    /* Calculate visual positions:
-       Each step gets a position on the x-axis.
-       The gap between steps is proportional to log(1 + dist) —
-       so big jumps are wider but don't overwhelm small ones. */
-
-    const totalSteps = journey.length;
-    const padding = 30;
-    const usableWidth = w - padding * 2;
-
-    /* Calculate gaps using log scale for jump distances */
-    const gaps = [];
-    let totalGapWeight = 0;
-    for (let i = 0; i < totalSteps; i++) {
-      const gapWeight = i === 0 ? 1 : Math.log(1 + journey[i].dist) + 1;
-      gaps.push(gapWeight);
-      totalGapWeight += gapWeight;
+    /* Filter out points with same position as previous */
+    const filtered = [points[0]];
+    for (let i = 1; i < points.length; i++) {
+      if (points[i].x !== filtered[filtered.length - 1].x || points[i].y !== filtered[filtered.length - 1].y) {
+        filtered.push(points[i]);
+      }
     }
 
-    /* Normalize to fit usable width */
-    const positions = [];
-    let cumulative = 0;
-    for (let i = 0; i < totalSteps; i++) {
-      const x = padding + (cumulative / totalGapWeight) * usableWidth;
-      cumulative += gaps[i];
-      positions.push(x);
+    if (filtered.length < 1) return;
+
+    /* Calculate bounding box */
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of filtered) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
     }
 
-    /* Draw connecting lines */
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-    ctx.lineWidth = 1;
-    for (let i = 1; i < totalSteps; i++) {
+    /* Handle single point */
+    if (minX === maxX && minY === maxY) {
+      /* Single point — just draw it centered */
+      const cx = w / 2, cy = h / 2;
+      const color = lib.GENRE_COLORS[filtered[0].genre] || '#4e5c6e';
       ctx.beginPath();
-      ctx.moveTo(positions[i - 1], h / 2);
-      ctx.lineTo(positions[i], h / 2);
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.font = 'bold 10px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff';
+      ctx.fillText('X:' + filtered[0].labelX + ' Y:' + filtered[0].labelY, cx, cy + 18);
+      return;
+    }
+
+    /* Add margin and handle degenerate cases */
+    const rangeX = maxX - minX || 1;
+    const rangeY = maxY - minY || 1;
+    const padding = 40;
+    const usableW = w - padding * 2;
+    const usableH = h - padding * 2;
+
+    /* Scale to fit, preserving aspect ratio */
+    const scaleX = usableW / rangeX;
+    const scaleY = usableH / rangeY;
+    const scale = Math.min(scaleX, scaleY);
+
+    /* Center the map */
+    const mapW = rangeX * scale;
+    const mapH = rangeY * scale;
+    const offsetX = (w - mapW) / 2;
+    const offsetY = (h - mapH) / 2;
+
+    /* Convert coordinates to canvas positions */
+    function toCanvas(px, py) {
+      return {
+        cx: offsetX + (px - minX) * scale,
+        cy: offsetY + (maxY - py) * scale, /* flip Y so north is up */
+      };
+    }
+
+    /* Draw trajectory lines */
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    for (let i = 1; i < filtered.length; i++) {
+      const from = toCanvas(filtered[i - 1].x, filtered[i - 1].y);
+      const to = toCanvas(filtered[i].x, filtered[i].y);
+      /* For big jumps, draw dashed line */
+      const d = filtered[i].dist;
+      if (d > 5) {
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      } else {
+        ctx.setLineDash([]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      }
+      ctx.beginPath();
+      ctx.moveTo(from.cx, from.cy);
+      ctx.lineTo(to.cx, to.cy);
       ctx.stroke();
     }
+    ctx.setLineDash([]);
 
-    /* Draw nodes with focus effect (current = large, old = small) */
+    /* Draw nodes */
+    const totalSteps = filtered.length;
     for (let i = 0; i < totalSteps; i++) {
-      const step = journey[i];
-      const age = totalSteps - 1 - i; // 0 = current
-      const focus = Math.max(0.15, 1 - age * 0.08); // fade out older steps
-      const radius = age === 0 ? 6 : Math.max(2, 5 - age * 0.5);
+      const step = filtered[i];
+      const pos = toCanvas(step.x, step.y);
+      const age = totalSteps - 1 - i; /* 0 = current */
+      const focus = Math.max(0.2, 1 - age * 0.06);
+      const radius = age === 0 ? 6 : Math.max(2, 5 - age * 0.4);
       const color = lib.GENRE_COLORS[step.genre] || '#4e5c6e';
 
       /* Draw node */
       ctx.globalAlpha = focus;
       ctx.beginPath();
-      ctx.arc(positions[i], h / 2, radius, 0, Math.PI * 2);
+      ctx.arc(pos.cx, pos.cy, radius, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
 
-      /* Draw distance label between this and previous (only for recent jumps) */
-      if (i > 0 && step.dist > 0 && age < 8) {
-        const midX = (positions[i - 1] + positions[i]) / 2;
-        ctx.font = '8px Inter, sans-serif';
+      /* Step number */
+      if (age === 0 || (age < 5 && totalSteps < 20)) {
+        ctx.font = age === 0 ? 'bold 9px Inter, sans-serif' : '7px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.fillText('d' + step.dist, midX, h / 2 - 8);
-      }
-
-      /* Label for current position and recent positions */
-      if (age < 3) {
-        ctx.font = age === 0 ? 'bold 10px Inter, sans-serif' : '8px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = `rgba(255,255,255,${focus * 0.8})`;
-        const label = 'X:' + step.x + ' Y:' + step.y;
-        ctx.fillText(label, positions[i], h / 2 + radius + 12);
+        ctx.fillStyle = `rgba(255,255,255,${focus * 0.7})`;
+        ctx.fillText(String(i + 1), pos.cx, pos.cy + radius + 10);
       }
     }
     ctx.globalAlpha = 1;
 
-    /* Draw "current" indicator */
-    if (positions.length > 0) {
-      const lastX = positions[positions.length - 1];
+    /* Draw "current" indicator — pulsing ring around last point */
+    if (filtered.length > 0) {
+      const last = filtered[filtered.length - 1];
+      const pos = toCanvas(last.x, last.y);
       ctx.beginPath();
-      ctx.arc(lastX, h / 2, 8, 0, Math.PI * 2);
+      ctx.arc(pos.cx, pos.cy, 9, 0, Math.PI * 2);
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1.5;
       ctx.stroke();
+
+      /* Label current position */
+      ctx.font = 'bold 10px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff';
+      const label = 'X:' + last.labelX + ' Y:' + last.labelY;
+      ctx.fillText(label, pos.cx, pos.cy - 14);
+    }
+
+    /* Draw distance label for big jumps */
+    for (let i = 1; i < filtered.length; i++) {
+      const d = filtered[i].dist;
+      if (d > 2) {
+        const from = toCanvas(filtered[i - 1].x, filtered[i - 1].y);
+        const to = toCanvas(filtered[i].x, filtered[i].y);
+        const midX = (from.cx + to.cx) / 2;
+        const midY = (from.cy + to.cy) / 2;
+        ctx.font = '7px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillText('d' + Math.round(d), midX, midY - 6);
+      }
     }
   }
 
@@ -903,46 +995,10 @@
       const chat = u.$('#msgChat');
       if (chat) chat.scrollTop = chat.scrollHeight;
 
-      /* Draw mini wander map */
+      /* Draw mini wander map — 2D trail with real coordinates */
       const miniMapCanvas = document.getElementById('wanderMiniMap');
       if (miniMapCanvas) {
-        const ctx = miniMapCanvas.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
-        const rect = miniMapCanvas.getBoundingClientRect();
-        miniMapCanvas.width = rect.width * dpr;
-        miniMapCanvas.height = rect.height * dpr;
-        ctx.scale(dpr, dpr);
-        const w = rect.width, h = rect.height;
-        const visited = store.getVisitedCoords();
-        if (visited.length > 0) {
-          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-          for (const v of visited) { if (v.x < minX) minX = v.x; if (v.x > maxX) maxX = v.x; if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y; }
-          minX -= 1; maxX += 1; minY -= 1; maxY += 1;
-          const rangeX = maxX - minX + 1, rangeY = maxY - minY + 1;
-          const hexSize = Math.min(w / (rangeX * 2 + 1), h / (rangeY * 1.73 + 1), 20);
-          const hexW = hexSize * 2, hexH = hexSize * 1.73;
-          const totalW = rangeX * hexW * 0.75 + hexW * 0.25, totalH = rangeY * hexH + hexH * 0.5;
-          const offsetX = (w - totalW) / 2, offsetY = (h - totalH) / 2;
-          ctx.globalAlpha = 0.1;
-          for (let gy = minY; gy <= maxY; gy++) for (let gx = minX; gx <= maxX; gx++) {
-            const cx = offsetX + (gx - minX) * hexW * 0.75 + hexW * 0.5;
-            const cy = offsetY + (gy - minY) * hexH + ((gx - minX) % 2 === 0 ? hexH * 0.5 : hexH);
-            drawMiniHex(ctx, cx, cy, hexSize * 0.85, '#555');
-          }
-          ctx.globalAlpha = 1;
-          for (const v of visited) {
-            const region = lib.classifyRegion(v.x, v.y);
-            const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
-            const cx = offsetX + (v.x - minX) * hexW * 0.75 + hexW * 0.5;
-            const cy = offsetY + (v.y - minY) * hexH + ((v.x - minX) % 2 === 0 ? hexH * 0.5 : hexH);
-            drawMiniHex(ctx, cx, cy, hexSize * 0.85, color);
-          }
-        } else {
-          ctx.fillStyle = '#4e5c6e';
-          ctx.font = '11px Inter, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('Начните блуждать...', w / 2, h / 2);
-        }
+        drawJourneyMap(miniMapCanvas);
       }
     },
 
@@ -1036,7 +1092,7 @@
       /* Track journey step for this page view */
       try {
         const pageXY = lib.coordinatesToXY(coords);
-        store.pushJourneyStep(Number(pageXY.x), Number(pageXY.y), lib.classifyRegion(Number(pageXY.x), Number(pageXY.y)).kind);
+        store.pushJourneyStep(pageXY.x, pageXY.y, lib.classifyRegion(safeNum(pageXY.x), safeNum(pageXY.y)).kind);
       } catch {}
 
       const contentSlot = u.$('#pageContentSlot');
@@ -1849,7 +1905,7 @@ ${bookList}
       /* Track journey step for this page view */
       try {
         const pageXY = lib.coordinatesToXY(coords);
-        store.pushJourneyStep(Number(pageXY.x), Number(pageXY.y), lib.classifyRegion(Number(pageXY.x), Number(pageXY.y)).kind);
+        store.pushJourneyStep(pageXY.x, pageXY.y, lib.classifyRegion(safeNum(pageXY.x), safeNum(pageXY.y)).kind);
       } catch {}
 
       const favBtn = u.$('#termFav');
@@ -2099,7 +2155,7 @@ ${highlighted}
     /* Track journey step for this page view */
     try {
       const pageXY = lib.coordinatesToXY(coords);
-      store.pushJourneyStep(Number(pageXY.x), Number(pageXY.y), lib.classifyRegion(Number(pageXY.x), Number(pageXY.y)).kind);
+      store.pushJourneyStep(pageXY.x, pageXY.y, lib.classifyRegion(safeNum(pageXY.x), safeNum(pageXY.y)).kind);
     } catch {}
 
     const favBtn = u.$('#favBtn');
@@ -2303,7 +2359,7 @@ ${highlighted}
     if (canvas) drawWanderMap(canvas);
   }
 
-  /* Draw hex-based wander map on canvas */
+  /* Draw hex-based wander map on canvas — 2D trail with real coordinates */
   function drawWanderMap(canvas) {
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
@@ -2325,22 +2381,35 @@ ${highlighted}
       return;
     }
 
+    /* Filter out entries with invalid coords and convert to numbers */
+    const pts = visited
+      .map(v => ({ x: safeNum(v.x), y: safeNum(v.y) }))
+      .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+
+    if (pts.length === 0) {
+      ctx.fillStyle = '#4e5c6e';
+      ctx.font = '14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Нет валидных координат', w / 2, h / 2);
+      return;
+    }
+
     /* Calculate bounds */
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const v of visited) {
-      if (v.x < minX) minX = v.x;
-      if (v.x > maxX) maxX = v.x;
-      if (v.y < minY) minY = v.y;
-      if (v.y > maxY) maxY = v.y;
+    for (const p of pts) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
     }
     /* Add padding */
-    const pad = 2;
+    const pad = Math.max(1, Math.round(Math.max(maxX - minX, maxY - minY) * 0.1));
     minX -= pad; maxX += pad; minY -= pad; maxY += pad;
 
-    const rangeX = maxX - minX + 1;
-    const rangeY = maxY - minY + 1;
+    const rangeX = (maxX - minX) || 1;
+    const rangeY = (maxY - minY) || 1;
 
-    /* Hex cell size */
+    /* Hex cell size — adaptive */
     const hexSize = Math.min(w / (rangeX * 1.5 + 1), h / (rangeY * 1.73 + 1), 28);
     const hexW = hexSize * 2;
     const hexH = hexSize * 1.73;
@@ -2351,24 +2420,33 @@ ${highlighted}
     const offsetX = (w - totalW) / 2;
     const offsetY = (h - totalH) / 2;
 
-    /* Draw unvisited cells (dim) */
-    ctx.globalAlpha = 0.1;
-    for (let gy = minY; gy <= maxY; gy++) {
-      for (let gx = minX; gx <= maxX; gx++) {
-        const cx = offsetX + (gx - minX) * hexW * 0.75 + hexW * 0.5;
-        const cy = offsetY + (gy - minY) * hexH + ((gx - minX) % 2 === 0 ? hexH * 0.5 : hexH) + hexH * 0.5 - hexH * 0.5;
-        drawHex(ctx, cx, cy, hexSize * 0.9, '#333');
+    /* Convert point to canvas coords */
+    function toCanvas(px, py) {
+      const gx = px - minX + pad; /* account for pad offset */
+      return {
+        cx: offsetX + gx * hexW * 0.75 + hexW * 0.5,
+        cy: offsetY + (maxY - py) * hexH + hexH * 0.5, /* flip Y */
+      };
+    }
+
+    /* Draw unvisited cells (dim) — only if range is small enough */
+    if (rangeX <= 60 && rangeY <= 60) {
+      ctx.globalAlpha = 0.08;
+      for (let gy = minY; gy <= maxY; gy++) {
+        for (let gx = minX; gx <= maxX; gx++) {
+          const pos = toCanvas(gx, gy);
+          drawHex(ctx, pos.cx, pos.cy, hexSize * 0.9, '#333');
+        }
       }
     }
 
     /* Draw visited cells */
     ctx.globalAlpha = 1;
-    for (const v of visited) {
-      const region = lib.classifyRegion(v.x, v.y);
+    for (const p of pts) {
+      const region = lib.classifyRegion(p.x, p.y);
       const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
-      const cx = offsetX + (v.x - minX) * hexW * 0.75 + hexW * 0.5;
-      const cy = offsetY + (v.y - minY) * hexH + ((v.x - minX) % 2 === 0 ? hexH * 0.5 : hexH) + hexH * 0.5 - hexH * 0.5;
-      drawHex(ctx, cx, cy, hexSize * 0.9, color);
+      const pos = toCanvas(p.x, p.y);
+      drawHex(ctx, pos.cx, pos.cy, hexSize * 0.9, color);
     }
   }
 
