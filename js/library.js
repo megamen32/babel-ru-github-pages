@@ -772,11 +772,108 @@
     },
 
     /* Find any next inhabited page — pick a random non-noise genre
-       and generate an inhabited page for it. */
+       and generate an inhabited page for it. (Legacy — not position-aware) */
     findAnyNextInhabitedPage(step) {
       const nonNoiseGenres = REGION_GENRES.filter(g => g.kind !== 'noise');
       const pick = nonNoiseGenres[Math.floor(Math.random() * nonNoiseGenres.length)];
       return app.library.generateInhabitedPage(pick.kind, step);
+    },
+
+    /* Position-aware next inhabited page.
+       1. Get XY from coords, classify current hex.
+       2. If NOT noise: generate in the SAME genre (stay in district).
+       3. If noise: scan adjacent hexes (dist 1, then 2) for non-noise.
+       4. Use current x,y as part of seed for deterministic results.
+       5. Fallback: any non-noise genre if scan fails (max dist 3). */
+    findNextInhabitedFromCoords(coords, step) {
+      const xy = coordinatesToXY(coords);
+      const cx = Number(xy.x);
+      const cy = Number(xy.y);
+      const currentRegion = classifyRegion(cx, cy);
+
+      if (currentRegion.kind !== 'noise') {
+        /* Current hex is inhabited — stay in the same district */
+        const seed = `pos-inhabited:${cx}:${cy}:${step}`;
+        const rng = rngFrom(seed);
+        const wb = WORD_BANK;
+        const w1 = wb[Math.floor(rng() * wb.length)];
+        const w2 = wb[Math.floor(rng() * wb.length)];
+        const phrase = app.utils.normalizeText(`${w1} ${w2}`);
+        const modeMap = {
+          dialogue: 'dialogue', diary: 'diary', post: 'post',
+          log: 'log', text: 'words', noise: 'noise'
+        };
+        const mode = modeMap[currentRegion.kind] || 'words';
+        const variants = app.library.createSearchVariants(phrase, mode, 1);
+        const v = variants[0];
+        v.regionGenre = currentRegion;
+        return v;
+      }
+
+      /* Current hex is noise — scan nearby for a non-noise region */
+      for (let dist = 1; dist <= 3; dist++) {
+        for (let dq = -dist; dq <= dist; dq++) {
+          for (let dr = -dist; dr <= dist; dr++) {
+            if (dq === 0 && dr === 0) continue;
+            const hexDist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+            if (hexDist !== dist) continue;
+            const nx = cx + dq;
+            const ny = cy + dr;
+            const region = classifyRegion(nx, ny);
+            if (region.kind !== 'noise') {
+              /* Found an inhabited neighbor — generate for its genre */
+              const seed = `pos-scan:${cx}:${cy}:${nx}:${ny}:${step}`;
+              const rng = rngFrom(seed);
+              const wb = WORD_BANK;
+              const w1 = wb[Math.floor(rng() * wb.length)];
+              const w2 = wb[Math.floor(rng() * wb.length)];
+              const phrase = app.utils.normalizeText(`${w1} ${w2}`);
+              const modeMap = {
+                dialogue: 'dialogue', diary: 'diary', post: 'post',
+                log: 'log', text: 'words', noise: 'noise'
+              };
+              const mode = modeMap[region.kind] || 'words';
+              const variants = app.library.createSearchVariants(phrase, mode, 1);
+              const v = variants[0];
+              v.regionGenre = region;
+              v.scanDistance = dist;
+              return v;
+            }
+          }
+        }
+      }
+
+      /* Fallback: any non-noise genre */
+      const nonNoiseGenres = REGION_GENRES.filter(g => g.kind !== 'noise');
+      const fallbackSeed = `pos-fallback:${cx}:${cy}:${step}`;
+      const fallbackRng = rngFrom(fallbackSeed);
+      const pick = nonNoiseGenres[Math.floor(fallbackRng() * nonNoiseGenres.length)];
+      const result = app.library.generateInhabitedPage(pick.kind, step);
+      result.regionGenre = pick;
+      result.scanDistance = -1;
+      return result;
+    },
+
+    /* Scan nearby hexes for inhabited regions.
+       Returns array of { dx, dy, dist, genre } for non-noise hexes
+       within maxDist (hex distance). Useful for the distance map. */
+    scanInhabitedNearby(x, y, maxDist) {
+      const limit = maxDist || 2;
+      const results = [];
+      for (let dist = 1; dist <= limit; dist++) {
+        for (let dq = -dist; dq <= dist; dq++) {
+          for (let dr = -dist; dr <= dist; dr++) {
+            if (dq === 0 && dr === 0) continue;
+            const hexDist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+            if (hexDist !== dist) continue;
+            const region = classifyRegion(x + dq, y + dr);
+            if (region.kind !== 'noise') {
+              results.push({ dx: dq, dy: dr, dist, genre: region });
+            }
+          }
+        }
+      }
+      return results;
     },
 
     /* Genre color for map rendering */

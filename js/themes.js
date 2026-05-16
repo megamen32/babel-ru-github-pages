@@ -1033,7 +1033,7 @@
       if (nextBtn) {
         nextBtn.addEventListener('click', () => {
           nextBtn.disabled = true;
-          const dest = lib.findAnyNextInhabitedPage(Date.now());
+          const dest = lib.findNextInhabitedFromCoords(coords, Date.now());
           const destUrl = lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` });
 
           /* Search animation on messenger bubble text */
@@ -1840,7 +1840,7 @@ ${bookList}
         nextCmd.addEventListener('click', () => {
           nextCmd.style.pointerEvents = 'none';
           nextCmd.textContent = '⏳ поиск…';
-          const dest = lib.findAnyNextInhabitedPage(Date.now());
+          const dest = lib.findNextInhabitedFromCoords(coords, Date.now());
           const destUrl = lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` });
 
           /* Scramble animation on terminal page text */
@@ -2170,8 +2170,8 @@ ${highlighted}
     if (nextBtn) {
       nextBtn.addEventListener('click', () => {
         nextBtn.disabled = true;
-        /* Compute destination first (synchronous, fast) */
-        const dest = lib.findAnyNextInhabitedPage(Date.now());
+        /* Compute destination first (synchronous, fast) — position-aware */
+        const dest = lib.findNextInhabitedFromCoords(coords, Date.now());
         const destUrl = lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` });
 
         /* Search animation: scramble page text bottom-to-top */
