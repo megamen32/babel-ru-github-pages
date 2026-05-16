@@ -3,7 +3,7 @@
    Caches all assets on first install, serves from cache.
    ═══════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'babel-v8-offline';
+const CACHE_NAME = 'babel-v8.1-offline';
 
 const ASSETS = [
   './',
@@ -19,6 +19,11 @@ const ASSETS = [
   './js/words.js',
   './js/worker.js',
   './404.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  './screenshot-wide.png',
+  './screenshot-mobile.png',
 ];
 
 /* Install: pre-cache all static assets */

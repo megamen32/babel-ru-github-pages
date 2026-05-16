@@ -13,3 +13,13 @@ If you are not trying to use TypeScript, please remove the tsconfig.json file fr
 npm install --save-exact --save-dev typescript @types/react @types/node
 
 [00:00:01.772] Server  ERROR   Unhandled Rejection: {}
+[03:14:39.593] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:14:39.595] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:14:39.959] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:14:39.962] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:14:40.352] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:14:40.354] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:14:40.515] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:14:40.518] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:18:20.041] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
+[03:18:20.043] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/z/my-project/src/app'
