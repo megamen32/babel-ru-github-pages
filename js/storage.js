@@ -65,5 +65,36 @@
     clearWanderMap() {
       try { localStorage.removeItem("babelWanderMap"); } catch {}
     },
+
+    /* ═══════════════════════════════════════════════════════════
+       JOURNEY HISTORY — ordered path with jump distances
+       Unlike the wander map (deduped set), this tracks the
+       ORDER of visits for the journey map visualization.
+       ═══════════════════════════════════════════════════════════ */
+
+    pushJourneyStep(x, y, genre) {
+      const journey = app.storage.readStore("babelJourney");
+      const last = journey.length > 0 ? journey[journey.length - 1] : null;
+      /* Skip if same position as last step (dedup consecutive) */
+      if (last && last.x === x && last.y === y) return;
+      /* Calculate hex distance from previous step */
+      let dist = 0;
+      if (last) {
+        const dx = x - last.x;
+        const dy = y - last.y;
+        dist = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dx + dy));
+      }
+      journey.push({ x, y, genre: genre || '', dist, ts: Date.now() });
+      /* Keep last 200 steps */
+      app.storage.writeStore("babelJourney", journey, 200);
+    },
+
+    getJourney() {
+      return app.storage.readStore("babelJourney");
+    },
+
+    clearJourney() {
+      try { localStorage.removeItem("babelJourney"); } catch {}
+    },
   };
 })();

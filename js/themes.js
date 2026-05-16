@@ -265,6 +265,117 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
+     JOURNEY MAP — horizontal timeline of visited positions
+     ═══════════════════════════════════════════════════════════
+     Shows WHERE YOU'VE BEEN and HOW FAR YOU JUMPED.
+     Left = oldest, Right = current position.
+     Gap between nodes = log(distance), colored by genre. */
+
+  function drawJourneyMap(canvas) {
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const w = rect.width, h = rect.height;
+
+    const journey = store.getJourney();
+    if (journey.length === 0) {
+      ctx.fillStyle = '#4e5c6e';
+      ctx.font = '11px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Начните блуждать, чтобы увидеть свой путь...', w / 2, h / 2);
+      return;
+    }
+
+    /* The journey array has items: { x, y, genre, dist, ts }
+       dist = hex distance from previous step (0 for first step) */
+
+    /* Calculate visual positions:
+       Each step gets a position on the x-axis.
+       The gap between steps is proportional to log(1 + dist) —
+       so big jumps are wider but don't overwhelm small ones. */
+
+    const totalSteps = journey.length;
+    const padding = 30;
+    const usableWidth = w - padding * 2;
+
+    /* Calculate gaps using log scale for jump distances */
+    const gaps = [];
+    let totalGapWeight = 0;
+    for (let i = 0; i < totalSteps; i++) {
+      const gapWeight = i === 0 ? 1 : Math.log(1 + journey[i].dist) + 1;
+      gaps.push(gapWeight);
+      totalGapWeight += gapWeight;
+    }
+
+    /* Normalize to fit usable width */
+    const positions = [];
+    let cumulative = 0;
+    for (let i = 0; i < totalSteps; i++) {
+      const x = padding + (cumulative / totalGapWeight) * usableWidth;
+      cumulative += gaps[i];
+      positions.push(x);
+    }
+
+    /* Draw connecting lines */
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < totalSteps; i++) {
+      ctx.beginPath();
+      ctx.moveTo(positions[i - 1], h / 2);
+      ctx.lineTo(positions[i], h / 2);
+      ctx.stroke();
+    }
+
+    /* Draw nodes with focus effect (current = large, old = small) */
+    for (let i = 0; i < totalSteps; i++) {
+      const step = journey[i];
+      const age = totalSteps - 1 - i; // 0 = current
+      const focus = Math.max(0.15, 1 - age * 0.08); // fade out older steps
+      const radius = age === 0 ? 6 : Math.max(2, 5 - age * 0.5);
+      const color = lib.GENRE_COLORS[step.genre] || '#4e5c6e';
+
+      /* Draw node */
+      ctx.globalAlpha = focus;
+      ctx.beginPath();
+      ctx.arc(positions[i], h / 2, radius, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      /* Draw distance label between this and previous (only for recent jumps) */
+      if (i > 0 && step.dist > 0 && age < 8) {
+        const midX = (positions[i - 1] + positions[i]) / 2;
+        ctx.font = '8px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText('d' + step.dist, midX, h / 2 - 8);
+      }
+
+      /* Label for current position and recent positions */
+      if (age < 3) {
+        ctx.font = age === 0 ? 'bold 10px Inter, sans-serif' : '8px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = `rgba(255,255,255,${focus * 0.8})`;
+        const label = 'X:' + step.x + ' Y:' + step.y;
+        ctx.fillText(label, positions[i], h / 2 + radius + 12);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    /* Draw "current" indicator */
+    if (positions.length > 0) {
+      const lastX = positions[positions.length - 1];
+      ctx.beginPath();
+      ctx.arc(lastX, h / 2, 8, 0, Math.PI * 2);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════
      THEME 1: BOOKSHELF
      ═══════════════════════════════════════════════════════════ */
 
@@ -381,6 +492,7 @@
       }
       /* Track visit on wander map */
       store.pushWanderVisit(x, y);
+      store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
       u.$$('.bk-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
@@ -561,6 +673,7 @@
       }
       /* Track visit on wander map */
       store.pushWanderVisit(x, y);
+      store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
       u.$$('.cosmos-hex-cell[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
@@ -743,6 +856,7 @@
       }
       /* Track visit on wander map */
       store.pushWanderVisit(x, y);
+      store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
       /* Navigation buttons */
       u.$$('.msg-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -904,7 +1018,7 @@
                 <button class="explore-next-btn" id="exploreNextBtn">🔍 Следующая обитаемая</button>
               </div>
               <div class="page-distance-map" id="pageDistanceMap">
-                <canvas class="page-distance-canvas" id="pageDistanceCanvas" width="400" height="120"></canvas>
+                <canvas class="page-distance-canvas" id="pageDistanceCanvas" width="600" height="140"></canvas>
               </div>
               <span class="msg-time">${timeStr()}</span>
             </div>
@@ -918,6 +1032,12 @@
       const number = route.pageNumber;
       const coords = lib.numberToCoordinates(number);
       const highlight = lib.parseHighlight(route.params);
+
+      /* Track journey step for this page view */
+      try {
+        const pageXY = lib.coordinatesToXY(coords);
+        store.pushJourneyStep(Number(pageXY.x), Number(pageXY.y), lib.classifyRegion(Number(pageXY.x), Number(pageXY.y)).kind);
+      } catch {}
 
       const contentSlot = u.$('#pageContentSlot');
       const navMsg = u.$('#pageNavMsg');
@@ -1034,7 +1154,10 @@
         nextBtn.addEventListener('click', () => {
           nextBtn.disabled = true;
           const dest = lib.findNextInhabitedFromCoords(coords, Date.now());
-          const destUrl = lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` });
+          if (!dest) { nextBtn.disabled = false; return; }
+          const destUrl = dest.range
+            ? lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` })
+            : lib.coordsToPageUrl(dest.coordinates);
 
           /* Search animation on messenger bubble text */
           const bubbleTexts = u.$$('.msg-bubble-page .msg-text');
@@ -1087,93 +1210,9 @@
         });
       }
 
-      /* Distance map for messenger page */
-      const distCanvas = document.getElementById('pageDistanceCanvas');
-      if (distCanvas) {
-        const xy = lib.coordinatesToXY(coords);
-        const cx = Number(xy.x);
-        const cy = Number(xy.y);
-        const ctx = distCanvas.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
-        const rect = distCanvas.getBoundingClientRect();
-        distCanvas.width = rect.width * dpr;
-        distCanvas.height = rect.height * dpr;
-        ctx.scale(dpr, dpr);
-        const w = rect.width, h = rect.height;
-
-        const hexSize = 14;
-        const hexW = hexSize * 2;
-        const hexH = hexSize * 1.73;
-        const centerX = w / 2;
-        const centerY = h / 2;
-
-        const currentRegion = lib.classifyRegion(cx, cy);
-        const currentColor = lib.GENRE_COLORS[currentRegion.kind] || '#4e5c6e';
-
-        drawMiniHex(ctx, centerX, centerY, hexSize, currentColor);
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#fff';
-        ctx.fill();
-        ctx.font = '9px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.fillText(`${currentRegion.icon}`, centerX, centerY - hexSize - 3);
-
-        const hexDirs = [
-          { dq: 0, dr: -1 }, { dq: 1, dr: -1 }, { dq: 1, dr: 0 },
-          { dq: 0, dr: 1 }, { dq: -1, dr: 1 }, { dq: -1, dr: 0 },
-        ];
-        const pixelOffsets = [
-          { dx: 0, dy: -hexH }, { dx: hexW * 0.75, dy: -hexH / 2 },
-          { dx: hexW * 0.75, dy: hexH / 2 }, { dx: 0, dy: hexH },
-          { dx: -hexW * 0.75, dy: hexH / 2 }, { dx: -hexW * 0.75, dy: -hexH / 2 },
-        ];
-
-        let minInhabitedDist = Infinity;
-        for (let i = 0; i < hexDirs.length; i++) {
-          const nx = cx + hexDirs[i].dq;
-          const ny = cy + hexDirs[i].dr;
-          const region = lib.classifyRegion(nx, ny);
-          const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
-          const px = centerX + pixelOffsets[i].dx;
-          const py = centerY + pixelOffsets[i].dy;
-          const isNoise = region.kind === 'noise';
-
-          drawMiniHex(ctx, px, py, hexSize, isNoise ? 'rgba(78,92,110,0.3)' : color);
-          if (!isNoise) {
-            minInhabitedDist = Math.min(minInhabitedDist, 1);
-            ctx.font = '8px Inter, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillStyle = 'rgba(255,255,255,0.8)';
-            ctx.fillText(region.icon, px, py + 3);
-          }
-        }
-
-        if (minInhabitedDist === Infinity) {
-          for (let dq = -2; dq <= 2; dq++) {
-            for (let dr = -2; dr <= 2; dr++) {
-              if (dq === 0 && dr === 0) continue;
-              if (Math.abs(dq + dr) > 2) continue;
-              const dist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
-              if (dist !== 2) continue;
-              const region = lib.classifyRegion(cx + dq, cy + dr);
-              if (region.kind !== 'noise') minInhabitedDist = Math.min(minInhabitedDist, dist);
-            }
-          }
-        }
-
-        ctx.font = '10px Inter, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        const distLabel = minInhabitedDist === Infinity
-          ? 'Обитаемых залов рядом нет'
-          : `Ближайший обитаемый зал: ${minInhabitedDist} ${minInhabitedDist === 1 ? 'шаг' : 'шага'}`;
-        ctx.fillText(distLabel, 8, h - 8);
-        ctx.textAlign = 'right';
-        ctx.fillStyle = currentColor;
-        ctx.fillText(currentRegion.label, w - 8, h - 8);
-      }
+      /* Journey map for messenger page */
+      const jmCanvas = document.getElementById('pageDistanceCanvas');
+      if (jmCanvas) drawJourneyMap(jmCanvas);
 
       if (chat) chat.scrollTop = chat.scrollHeight;
     },
@@ -1510,6 +1549,7 @@
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
       }
+      store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
       u.$$('.feed-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
@@ -1694,6 +1734,7 @@ ${bookList}
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
       }
+      store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
 
       /* Direction links */
       u.$$('.term-dir[data-dq]').forEach(el => {
@@ -1792,7 +1833,7 @@ ${bookList}
               <span class="term-cmd" id="termExploreNext">🔍 следующая обитаемая</span>
             </div>
             <div class="page-distance-map" id="pageDistanceMap">
-              <canvas class="page-distance-canvas" id="pageDistanceCanvas" width="400" height="120"></canvas>
+              <canvas class="page-distance-canvas" id="pageDistanceCanvas" width="600" height="140"></canvas>
             </div>
           </div>
         </div>
@@ -1804,6 +1845,12 @@ ${bookList}
       let number;
       try { number = route.pageNumber; } catch { return; }
       const coords = lib.numberToCoordinates(number);
+
+      /* Track journey step for this page view */
+      try {
+        const pageXY = lib.coordinatesToXY(coords);
+        store.pushJourneyStep(Number(pageXY.x), Number(pageXY.y), lib.classifyRegion(Number(pageXY.x), Number(pageXY.y)).kind);
+      } catch {}
 
       const favBtn = u.$('#termFav');
       if (favBtn) favBtn.addEventListener('click', () => {
@@ -1841,7 +1888,10 @@ ${bookList}
           nextCmd.style.pointerEvents = 'none';
           nextCmd.textContent = '⏳ поиск…';
           const dest = lib.findNextInhabitedFromCoords(coords, Date.now());
-          const destUrl = lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` });
+          if (!dest) { nextCmd.style.pointerEvents = ''; nextCmd.textContent = '🔍 next inhabited'; return; }
+          const destUrl = dest.range
+            ? lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` })
+            : lib.coordsToPageUrl(dest.coordinates);
 
           /* Scramble animation on terminal page text */
           const pageTextEl = u.$('.term-page-text');
@@ -1890,93 +1940,9 @@ ${bookList}
         });
       }
 
-      /* Distance map for terminal page */
-      const distCanvas = document.getElementById('pageDistanceCanvas');
-      if (distCanvas) {
-        const xy = lib.coordinatesToXY(coords);
-        const cx = Number(xy.x);
-        const cy = Number(xy.y);
-        const ctx = distCanvas.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
-        const rect = distCanvas.getBoundingClientRect();
-        distCanvas.width = rect.width * dpr;
-        distCanvas.height = rect.height * dpr;
-        ctx.scale(dpr, dpr);
-        const w = rect.width, h = rect.height;
-
-        const hexSize = 14;
-        const hexW = hexSize * 2;
-        const hexH = hexSize * 1.73;
-        const centerX = w / 2;
-        const centerY = h / 2;
-
-        const currentRegion = lib.classifyRegion(cx, cy);
-        const currentColor = lib.GENRE_COLORS[currentRegion.kind] || '#4e5c6e';
-
-        drawMiniHex(ctx, centerX, centerY, hexSize, currentColor);
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#0f0';
-        ctx.fill();
-        ctx.font = '9px Inter, monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#0f0';
-        ctx.fillText(`${currentRegion.icon}`, centerX, centerY - hexSize - 3);
-
-        const hexDirs = [
-          { dq: 0, dr: -1 }, { dq: 1, dr: -1 }, { dq: 1, dr: 0 },
-          { dq: 0, dr: 1 }, { dq: -1, dr: 1 }, { dq: -1, dr: 0 },
-        ];
-        const pixelOffsets = [
-          { dx: 0, dy: -hexH }, { dx: hexW * 0.75, dy: -hexH / 2 },
-          { dx: hexW * 0.75, dy: hexH / 2 }, { dx: 0, dy: hexH },
-          { dx: -hexW * 0.75, dy: hexH / 2 }, { dx: -hexW * 0.75, dy: -hexH / 2 },
-        ];
-
-        let minInhabitedDist = Infinity;
-        for (let i = 0; i < hexDirs.length; i++) {
-          const nx = cx + hexDirs[i].dq;
-          const ny = cy + hexDirs[i].dr;
-          const region = lib.classifyRegion(nx, ny);
-          const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
-          const px = centerX + pixelOffsets[i].dx;
-          const py = centerY + pixelOffsets[i].dy;
-          const isNoise = region.kind === 'noise';
-
-          drawMiniHex(ctx, px, py, hexSize, isNoise ? 'rgba(0,255,65,0.12)' : color);
-          if (!isNoise) {
-            minInhabitedDist = Math.min(minInhabitedDist, 1);
-            ctx.font = '8px Inter, monospace';
-            ctx.textAlign = 'center';
-            ctx.fillStyle = 'rgba(0,255,65,0.8)';
-            ctx.fillText(region.icon, px, py + 3);
-          }
-        }
-
-        if (minInhabitedDist === Infinity) {
-          for (let dq = -2; dq <= 2; dq++) {
-            for (let dr = -2; dr <= 2; dr++) {
-              if (dq === 0 && dr === 0) continue;
-              if (Math.abs(dq + dr) > 2) continue;
-              const dist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
-              if (dist !== 2) continue;
-              const region = lib.classifyRegion(cx + dq, cy + dr);
-              if (region.kind !== 'noise') minInhabitedDist = Math.min(minInhabitedDist, dist);
-            }
-          }
-        }
-
-        ctx.font = '10px Inter, monospace';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = 'rgba(0,255,65,0.6)';
-        const distLabel = minInhabitedDist === Infinity
-          ? 'Обитаемых залов рядом нет'
-          : `Ближайший обитаемый зал: ${minInhabitedDist} ${minInhabitedDist === 1 ? 'шаг' : 'шага'}`;
-        ctx.fillText(distLabel, 8, h - 8);
-        ctx.textAlign = 'right';
-        ctx.fillStyle = currentColor;
-        ctx.fillText(currentRegion.label, w - 8, h - 8);
-      }
+      /* Journey map for terminal page */
+      const jmCanvas = document.getElementById('pageDistanceCanvas');
+      if (jmCanvas) drawJourneyMap(jmCanvas);
     },
 
     renderSearch(route) {
@@ -2119,7 +2085,7 @@ ${highlighted}
         <button class="explore-next-btn" id="exploreNextBtn">🔍 Следующая обитаемая</button>
       </div>
       <div class="page-distance-map" id="pageDistanceMap">
-        <canvas class="page-distance-canvas" id="pageDistanceCanvas" width="400" height="120"></canvas>
+        <canvas class="page-distance-canvas" id="pageDistanceCanvas" width="600" height="140"></canvas>
       </div>
     </section>`;
   }
@@ -2129,6 +2095,12 @@ ${highlighted}
     let number;
     try { number = route.pageNumber; } catch { return; }
     const coords = lib.numberToCoordinates(number);
+
+    /* Track journey step for this page view */
+    try {
+      const pageXY = lib.coordinatesToXY(coords);
+      store.pushJourneyStep(Number(pageXY.x), Number(pageXY.y), lib.classifyRegion(Number(pageXY.x), Number(pageXY.y)).kind);
+    } catch {}
 
     const favBtn = u.$('#favBtn');
     if (favBtn) favBtn.addEventListener('click', () => {
@@ -2172,7 +2144,10 @@ ${highlighted}
         nextBtn.disabled = true;
         /* Compute destination first (synchronous, fast) — position-aware */
         const dest = lib.findNextInhabitedFromCoords(coords, Date.now());
-        const destUrl = lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` });
+        if (!dest) { nextBtn.disabled = false; return; }
+        const destUrl = dest.range
+          ? lib.coordsToPageUrl(dest.coordinates, { hl: `${dest.range.start}:${dest.range.length}` })
+          : lib.coordsToPageUrl(dest.coordinates);
 
         /* Search animation: scramble page text bottom-to-top */
         const pageTextEl = u.$('.page-text');
@@ -2227,115 +2202,9 @@ ${highlighted}
       });
     }
 
-    /* Distance map: draw hex grid showing current hall + neighbors */
-    const distCanvas = document.getElementById('pageDistanceCanvas');
-    if (distCanvas) {
-      const xy = lib.coordinatesToXY(coords);
-      const cx = Number(xy.x);
-      const cy = Number(xy.y);
-      const ctx = distCanvas.getContext('2d');
-      const dpr = window.devicePixelRatio || 1;
-      const rect = distCanvas.getBoundingClientRect();
-      distCanvas.width = rect.width * dpr;
-      distCanvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
-      const w = rect.width, h = rect.height;
-
-      const hexSize = 14;
-      const hexW = hexSize * 2;
-      const hexH = hexSize * 1.73;
-      const centerX = w / 2;
-      const centerY = h / 2;
-
-      /* Current hall */
-      const currentRegion = lib.classifyRegion(cx, cy);
-      const currentColor = lib.GENRE_COLORS[currentRegion.kind] || '#4e5c6e';
-
-      /* Draw current hex */
-      drawMiniHex(ctx, centerX, centerY, hexSize, currentColor);
-      /* Marker dot */
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff';
-      ctx.fill();
-      /* Label */
-      ctx.font = '9px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.fillText(`${currentRegion.icon}`, centerX, centerY - hexSize - 3);
-
-      /* 6 neighbors (axial hex directions) */
-      const hexDirs = [
-        { dq: 0, dr: -1 },  /* N */
-        { dq: 1, dr: -1 },  /* NE */
-        { dq: 1, dr: 0 },   /* SE */
-        { dq: 0, dr: 1 },   /* S */
-        { dq: -1, dr: 1 },  /* SW */
-        { dq: -1, dr: 0 },  /* NW */
-      ];
-      /* Pixel offsets for pointy-top hex neighbors */
-      const pixelOffsets = [
-        { dx: 0, dy: -hexH },                  /* N */
-        { dx: hexW * 0.75, dy: -hexH / 2 },    /* NE */
-        { dx: hexW * 0.75, dy: hexH / 2 },     /* SE */
-        { dx: 0, dy: hexH },                    /* S */
-        { dx: -hexW * 0.75, dy: hexH / 2 },    /* SW */
-        { dx: -hexW * 0.75, dy: -hexH / 2 },   /* NW */
-      ];
-
-      let minInhabitedDist = Infinity;
-      for (let i = 0; i < hexDirs.length; i++) {
-        const nx = cx + hexDirs[i].dq;
-        const ny = cy + hexDirs[i].dr;
-        const region = lib.classifyRegion(nx, ny);
-        const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
-        const px = centerX + pixelOffsets[i].dx;
-        const py = centerY + pixelOffsets[i].dy;
-        const isNoise = region.kind === 'noise';
-
-        drawMiniHex(ctx, px, py, hexSize, isNoise ? 'rgba(78,92,110,0.3)' : color);
-
-        if (!isNoise) {
-          minInhabitedDist = Math.min(minInhabitedDist, 1);
-          /* Genre icon label for non-noise */
-          ctx.font = '8px Inter, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillStyle = 'rgba(255,255,255,0.8)';
-          ctx.fillText(region.icon, px, py + 3);
-        }
-      }
-
-      /* 2-ring neighbors (distance 2) — check for nearest inhabited */
-      if (minInhabitedDist === Infinity) {
-        for (let dq = -2; dq <= 2; dq++) {
-          for (let dr = -2; dr <= 2; dr++) {
-            if (dq === 0 && dr === 0) continue;
-            if (Math.abs(dq + dr) > 2) continue;
-            const dist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
-            if (dist !== 2) continue;
-            const nx = cx + dq, ny = cy + dr;
-            const region = lib.classifyRegion(nx, ny);
-            if (region.kind !== 'noise') {
-              minInhabitedDist = Math.min(minInhabitedDist, dist);
-            }
-          }
-        }
-      }
-
-      /* Distance text */
-      ctx.font = '10px Inter, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      const distLabel = minInhabitedDist === Infinity
-        ? 'Обитаемых залов рядом нет'
-        : `Ближайший обитаемый зал: ${minInhabitedDist} ${minInhabitedDist === 1 ? 'шаг' : 'шага'}`;
-      ctx.fillText(distLabel, 8, h - 8);
-
-      /* Current region label */
-      ctx.textAlign = 'right';
-      ctx.fillStyle = currentColor;
-      ctx.fillText(currentRegion.label, w - 8, h - 8);
-    }
+    /* Journey map: show where you've been */
+    const jmCanvas = document.getElementById('pageDistanceCanvas');
+    if (jmCanvas) drawJourneyMap(jmCanvas);
   }
 
   /* ═══════════════════════════════════════════════════════════
@@ -2786,6 +2655,8 @@ ${highlighted}
     timeStr,
     /* Reusable mini-map hex drawing for wander views */
     drawMiniHex,
+    /* Journey map timeline visualization */
+    drawJourneyMap,
     /* Atlas view (moved from app.js) */
     renderAtlas,
     bindAtlas,
