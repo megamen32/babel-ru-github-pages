@@ -1118,14 +1118,18 @@ main#view {
   font-size: 0.85rem;
   line-height: 1.8;
   color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-all;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
-.page-text .char { transition: color 0.15s; }
-.page-text .char.marked {
+.page-text mark {
   background: rgba(176, 38, 255, 0.35);
   color: var(--text-bright);
   border-radius: 2px;
+  padding: 0 2px;
+}
+.page-text .nl-mark {
+  opacity: 0.3;
+  font-size: 0.7em;
 }
 
 /* Page Passport */

@@ -2,13 +2,50 @@
   const app = window.BabelApp;
   const ALG = app.config.ALG;
 
+  /* Build char→index lookup from the alphabet array.
+     Handles multi-JS-char entries (emoji) via greedy longest match. */
+  const charToIndex = new Map();
+  for (let i = 0; i < ALG.alphabet.length; i++) {
+    charToIndex.set(ALG.alphabet[i], i);
+  }
+
   app.utils = {
-    $(selector) {
-      return document.querySelector(selector);
+    charToIndex,
+
+    /* Tokenize a string into an array of alphabet indices (0–255).
+       Greedy longest-match handles emoji (2–4 JS chars).
+       Unknown characters → 0 (space). */
+    tokenizeText(text) {
+      const indices = [];
+      let i = 0;
+      while (i < text.length) {
+        let matched = false;
+        for (let len = 4; len >= 1; len--) {
+          if (i + len > text.length) continue;
+          const substr = text.slice(i, i + len);
+          const idx = charToIndex.get(substr);
+          if (idx !== undefined) {
+            indices.push(idx);
+            i += len;
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) {
+          indices.push(0);
+          i++;
+        }
+      }
+      return indices;
     },
-    $$(selector) {
-      return document.querySelectorAll(selector);
+
+    /* Convert an array of alphabet indices back to a string */
+    indicesToString(indices) {
+      return indices.map(i => ALG.alphabet[i]).join("");
     },
+
+    $(selector) { return document.querySelector(selector); },
+    $$(selector) { return document.querySelectorAll(selector); },
     esc(value) {
       return String(value).replace(/[&<>"']/g, (char) => (
         { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]
@@ -36,20 +73,15 @@
       return app.utils.mulberry32(app.utils.fnv1a(text));
     },
     normalizeText(raw) {
-      const lower = String(raw || "").toLowerCase().replace(/\s+/g, " ").trim();
-      let output = "";
-      for (const char of lower) {
-        output += ALG.alphabet.includes(char) ? char : " ";
-      }
-      return output.replace(/\s+/g, " ").trim();
-    },
-    paragraphize(text) {
-      const trimmed = String(text).replace(/\s+$/g, "");
-      const rows = [];
-      for (let index = 0; index < trimmed.length; index += ALG.lineWidth) {
-        rows.push(trimmed.slice(index, index + ALG.lineWidth));
-      }
-      return rows.join("\n");
+      const OVERLAP = app.config.VISUAL_OVERLAP;
+      let text = String(raw || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      text = text.toLowerCase().replace(/[ \t]+/g, " ").trim();
+      // Map visually-overlapping English letters to their Russian counterparts
+      text = text.replace(/[aekmoctx]/g, ch => OVERLAP[ch] || ch);
+      // Tokenize — unknowns become space (index 0)
+      const indices = app.utils.tokenizeText(text);
+      // Convert back and collapse spaces
+      return app.utils.indicesToString(indices).replace(/ +/g, " ").trim();
     },
     shortNumber(value) {
       const stringValue = String(value);
@@ -62,7 +94,7 @@
       const extra = pad || 70;
       const start = Math.max(0, range.start - extra);
       const end = Math.min(text.length, range.start + range.length + extra);
-      const raw = text.slice(start, end).trim();
+      const raw = text.slice(start, end).replace(/\n/g, " ").trim();
       return `${start > 0 ? "… " : ""}${raw}${end < text.length ? " …" : ""}`;
     },
     highlightByRange(text, range) {
@@ -70,17 +102,30 @@
       const safeEnd = app.utils.clamp(range.start + range.length, safeStart, text.length);
       return `${app.utils.esc(text.slice(0, safeStart))}<mark>${app.utils.esc(text.slice(safeStart, safeEnd))}</mark>${app.utils.esc(text.slice(safeEnd))}`;
     },
-    renderPageSpans(text, highlight) {
-      let output = "";
-      for (let index = 0; index < text.length; index += 1) {
-        const char = text[index] === "\n" ? "\n" : app.utils.esc(text[index]);
-        const isMarked = highlight && index >= highlight.start && index < highlight.start + highlight.length;
-        output += `<span class="char ${isMarked ? "marked" : ""}" data-pos="${index}">${char}</span>`;
-        if ((index + 1) % ALG.lineWidth === 0) {
-          output += "\n";
+    /* Render page content from indices array (0–4095).
+       Newlines (index 1) become <br>. Highlight uses <mark>.
+       Optimized: batches consecutive plain chars for speed. */
+    renderPageFromIndices(indices, highlight) {
+      let html = '';
+      let batch = '';
+      const flush = () => { if (batch) { html += app.utils.esc(batch); batch = ''; } };
+
+      for (let i = 0; i < indices.length; i++) {
+        const idx = indices[i];
+        const isMarked = highlight && i >= highlight.start && i < highlight.start + highlight.length;
+
+        if (idx === 1) { // newline
+          flush();
+          html += isMarked ? '<mark class="nl-mark">↵</mark><br>' : '<br>';
+        } else if (isMarked) {
+          flush();
+          html += `<mark>${app.utils.esc(ALG.alphabet[idx])}</mark>`;
+        } else {
+          batch += ALG.alphabet[idx];
         }
       }
-      return output;
+      flush();
+      return html;
     },
     copyText(value, message) {
       return navigator.clipboard.writeText(value).then(() => {
