@@ -723,6 +723,54 @@
       return { x: Math.floor(Math.random() * 2000) - 1000, y: Math.floor(Math.random() * 2000) - 1000 };
     },
 
+    /* Generate an inhabited page for a specific genre at a given step.
+       Uses createSearchVariants with auto-generated phrase for variety. */
+    generateInhabitedPage(genre, step) {
+      const seed = `genre-nav:${genre}:${step}`;
+      const rng = rngFrom(seed);
+      const wb = WORD_BANK;
+      const w1 = wb[Math.floor(rng() * wb.length)];
+      const w2 = wb[Math.floor(rng() * wb.length)];
+      const phrase = app.utils.normalizeText(`${w1} ${w2}`);
+
+      /* Map genre kind to filler mode */
+      const modeMap = {
+        dialogue: 'dialogue', diary: 'diary', post: 'post',
+        log: 'log', text: 'words', noise: 'noise'
+      };
+      const mode = modeMap[genre] || 'words';
+
+      /* Create 1 variant with this phrase and mode */
+      const variants = app.library.createSearchVariants(phrase, mode, 1);
+      return variants[0]; // { mode, number, coordinates, xy, phrase, position, text, variant, range }
+    },
+
+    /* Scan forward from a page number looking for a page of specific genre.
+       Returns { number, coords, xy, text, classification } or null if maxScan reached. */
+    scanNextInhabitedPage(startNumber, genre, maxScan) {
+      const limit = maxScan || 50;
+      const modeMap = {
+        dialogue: 'dialogue', diary: 'diary', post: 'post',
+        log: 'log', text: 'text', noise: 'noise'
+      };
+      const targetKind = modeMap[genre] || genre;
+
+      for (let i = 1; i <= limit; i++) {
+        try {
+          const number = BigInt(startNumber) + BigInt(i);
+          const indices = numberToIndices(number);
+          const text = indicesToString(indices);
+          const classification = classifyPageText(text);
+          if (classification.kind === targetKind) {
+            const coords = rawIndexToCoordinates(app.library.unpermuteIndex(number));
+            const xy = coordinatesToXY(coords);
+            return { number, coords, xy, text, classification, scanned: i };
+          }
+        } catch { continue; }
+      }
+      return null;
+    },
+
     /* Genre color for map rendering */
     GENRE_COLORS: {
       dialogue: '#5eb5f7',

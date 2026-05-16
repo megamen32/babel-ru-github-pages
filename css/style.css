@@ -1706,3 +1706,115 @@ main#view { flex: 1; padding: 0; }
 .genre-badge:hover {
   transform: translateY(-1px);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   GENRE BROWSING VIEW
+   ═══════════════════════════════════════════════════════════ */
+
+.genre-view {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px);
+  height: calc(100dvh - 56px);
+  overflow: hidden;
+}
+
+.genre-step-badge {
+  font-size: 0.55rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  border: 1px solid;
+}
+
+.genre-coords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+}
+
+.genre-page-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+
+.genre-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.genre-nav-btn {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.genre-nav-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.genre-nav-disabled {
+  color: var(--text-muted);
+  background: transparent;
+  border-color: var(--border);
+  cursor: default;
+}
+
+.genre-nav-step {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.genre-scan-row {
+  margin-top: 0.4rem;
+}
+
+.genre-scan-btn {
+  display: inline-block;
+  padding: 0.35rem 0.8rem;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.genre-scan-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.genre-scan-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@media (min-width: 601px) {
+  .genre-view {
+    max-width: 700px;
+    margin: 0 auto;
+  }
+}

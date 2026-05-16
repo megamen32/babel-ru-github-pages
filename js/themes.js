@@ -1794,6 +1794,377 @@ ${highlighted}
   }
 
   /* ═══════════════════════════════════════════════════════════
+     ATLAS VIEW (moved from app.js — fixes themes.renderAtlas)
+     ═══════════════════════════════════════════════════════════ */
+
+  const GENRE_DESCRIPTIONS = {
+    dialogue: 'Район переписок — здесь страницы полны диалогами. Таймстемпы, имена, реплики собеседников. Как будто ты подслушиваешь чужой чат.',
+    diary: 'Район дневников — личные записи с датами и настроением. Кто-то описывает свои дни, кто-то — свои сны. Интимная территория библиотеки.',
+    post: 'Район постов — лента коротких сообщений с авторами и тегами. Мысли, наблюдения, афоризмы — как бесконечная соцсеть.',
+    log: 'Серверный кластер — машинные записи, таймстемпы, уровни ошибок. Здесь обитает техническая душа библиотеки.',
+    text: 'Книжные полки — поток осмысленных слов. Классический текст, как в настоящей книге. Самый читаемый район.',
+    noise: 'Пустые залы — случайный шум, бессмысленные символы. Большинство залов библиотеки именно такие. Тишина и хаос.',
+  };
+
+  function renderAtlas() {
+    const genres = lib.REGION_GENRES;
+    const visitedCount = store.getVisitedCount();
+    const genreCards = genres.map(g => {
+      const pct = Math.round(g.weight * 100);
+      const desc = GENRE_DESCRIPTIONS[g.kind] || g.label;
+      const color = lib.GENRE_COLORS[g.kind] || '#4e5c6e';
+      /* For noise, link to wander; for others, link to genre browsing */
+      const targetUrl = g.kind === 'noise'
+        ? null
+        : `#/genre/${g.kind}/step/1`;
+      const actionBtn = targetUrl
+        ? `<a class="atlas-go-btn" href="${targetUrl}" style="background:${color}">Обитаемые страницы</a>`
+        : `<button class="atlas-go-btn" data-kind="${g.kind}" style="background:${color}">Перейти в ${g.label.toLowerCase()}</button>`;
+      return `
+      <div class="atlas-card" data-genre="${g.kind}">
+        <div class="atlas-card-header">
+          <span class="atlas-icon" style="background:${color}20;color:${color}">${g.icon}</span>
+          <div class="atlas-card-info">
+            <h3 class="atlas-card-title">${g.label}</h3>
+            <span class="atlas-card-pct" style="color:${color}">${pct}% библиотеки</span>
+          </div>
+        </div>
+        <p class="atlas-card-desc">${desc}</p>
+        <div class="atlas-card-bar">
+          <div class="atlas-card-bar-fill" style="width:${pct}%;background:${color}"></div>
+        </div>
+        <div class="atlas-card-actions">
+          ${actionBtn}
+        </div>
+      </div>`;
+    }).join('');
+
+    /* Mini wanderings map */
+    const mapSection = `
+    <div class="atlas-map-section">
+      <h2 class="atlas-section-title">🗺️ Карта блужданий</h2>
+      <p class="atlas-section-desc">Вы посетили <strong>${visitedCount}</strong> ${visitedCount === 1 ? 'зал' : visitedCount < 5 ? 'зала' : 'залов'}. Каждый зал на карте окрашен по жанру региона.</p>
+      <div class="atlas-map-container">
+        <canvas class="atlas-map-canvas" id="atlasMapCanvas" width="600" height="400"></canvas>
+      </div>
+      <div class="atlas-map-legend">
+        ${genres.map(g => `<span class="atlas-legend-item"><span class="atlas-legend-dot" style="background:${lib.GENRE_COLORS[g.kind]}"></span>${g.icon} ${g.label}</span>`).join('')}
+      </div>
+      ${visitedCount > 0 ? '<button class="atlas-clear-btn" id="atlasClearBtn">Очистить карту</button>' : ''}
+    </div>`;
+
+    return `
+    <section class="atlas-view fade-in">
+      <div class="atlas-header">
+        <h1 class="atlas-title">🗺️ Обитаемый атлас</h1>
+        <p class="atlas-subtitle">Библиотека разделена на регионы по жанрам. Каждый зал принадлежит определённому району — выбери, куда хочешь попасть.</p>
+      </div>
+      <div class="atlas-grid">${genreCards}</div>
+      ${mapSection}
+    </section>`;
+  }
+
+  function bindAtlas() {
+    /* Noise go button (still uses wander) */
+    u.$$('.atlas-go-btn[data-kind]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const kind = btn.dataset.kind;
+        const { x, y } = lib.findRandomHallOfGenre(kind);
+        store.pushWanderVisit(x, y);
+        location.hash = `#/wander/x/${x}/y/${y}`;
+      });
+    });
+
+    /* Clear map button */
+    const clearBtn = u.$('#atlasClearBtn');
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      if (confirm('Очистить карту блужданий? Это действие нельзя отменить.')) {
+        store.clearWanderMap();
+        window.dispatchEvent(new Event('hashchange'));
+      }
+    });
+
+    /* Draw mini wanderings map */
+    const canvas = document.getElementById('atlasMapCanvas');
+    if (canvas) drawWanderMap(canvas);
+  }
+
+  /* Draw hex-based wander map on canvas */
+  function drawWanderMap(canvas) {
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const w = rect.width;
+    const h = rect.height;
+
+    const visited = store.getVisitedCoords();
+    if (visited.length === 0) {
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#4e5c6e';
+      ctx.font = '14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Пока нет посещённых залов', w / 2, h / 2);
+      ctx.font = '12px Inter, sans-serif';
+      ctx.fillText('Начните блуждать по залам, чтобы они появились на карте', w / 2, h / 2 + 24);
+      return;
+    }
+
+    /* Calculate bounds */
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const v of visited) {
+      if (v.x < minX) minX = v.x;
+      if (v.x > maxX) maxX = v.x;
+      if (v.y < minY) minY = v.y;
+      if (v.y > maxY) maxY = v.y;
+    }
+    /* Add padding */
+    const pad = 2;
+    minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+
+    const rangeX = maxX - minX + 1;
+    const rangeY = maxY - minY + 1;
+
+    /* Hex cell size */
+    const hexSize = Math.min(w / (rangeX * 1.5 + 1), h / (rangeY * 1.73 + 1), 28);
+    const hexW = hexSize * 2;
+    const hexH = hexSize * 1.73;
+
+    /* Offset to center */
+    const totalW = rangeX * hexW * 0.75 + hexW * 0.25;
+    const totalH = rangeY * hexH + hexH * 0.5;
+    const offsetX = (w - totalW) / 2;
+    const offsetY = (h - totalH) / 2;
+
+    /* Draw unvisited cells (dim) */
+    ctx.globalAlpha = 0.1;
+    for (let gy = minY; gy <= maxY; gy++) {
+      for (let gx = minX; gx <= maxX; gx++) {
+        const cx = offsetX + (gx - minX) * hexW * 0.75 + hexW * 0.5;
+        const cy = offsetY + (gy - minY) * hexH + ((gx - minX) % 2 === 0 ? hexH * 0.5 : hexH) + hexH * 0.5 - hexH * 0.5;
+        drawHex(ctx, cx, cy, hexSize * 0.9, '#333');
+      }
+    }
+
+    /* Draw visited cells */
+    ctx.globalAlpha = 1;
+    for (const v of visited) {
+      const region = lib.classifyRegion(v.x, v.y);
+      const color = lib.GENRE_COLORS[region.kind] || '#4e5c6e';
+      const cx = offsetX + (v.x - minX) * hexW * 0.75 + hexW * 0.5;
+      const cy = offsetY + (v.y - minY) * hexH + ((v.x - minX) % 2 === 0 ? hexH * 0.5 : hexH) + hexH * 0.5 - hexH * 0.5;
+      drawHex(ctx, cx, cy, hexSize * 0.9, color);
+    }
+  }
+
+  function drawHex(ctx, cx, cy, size, color) {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.PI / 3 * i - Math.PI / 6;
+      const x = cx + size * Math.cos(angle);
+      const y = cy + size * Math.sin(angle);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     GENRE BROWSING VIEW — page-by-page inhabited navigation
+     ═══════════════════════════════════════════════════════════ */
+
+  const GENRE_INFO = {
+    dialogue: { icon: '💬', label: 'Район переписок', name: 'Переписка' },
+    diary:    { icon: '📔', label: 'Район дневников', name: 'Дневник' },
+    post:     { icon: '📱', label: 'Район постов', name: 'Пост' },
+    log:      { icon: '⌨️', label: 'Серверный кластер', name: 'Лог' },
+    text:     { icon: '📖', label: 'Книжные полки', name: 'Текст' },
+    noise:    { icon: '🌫️', label: 'Пустые залы', name: 'Шум' },
+  };
+
+  function renderGenre(route) {
+    const kind = route.parts[1] || 'dialogue';
+    const step = parseInt(route.parts[3]) || 1;
+    const gi = GENRE_INFO[kind] || GENRE_INFO.dialogue;
+    const color = lib.GENRE_COLORS[kind] || '#4e5c6e';
+
+    /* Generate the inhabited page for this step */
+    let pageData = null;
+    let pageError = null;
+    try {
+      pageData = lib.generateInhabitedPage(kind, step);
+    } catch (err) {
+      pageError = err.message;
+    }
+
+    /* Build page content */
+    let contentHTML = '';
+    if (pageError) {
+      contentHTML = `<div class="notice">Ошибка: ${u.esc(pageError)}</div>`;
+    } else if (pageData) {
+      /* Render page text similar to messenger theme */
+      const fullText = pageData.text || '';
+      const MAX_BUBBLE = 2000;
+      const bubbleChunks = [];
+      if (fullText.length <= MAX_BUBBLE) {
+        bubbleChunks.push(fullText);
+      } else {
+        let remaining = fullText;
+        while (remaining.length > 0) {
+          if (remaining.length <= MAX_BUBBLE) {
+            bubbleChunks.push(remaining);
+            break;
+          }
+          let splitAt = -1;
+          for (const sep of ['\n\n', '\n', ' ']) {
+            const idx = remaining.lastIndexOf(sep, MAX_BUBBLE);
+            if (idx > MAX_BUBBLE * 0.3) { splitAt = idx + sep.length; break; }
+          }
+          if (splitAt < 0) splitAt = MAX_BUBBLE;
+          bubbleChunks.push(remaining.slice(0, splitAt));
+          remaining = remaining.slice(splitAt);
+        }
+      }
+
+      const bubblesHTML = bubbleChunks.map((b, i) => `
+        <div class="msg msg-them">
+          <div class="msg-avatar">${i === 0 ? gi.icon : '📜'}</div>
+          <div class="msg-bubble msg-bubble-page">
+            <div class="msg-text">${escWithBR(b)}</div>
+            <span class="msg-time">${timeStr()}</span>
+          </div>
+        </div>
+      `).join('');
+
+      /* Coordinates info */
+      const vCoords = {
+        sector: BigInt(pageData.coordinates.sector),
+        hall: BigInt(pageData.coordinates.hall),
+        wall: BigInt(pageData.coordinates.wall),
+        shelf: BigInt(pageData.coordinates.shelf),
+        volume: BigInt(pageData.coordinates.volume),
+        page: BigInt(pageData.coordinates.page),
+      };
+      const vXY = { x: BigInt(pageData.xy.x), y: BigInt(pageData.xy.y) };
+      const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${pageData.range.start}:${pageData.range.length}` });
+      const wanderUrl = `#/wander/x/${fmtXY(vXY.x)}/y/${fmtXY(vXY.y)}`;
+
+      contentHTML = `
+      <div class="msg msg-them">
+        <div class="msg-avatar">📚</div>
+        <div class="msg-bubble">
+          <div class="msg-name">Библиотекарь</div>
+          <p>Вот обитаемая страница шага ${step}. Фраза: «${u.esc(pageData.phrase)}»</p>
+          <div class="genre-coords">
+            <span class="coord-pill">X: ${fmtXY(vXY.x)}</span>
+            <span class="coord-pill">Y: ${fmtXY(vXY.y)}</span>
+            <span class="coord-pill">Том ${vCoords.volume}</span>
+            <span class="coord-pill">Лист ${vCoords.page}</span>
+          </div>
+          <div class="genre-page-actions">
+            <a class="msg-qa" href="${pageUrl}">📖 Телепортироваться</a>
+            <a class="msg-qa" href="${wanderUrl}">🏛 Перейти в зал</a>
+          </div>
+          <span class="msg-time">${timeStr()}</span>
+        </div>
+      </div>
+      ${bubblesHTML}`;
+    }
+
+    const prevUrl = step > 1 ? `#/genre/${kind}/step/${step - 1}` : null;
+    const nextUrl = `#/genre/${kind}/step/${step + 1}`;
+
+    return `
+    <section class="t-messenger genre-view fade-in">
+      <div class="msg-room-header">
+        <a class="msg-back" href="#/atlas">← Атлас</a>
+        <div>
+          <span class="msg-room-title" style="color:${color}">${gi.icon} ${gi.name}</span>
+          <span class="msg-room-sub">Шаг ${step}</span>
+        </div>
+        <span class="msg-density genre-step-badge" style="color:${color};border-color:${color}40;background:${color}15">Шаг ${step}</span>
+      </div>
+      <div class="msg-chat" id="msgChat">
+        ${contentHTML}
+        <div class="msg msg-them">
+          <div class="msg-avatar">📚</div>
+          <div class="msg-bubble">
+            <div class="msg-name">Навигация</div>
+            <div class="genre-nav-row">
+              ${prevUrl ? `<a class="genre-nav-btn" href="${prevUrl}">← Пред. обитаемая</a>` : '<span class="genre-nav-btn genre-nav-disabled">← Пред. обитаемая</span>'}
+              <span class="genre-nav-step">Шаг ${step}</span>
+              <a class="genre-nav-btn" href="${nextUrl}">След. обитаемая →</a>
+            </div>
+            <div class="genre-scan-row">
+              <button class="genre-scan-btn" id="genreScanBtn" data-kind="${kind}" data-number="${pageData ? pageData.number : '0'}">🔍 Сканировать честно (медленно)</button>
+            </div>
+            <span class="msg-time">${timeStr()}</span>
+          </div>
+        </div>
+      </div>
+    </section>`;
+  }
+
+  function bindGenre(route) {
+    const kind = route.parts[1] || 'dialogue';
+    const step = parseInt(route.parts[3]) || 1;
+
+    /* Scroll chat to bottom */
+    const chat = u.$('#msgChat');
+    if (chat) chat.scrollTop = chat.scrollHeight;
+
+    /* Scan button */
+    const scanBtn = u.$('#genreScanBtn');
+    if (scanBtn) {
+      scanBtn.addEventListener('click', () => {
+        const startNumber = scanBtn.dataset.number;
+        const genreKind = scanBtn.dataset.kind;
+
+        scanBtn.disabled = true;
+        scanBtn.textContent = '🔍 Сканирую…';
+
+        /* Run scan asynchronously (setTimeout to allow UI update) */
+        setTimeout(() => {
+          try {
+            const result = lib.scanNextInhabitedPage(BigInt(startNumber), genreKind, 100);
+            if (result) {
+              /* Navigate to the real page found by scan */
+              const coords = {
+                sector: result.coords.sector,
+                hall: result.coords.hall,
+                wall: result.coords.wall,
+                shelf: result.coords.shelf,
+                volume: result.coords.volume,
+                page: result.coords.page,
+              };
+              const pageUrl = lib.coordsToPageUrl(coords);
+              location.hash = pageUrl;
+            } else {
+              scanBtn.disabled = false;
+              scanBtn.textContent = '🔍 Не найдено (попробуйте снова)';
+              setTimeout(() => {
+                scanBtn.textContent = '🔍 Сканировать честно (медленно)';
+              }, 2000);
+            }
+          } catch (err) {
+            scanBtn.disabled = false;
+            scanBtn.textContent = '🔍 Ошибка сканирования';
+            setTimeout(() => {
+              scanBtn.textContent = '🔍 Сканировать честно (медленно)';
+            }, 2000);
+          }
+        }, 50);
+      });
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════
      THEME REGISTRY — public API
      ═══════════════════════════════════════════════════════════ */
 
@@ -1870,5 +2241,14 @@ ${highlighted}
     timeStr,
     /* Reusable mini-map hex drawing for wander views */
     drawMiniHex,
+    /* Atlas view (moved from app.js) */
+    renderAtlas,
+    bindAtlas,
+    drawWanderMap,
+    drawHex,
+    GENRE_DESCRIPTIONS,
+    /* Genre browsing view */
+    renderGenre,
+    bindGenre,
   };
 })();
