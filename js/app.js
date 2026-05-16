@@ -12,6 +12,10 @@
 
   let currentCleanup = null;
 
+  function keepCleanup(maybeCleanup) {
+    currentCleanup = typeof maybeCleanup === 'function' ? maybeCleanup : null;
+  }
+
   function parseRoute() {
     const hash = location.hash.slice(1) || '/';
     const [path, query] = hash.split('?');
@@ -82,21 +86,21 @@
       switch (route.name) {
         case 'home': {
           view.innerHTML = renderer.renderHome();
-          if (renderer.bindHome) renderer.bindHome();
+          keepCleanup(renderer.bindHome ? renderer.bindHome() : null);
           break;
         }
         case 'wander': {
           view.innerHTML = renderer.renderWander(route);
-          if (renderer.bindWander) renderer.bindWander(route);
+          keepCleanup(renderer.bindWander ? renderer.bindWander(route) : null);
           break;
         }
         case 'search': {
           if (renderer.renderSearch) {
             view.innerHTML = renderer.renderSearch(route);
-            if (renderer.bindSearch) renderer.bindSearch(route);
+            keepCleanup(renderer.bindSearch ? renderer.bindSearch(route) : null);
           } else {
             view.innerHTML = renderSearchShared(route);
-            bindSearchShared(route);
+            keepCleanup(bindSearchShared(route));
           }
           break;
         }
@@ -151,8 +155,8 @@
           }
 
           view.innerHTML = renderer.renderPage(route);
-          if (renderer.bindPage) renderer.bindPage(route);
-          else themes.bindSharedPage(route);
+          if (renderer.bindPage) keepCleanup(renderer.bindPage(route));
+          else keepCleanup(themes.bindSharedPage(route));
           break;
         }
         case 'about': {
@@ -161,13 +165,13 @@
         }
         case 'favorites': {
           view.innerHTML = renderFavorites();
-          bindFavorites();
+          keepCleanup(bindFavorites());
           break;
         }
         default: {
           const r = themes.getThemeRenderer();
           view.innerHTML = r.renderHome();
-          if (r.bindHome) r.bindHome();
+          keepCleanup(r.bindHome ? r.bindHome() : null);
         }
       }
     } catch (err) {
@@ -240,12 +244,16 @@
     });
 
     /* Async search via Worker — multi-mode */
+    let isActive = true;
+    let jokeTicker = null;
+
     if (q && resultsSlot) {
       const bridge = app.workerBridge;
       const chatContainer = resultsSlot.closest('.msg-chat') || resultsSlot;
-      const jokeTicker = bridge.startJokeTicker(chatContainer);
+      jokeTicker = bridge.startJokeTicker(chatContainer, { seedText: q });
 
       bridge.searchMultiMode(q).then(({ phrase, modes: resultsByMode }) => {
+        if (!isActive) return;
         jokeTicker.stop();
 
         const phraseEscaped = esc(phrase);
@@ -306,10 +314,16 @@
 
         resultsSlot.innerHTML = html;
       }).catch(err => {
+        if (!isActive) return;
         jokeTicker.stop();
         resultsSlot.innerHTML = `<div class="notice">${esc(err.message)}</div>`;
       });
     }
+
+    return function cleanupSearchShared() {
+      isActive = false;
+      if (jokeTicker) jokeTicker.stop();
+    };
   }
 
   /* ═══════════════════════════════════════════════════════════

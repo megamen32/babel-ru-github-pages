@@ -793,6 +793,9 @@
       const resultsSlot = u.$('#searchResultsSlot');
       const chat = u.$('#msgChat');
       const q = route.params.get('q') || '';
+      let isActive = true;
+      let typingEl = null;
+      let jokeTicker = null;
 
       /* Genre definitions for multi-mode results */
       const GENRE_INFO = {
@@ -821,11 +824,12 @@
       /* Async search: if query exists, search across ALL modes */
       if (q && resultsSlot) {
         /* Show typing indicator */
-        const typingEl = app.workerBridge.showTyping(chat, 'Библиотекарь');
+        typingEl = app.workerBridge.showTyping(chat, 'Библиотекарь');
         /* Show jokes while waiting */
-        const jokeTicker = app.workerBridge.startJokeTicker(chat);
+        jokeTicker = app.workerBridge.startJokeTicker(chat, { seedText: q });
 
         app.workerBridge.searchMultiMode(q).then(({ phrase, modes: resultsByMode }) => {
+          if (!isActive) return;
           app.workerBridge.removeTyping(typingEl);
           jokeTicker.stop();
 
@@ -900,6 +904,7 @@
           resultsSlot.innerHTML = html;
           if (chat) chat.scrollTop = chat.scrollHeight;
         }).catch(err => {
+          if (!isActive) return;
           app.workerBridge.removeTyping(typingEl);
           jokeTicker.stop();
           resultsSlot.innerHTML = `<div class="msg msg-them"><div class="msg-bubble"><p>Ошибка: ${u.esc(err.message)}</p></div></div>`;
@@ -916,6 +921,12 @@
       }
 
       if (chat) chat.scrollTop = chat.scrollHeight;
+
+      return function cleanupMessengerSearch() {
+        isActive = false;
+        if (typingEl) app.workerBridge.removeTyping(typingEl);
+        if (jokeTicker) jokeTicker.stop();
+      };
     },
   };
 

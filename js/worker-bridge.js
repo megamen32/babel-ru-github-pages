@@ -91,127 +91,94 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
-     RZHUNEMOGU.RU — Jokes while searching!
-     CType 1-18 = different joke categories
-     (1=Анекдоты, 2=Стишки, 3=Истории, 4=Афоризмы, 5=Цитаты,
-      6=Тосты, 7=Анекдоты(18+), 8=Стишки(18+), 9=Афоризмы(18+),
-      10=Цитаты(18+), 11=Тосты(18+), 12=Реклама, 13=Компьютер,
-      14=Программистские, 15=Чёрный юмор, 16=В мире животных,
-      17=Блондинки, 18=Студенческие)
-     ═══════════════════════════════════════════════════════════ */
-
-  /* ═══════════════════════════════════════════════════════════
      MULTI-SOURCE JOKE / QUOTE SYSTEM
      ═══════════════════════════════════════════════════════════
-     Sources (in priority order):
-     1. rzhunemogu.ru — jokes, anecdotes, aphorisms, stories (18 categories)
-        via api.codetabs.com CORS proxy (allorigins.win is unreliable)
-     2. forismatic.com — wise quotes in Russian (CORS-friendly JSON API)
-     3. Built-in fallback — librarian-themed quips */
+     Local Russian quips / quotes generated deterministically from the query.
+     This avoids flaky public APIs, CORS problems, and broken encodings. */
 
   let jokesCache = [];
   let jokesFetched = false;
   let jokesFetchPromise = null;
+  let jokesCacheKey = '';
 
-  /* CType descriptions for rzhunemogu.ru */
-  const CTYPE_LABELS = {
-    1: 'Анекдот', 2: 'Стишок', 3: 'История', 4: 'Афоризм',
-    5: 'Цитата', 6: 'Тост', 7: 'Анекдот', 8: 'Стишок',
-    9: 'Афоризм', 10: 'Цитата', 11: 'Тост', 12: 'Реклама',
-    13: 'Компьютерный', 14: 'Программистский', 15: 'Чёрный юмор',
-    16: 'Животные', 17: 'Блондинки', 18: 'Студенческий',
-  };
-
-  /* CORS proxies to try in order for rzhunemogu.ru */
-  const CORS_PROXIES = [
-    (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  const JOKE_OPENERS = [
+    'Библиотекарь шепчет',
+    'Архивариус записал',
+    'Каталог на полях заметил',
+    'Дежурный по залу уверяет',
+    'Случайный том подсказывает',
+  ];
+  const JOKE_SUBJECTS = [
+    'что короткая фраза опаснее длинной',
+    'что поиск в Вавилоне похож на рыбалку в космосе',
+    'что каждая страница притворяется судьбой',
+    'что тишина тут индексируется лучше шума',
+    'что даже опечатка уже ждёт на своей полке',
+  ];
+  const JOKE_TWISTS = [
+    'потому что вокруг неё помещается слишком много миров.',
+    'но библиотека всё равно делает вид, что это рутина.',
+    'и спорить с этим умеют только очень смелые книги.',
+    'а потом просит не хлопать томами.',
+    'так что паниковать пока рано.',
+  ];
+  const QUOTE_OPENERS = [
+    'В хорошей библиотеке поиск не находит ответ, а выбирает декорации для него.',
+    'Если текст можно вообразить, Вавилон уже выделил ему полку.',
+    'Бесконечность пугает ровно до тех пор, пока не попросишь у неё страницу.',
+    'Иногда лучшая навигация по хаосу — точная фраза и немного терпения.',
+  ];
+  const QUOTE_ENDINGS = [
+    '— Борхес бы одобрил, программист бы залогировал.',
+    '— Так работает местная география смысла.',
+    '— Остальное делает арифметика.',
+    '— Дальше остаётся только открыть том.',
   ];
 
-  /* Fetch a single joke from rzhunemogu.ru via CORS proxy cascade */
-  function fetchRzhunemogu(cType) {
-    const rawUrl = `http://rzhunemogu.ru/Rand.aspx?CType=${cType}`;
-
-    /* Try each proxy in sequence */
-    function tryProxy(proxyIndex) {
-      if (proxyIndex >= CORS_PROXIES.length) return Promise.resolve(null);
-      const proxyUrl = CORS_PROXIES[proxyIndex](rawUrl);
-      return fetch(proxyUrl)
-        .then(r => {
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          return r.text();
-        })
-        .then(text => {
-          /* API returns XML with windows-1251 encoding via proxy.
-             Extract content from <content> tag. */
-          const content = text
-            .replace(/<[^>]+>/g, '')
-            .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-            .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
-            .replace(/&nbsp;/g, ' ')
-            .trim();
-          if (content.length > 5) {
-            return { text: content, label: CTYPE_LABELS[cType] || 'Юмор' };
-          }
-          return null;
-        })
-        .catch(() => tryProxy(proxyIndex + 1));
-    }
-
-    return tryProxy(0);
+  function normalizeJokeSeed(seedText) {
+    return String(seedText || '').replace(/\s+/g, ' ').trim().toLowerCase();
   }
 
-  /* Fetch a wise quote from forismatic.com (CORS-friendly, no proxy needed) */
-  function fetchForismaticQuote() {
-    return fetch('https://api.forismatic.com/api/1.0/?method=getQuote&format=json&lang=ru')
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(data => {
-        const text = (data.quoteText || '').trim();
-        const author = (data.quoteAuthor || '').trim();
-        if (text.length > 5) {
-          return {
-            text: author ? `${text}\n— ${author}` : text,
-            label: 'Мудрость',
-          };
-        }
-        return null;
-      })
-      .catch(() => null);
+  function pickSeeded(list, rng) {
+    return list[Math.floor(rng() * list.length)];
   }
 
-  /* Fetch jokes from all sources, collect a diverse set */
-  function fetchJokes() {
-    if (jokesFetched && jokesCache.length > 0) return Promise.resolve(jokesCache);
-    if (jokesFetchPromise) return jokesFetchPromise;
+  function buildJokes(seedText) {
+    const normalizedSeed = normalizeJokeSeed(seedText);
+    const rng = app.utils.rngFrom(`joke:${normalizedSeed || 'default'}`);
+    const seedMention = normalizedSeed ? ` Фраза «${normalizedSeed.slice(0, 48)}» уже строит себе адрес.` : '';
+    const jokes = [];
 
-    const promises = [];
-
-    /* 4 jokes from rzhunemogu.ru with random CType for variety */
-    for (let i = 0; i < 4; i++) {
-      const cType = Math.floor(Math.random() * 18) + 1;
-      promises.push(fetchRzhunemogu(cType));
+    for (let index = 0; index < 4; index += 1) {
+      jokes.push({
+        label: index % 2 === 0 ? 'Шутка' : 'Наблюдение',
+        text: `${pickSeeded(JOKE_OPENERS, rng)}: ${pickSeeded(JOKE_SUBJECTS, rng)}, ${pickSeeded(JOKE_TWISTS, rng)}${seedMention}`,
+      });
     }
 
-    /* 2 wise quotes from forismatic */
-    promises.push(fetchForismaticQuote());
-    promises.push(fetchForismaticQuote());
+    for (let index = 0; index < 3; index += 1) {
+      jokes.push({
+        label: 'Цитата',
+        text: `${pickSeeded(QUOTE_OPENERS, rng)} ${pickSeeded(QUOTE_ENDINGS, rng)}`,
+      });
+    }
 
-    jokesFetchPromise = Promise.all(promises).then(results => {
-      const jokes = results.filter(r => r !== null);
-      if (jokes.length === 0) {
-        jokesCache = [
-          { text: 'Библиотека бесконечна, а анекдоты всё равно конечны.', label: 'Библиотекарь' },
-          { text: 'Вавилон считает. Анекдоты загружаются. Жизнь прекрасна.', label: 'Библиотекарь' },
-          { text: 'Каждый анекдот уже существует в библиотеке. И каждый раз — на другой странице.', label: 'Библиотекарь' },
-          { text: 'Книга — это устройство для перелистывания времени. Борхес это знал.', label: 'Библиотекарь' },
-          { text: 'Если бы Борхес мог программировать, он бы написал Вавилон на JavaScript.', label: 'Библиотекарь' },
-        ];
-      } else {
-        jokesCache = jokes;
-      }
+    jokes.push({
+      label: 'Библиотекарь',
+      text: 'Пока идут вычисления, представь себе полку, где каждая книга уверена, что ты ищешь именно её.',
+    });
+
+    return jokes;
+  }
+
+  function fetchJokes(seedText) {
+    const cacheKey = normalizeJokeSeed(seedText);
+    if (jokesFetched && jokesCache.length > 0 && jokesCacheKey === cacheKey) return Promise.resolve(jokesCache);
+    if (jokesFetchPromise && jokesCacheKey === cacheKey) return jokesFetchPromise;
+
+    jokesCacheKey = cacheKey;
+    jokesFetchPromise = Promise.resolve().then(() => {
+      jokesCache = buildJokes(seedText);
       jokesFetched = true;
       return jokesCache;
     });
@@ -220,23 +187,29 @@
   }
 
   /* Show rotating jokes in a container while search runs */
-  function startJokeTicker(container) {
+  function startJokeTicker(container, options) {
     if (!container) return { stop() {} };
 
+    const seedText = options && options.seedText ? String(options.seedText) : '';
     let jokeIndex = 0;
     let intervalId = null;
+    let transitionTimeoutId = null;
     let jokeEl = null;
+    let stopped = false;
 
-    /* Reset cache so each search gets fresh jokes */
-    jokesFetched = false;
-    jokesFetchPromise = null;
+    function stop() {
+      stopped = true;
+      if (intervalId) clearInterval(intervalId);
+      if (transitionTimeoutId) clearTimeout(transitionTimeoutId);
+      if (jokeEl && jokeEl.parentNode) jokeEl.parentNode.removeChild(jokeEl);
+    }
 
-    fetchJokes().then(jokes => {
-      if (!jokes.length) return;
+    fetchJokes(seedText).then(jokes => {
+      if (stopped || !container.isConnected || !jokes.length) return;
       jokeEl = document.createElement('div');
       jokeEl.className = 'msg msg-them babel-joke-msg';
       const joke = jokes[0];
-      const avatar = joke.label === 'Мудрость' ? '🧠' : '😂';
+      const avatar = joke.label === 'Цитата' ? '🧠' : '😂';
       jokeEl.innerHTML = `
         <div class="msg-avatar">${avatar}</div>
         <div class="msg-bubble">
@@ -248,17 +221,22 @@
       container.scrollTop = container.scrollHeight;
 
       intervalId = setInterval(() => {
+        if (stopped || !container.isConnected || !jokeEl || !jokeEl.isConnected) {
+          stop();
+          return;
+        }
         jokeIndex = (jokeIndex + 1) % jokes.length;
         const textEl = jokeEl.querySelector('.babel-joke-text');
         const nameEl = jokeEl.querySelector('.msg-name');
         const avatarEl = jokeEl.querySelector('.msg-avatar');
         if (textEl) {
           textEl.style.opacity = '0';
-          setTimeout(() => {
+          transitionTimeoutId = setTimeout(() => {
+            if (stopped || !container.isConnected || !jokeEl || !jokeEl.isConnected) return;
             const j = jokes[jokeIndex];
             textEl.innerHTML = escJoke(j.text);
-            if (nameEl) nameEl.textContent = `${escJoke(j.label || 'Анекдот')} пока ждёшь`;
-            if (avatarEl) avatarEl.textContent = j.label === 'Мудрость' ? '🧠' : '😂';
+            if (nameEl) nameEl.textContent = `${j.label || 'Анекдот'} пока ждёшь`;
+            if (avatarEl) avatarEl.textContent = j.label === 'Цитата' ? '🧠' : '😂';
             textEl.style.opacity = '1';
             container.scrollTop = container.scrollHeight;
           }, 300);
@@ -267,15 +245,12 @@
     });
 
     return {
-      stop() {
-        if (intervalId) clearInterval(intervalId);
-        if (jokeEl && jokeEl.parentNode) jokeEl.parentNode.removeChild(jokeEl);
-      }
+      stop,
     };
   }
 
   function escJoke(text) {
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    return String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\n/g, '<br>');
   }
 

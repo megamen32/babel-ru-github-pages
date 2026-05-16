@@ -15,7 +15,7 @@ test.describe('messenger volumes', () => {
     await expect(volume32Link).toContainText('Том 32');
     await volume32Link.click();
 
-    await expect(page).toHaveURL(/#\/page\/s\/1\/h\/1\/w\/1\/sh\/1\/v\/32\/p\/1$/);
+    await expect(page).toHaveURL(/#\/page\/h\/1\/w\/1\/sh\/1\/v\/32\/p\/1\/s\/AA$/);
     await expect(page.locator('.msg-room-title')).toContainText('Том 32');
     await expect(page.locator('#pageContentSlot')).toBeVisible();
   });
