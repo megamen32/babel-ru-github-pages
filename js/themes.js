@@ -76,6 +76,13 @@
     return String(v);
   }
 
+  /* Escape HTML + convert \n to <br> (for messenger bubble text) */
+  function escWithBR(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;')
+      .replace(/\n/g, '<br>');
+  }
+
   /* Format timestamp for chat messages */
   function timeStr() {
     const d = new Date();
@@ -685,26 +692,39 @@
           densityEl.textContent = `${stats.label} ${stats.readability}%`;
         }
 
-        /* Break page text into chat-friendly chunks */
+        /* Render page text as chat messages — \n is a line break
+           INSIDE the bubble (like a real messenger), NOT a new post.
+           Only split into separate bubbles if text exceeds ~2000 chars. */
         const fullText = u.indicesToString(indices);
-        const paragraphs = fullText.split('\n').filter(p => p.trim());
+        const MAX_BUBBLE = 2000;
         const bubbleChunks = [];
-        let chunk = '';
-        for (const p of paragraphs) {
-          if (chunk.length + p.length > 600) {
-            if (chunk) bubbleChunks.push(chunk);
-            chunk = p;
-          } else {
-            chunk += (chunk ? '\n' : '') + p;
+        if (fullText.length <= MAX_BUBBLE) {
+          bubbleChunks.push(fullText);
+        } else {
+          /* Split at paragraph boundaries (\n\n) when possible */
+          let remaining = fullText;
+          while (remaining.length > 0) {
+            if (remaining.length <= MAX_BUBBLE) {
+              bubbleChunks.push(remaining);
+              break;
+            }
+            /* Find a good split point near MAX_BUBBLE — prefer \n\n, then \n, then space */
+            let splitAt = -1;
+            for (const sep of ['\n\n', '\n', ' ']) {
+              const idx = remaining.lastIndexOf(sep, MAX_BUBBLE);
+              if (idx > MAX_BUBBLE * 0.3) { splitAt = idx + sep.length; break; }
+            }
+            if (splitAt < 0) splitAt = MAX_BUBBLE;
+            bubbleChunks.push(remaining.slice(0, splitAt));
+            remaining = remaining.slice(splitAt);
           }
         }
-        if (chunk) bubbleChunks.push(chunk);
 
         const bubblesHTML = bubbleChunks.map((b, i) => `
           <div class="msg msg-them">
             <div class="msg-avatar">${i === 0 ? '📖' : '📜'}</div>
             <div class="msg-bubble msg-bubble-page">
-              <div class="msg-text">${u.esc(b)}</div>
+              <div class="msg-text">${escWithBR(b)}</div>
               <span class="msg-time">${timeStr()}</span>
             </div>
           </div>
@@ -1407,6 +1427,12 @@ ${highlighted}
         </div>
       </div>
 
+      <div class="page-nav">
+        ${prevPage ? `<a class="btn-outline" href="${prevPage}">← Лист ${pageNum - 1}</a>` : '<span></span>'}
+        <span class="page-num">Лист ${pageNum} из ${totalPages}</span>
+        ${nextPage ? `<a class="btn-outline" href="${nextPage}">Лист ${pageNum + 1} →</a>` : '<span></span>'}
+      </div>
+
       <div class="page-fingerprint">${fpHTML}</div>
 
       <div class="page-text-box">
@@ -1417,12 +1443,6 @@ ${highlighted}
         <div class="stat-row"><span class="stat-label">Буквы</span><div class="stat-bar-track"><div class="stat-bar-fill" style="width:${Math.round(stats.letters/stats.total*100)}%;background:var(--accent);"></div></div><span class="stat-value">${stats.letters}</span></div>
         <div class="stat-row"><span class="stat-label">Пробелы</span><div class="stat-bar-track"><div class="stat-bar-fill" style="width:${Math.round(stats.spaces/stats.total*100)}%;background:var(--accent2);"></div></div><span class="stat-value">${stats.spaces}</span></div>
         <div class="stat-row"><span class="stat-label">Знаки</span><div class="stat-bar-track"><div class="stat-bar-fill" style="width:${Math.round((stats.punctuation+stats.emoji)/stats.total*100)}%;background:var(--accent);"></div></div><span class="stat-value">${stats.punctuation + stats.emoji}</span></div>
-      </div>
-
-      <div class="page-nav">
-        ${prevPage ? `<a class="btn-outline" href="${prevPage}">← Лист ${pageNum - 1}</a>` : '<span></span>'}
-        <span class="page-num">Лист ${pageNum} из ${totalPages}</span>
-        ${nextPage ? `<a class="btn-outline" href="${nextPage}">Лист ${pageNum + 1} →</a>` : '<span></span>'}
       </div>
 
       <div class="page-actions">
