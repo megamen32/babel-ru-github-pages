@@ -1,6 +1,17 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('search', () => {
+  test('shows footer only on the home route', async ({ page }) => {
+    await page.goto('/#/');
+    await expect(page.locator('.site-footer')).toBeVisible();
+
+    await page.goto('/#/search');
+    await expect(page.locator('.site-footer')).toBeHidden();
+
+    await page.goto('/#/about');
+    await expect(page.locator('.site-footer')).toBeHidden();
+  });
+
   test('finds mixed Russian, English, emoji, and multiline text and opens a page that contains it', async ({ page }) => {
     const rawPhrase = 'Привет, BABEL 🔥\n\nEnglish line ✅\nТретий абзац 😎';
 

@@ -213,6 +213,9 @@ a:hover { color: var(--pink); }
   border-top: 1px solid var(--border);
   background: rgba(14, 22, 33, 0.6);
 }
+.site-footer[hidden] {
+  display: none !important;
+}
 .site-footer .borges { font-style: italic; color: var(--text-dim); max-width: 500px; margin: 0 auto; }
 
 main#view { flex: 1; padding: 0; }

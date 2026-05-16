@@ -80,6 +80,7 @@
 
     /* Update nav active state */
     updateNav(route.name);
+    updateFooter(route.name);
 
     try {
       const renderer = themes.getThemeRenderer();
@@ -198,6 +199,12 @@
         (name === 'favorites' && href.includes('favorites'))
       );
     });
+  }
+
+  function updateFooter(routeName) {
+    const footer = document.querySelector('.site-footer');
+    if (!footer) return;
+    footer.hidden = routeName !== 'home';
   }
 
   /* ═══════════════════════════════════════════════════════════
