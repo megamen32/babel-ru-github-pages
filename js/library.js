@@ -21,7 +21,25 @@
   }
 
   /* ---- Affine Permutation over Z/(2^32768) ---- */
-  const PERM_C = 9182736450192837465n;
+
+  /* C must be ODD (coprime to 2^n for bijection) and must have bits set
+     across the ENTIRE width of the modulus. If C ≈ 2^63 while the modulus
+     is 2^32768, adjacent indices differ by only 63 bits → first 4088 of 4096
+     characters are identical! We build C by tiling a 64-bit pattern with
+     alternating inversion to ensure high Hamming distance across the full width.
+     The seed pattern 0x4CF3B209D871A5E6 is odd (LSB=0 → wait, 0xE6 ends in 0,
+     that's even! Use 0x4CF3B209D871A5E7 to force odd). */
+
+  const SEED_C = 0x4CF3B209D871A5E7n; // odd 64-bit seed
+  const SEED_C_INV = SEED_C ^ 0xFFFFFFFFFFFFFFFFn; // bitwise complement for alternation
+
+  let _c = 0n;
+  for (let bitPos = 0; bitPos < Number(TOTAL_BITS); bitPos += 64) {
+    const pattern = (bitPos / 64) % 2 === 0 ? SEED_C : SEED_C_INV;
+    _c = (_c | (pattern << BigInt(bitPos))) & BIT_MASK;
+  }
+  // Ensure C is odd (required for coprimality with 2^n)
+  const PERM_C = _c | 1n;
 
   let _offset = 0n;
   const PATTERN = 0x5BD1E9A3F7C20658n;
