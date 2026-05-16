@@ -14,6 +14,15 @@
     return String(v);
   }
 
+  /* Format any BigInt/Number for compact display */
+  function fmtCoord(v) {
+    if (typeof v === "bigint") {
+      const s = String(v);
+      return s.length > 10 ? s.slice(0, 5) + "…" + s.slice(-4) : s;
+    }
+    return String(v);
+  }
+
   /* ============================================
      ROUTER
      ============================================ */
@@ -103,11 +112,6 @@
       <div class="home-hero">
         <h1 class="home-title">Вавилон</h1>
         <p class="home-version">Гексагональная Бесконечность · v8.0</p>
-        <blockquote class="intro-quote">
-          Вавилон — это не про шифры. Это про <span class="highlight">оцепенение</span>,
-          когда ты стоишь в бесконечном зале, тянешь наугад пыльную книгу с полки,
-          и там — дневник твоей смерти. Или рецепт борща. Или просто шум.
-        </blockquote>
       </div>
 
       <div class="home-ctas">
@@ -122,6 +126,13 @@
           <p>Найди любой текст во вселенной и телепортируйся к нему.</p>
         </a>
       </div>
+
+      <blockquote class="intro-quote">
+        Всё что когда-либо было или будет написано уже хранится здесь.
+        Здесь — <span class="highlight">дневник твоей смерти</span>, все твои мысли,
+        изобретения, и даже <span class="highlight">рецепт борща мамы</span>.
+        Или просто шум. Нет разницы изобретать или открывать.
+      </blockquote>
 
       <div class="retro-grid"></div>
     </section>`;
@@ -315,8 +326,8 @@
       <div class="catalog-coords">
         <span class="coord-pill">X: ${fmtXY(xy.x)}</span>
         <span class="coord-pill">Y: ${fmtXY(xy.y)}</span>
-        <span class="coord-pill">Сектор ${coords.sector}</span>
-        <span class="coord-pill">Зал ${coords.hall}</span>
+        <span class="coord-pill" title="Сектор ${coords.sector}">Сектор ${fmtCoord(coords.sector)}</span>
+        <span class="coord-pill" title="Зал ${coords.hall}">Зал ${fmtCoord(coords.hall)}</span>
         <span class="coord-pill">Стена ${coords.wall}</span>
         <span class="coord-pill">Полка ${coords.shelf}</span>
         <span class="coord-pill">Том ${coords.volume}</span>
@@ -385,6 +396,12 @@
     const pageTextHTML = renderPageSpans(text, highlight);
     const b36 = lib.prettyBase36(number);
 
+    // Unique hue per page — based on coordinates for visual variety
+    const hueBase = (Number(coords.volume) * 37 + Number(coords.shelf) * 73 + Number(coords.wall) * 113 + Number(coords.hall) * 51) % 360;
+    const accentColor = `hsl(${hueBase}, 80%, 65%)`;
+    const accentGlow = `0 0 20px hsla(${hueBase}, 80%, 65%, 0.35), 0 0 60px hsla(${hueBase}, 80%, 65%, 0.1)`;
+    const accentBorder = `hsla(${hueBase}, 80%, 65%, 0.25)`;
+
     // Build breadcrumbs
     const crumbs = [
       { label: "Вавилон", href: "#/" },
@@ -401,11 +418,12 @@
     // Page navigation
     const pageNum = Number(coords.page);
     const totalPages = Number(ALG.pagesPerVolume);
+    // Next/prev pages should NOT carry over highlight from search — it's a different page
     const prevPage = pageNum > 1
-      ? routeFor(`/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum - 1)}))}`, highlight ? { hl: `${highlight.start}:${highlight.length}` } : null)
+      ? routeFor(`/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum - 1)}))}`)
       : null;
     const nextPage = pageNum < totalPages
-      ? routeFor(`/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum + 1)}))}`, highlight ? { hl: `${highlight.start}:${highlight.length}` } : null)
+      ? routeFor(`/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum + 1)}))}`)
       : null;
 
     // Save to history
@@ -422,21 +440,26 @@
         ${breadcrumbsHTML}
       </div>
 
-      <div class="page-text-box">
+      <div class="page-header" style="border-color:${accentBorder};">
+        <h2 style="color:${accentColor}; text-shadow:${accentGlow};">Том ${coords.volume} · Лист ${pageNum}</h2>
+        <span style="color:var(--text-dim); font-family:var(--font-mono); font-size:0.8rem;">Полка ${coords.shelf} · Стена ${coords.wall}</span>
+      </div>
+
+      <div class="page-text-box" style="border-color:${accentBorder}; box-shadow:${accentGlow};">
         <div class="page-text">${pageTextHTML}</div>
       </div>
 
       <div class="page-nav">
         ${prevPage ? `<a class="btn-outline" href="${prevPage}">← Лист ${pageNum - 1}</a>` : '<span></span>'}
-        <span class="page-num">Лист ${pageNum} из ${totalPages}</span>
+        <span class="page-num" style="color:${accentColor};">Лист ${pageNum} из ${totalPages}</span>
         ${nextPage ? `<a class="btn-outline" href="${nextPage}">Лист ${pageNum + 1} →</a>` : '<span></span>'}
       </div>
 
       <div class="page-passport">
-        <div class="passport-title">Паспорт страницы</div>
+        <div class="passport-title" style="color:${accentColor};">Паспорт страницы</div>
         <div class="passport-grid">
           <div class="passport-item"><span class="label">Зал</span><span class="value">X: ${fmtXY(xy.x)}, Y: ${fmtXY(xy.y)}</span></div>
-          <div class="passport-item"><span class="label">Сектор</span><span class="value">${coords.sector}</span></div>
+          <div class="passport-item"><span class="label">Сектор</span><span class="value" title="${coords.sector}">${fmtCoord(coords.sector)}</span></div>
           <div class="passport-item"><span class="label">Зал</span><span class="value">${coords.hall}</span></div>
           <div class="passport-item"><span class="label">Стена</span><span class="value">${coords.wall}</span></div>
           <div class="passport-item"><span class="label">Полка</span><span class="value">${coords.shelf}</span></div>
