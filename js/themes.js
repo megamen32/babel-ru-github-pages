@@ -197,7 +197,7 @@
       <section class="t-bookshelf wander fade-in">
         <div class="bk-room-header">
           <h1>Шестигранный зал</h1>
-          <span class="bk-coords">X: ${x} · Y: ${y} · Сектор ${hallInfo.sector} · Зал ${hallInfo.hall}</span>
+          <span class="bk-coords">X: ${x} · Y: ${y} · ${lib.classifyRegion(x, y).icon} ${lib.classifyRegion(x, y).label}</span>
         </div>
 
         <div class="bk-nav">${navHTML}</div>
@@ -361,7 +361,7 @@
       <section class="t-cosmos wander fade-in">
         <div class="cosmos-room-header">
           <h1>Звёздный зал</h1>
-          <span class="cosmos-coords">⭐ X:${x} Y:${y} · Сектор ${hallInfo.sector}</span>
+          <span class="cosmos-coords">⭐ X:${x} Y:${y} · ${lib.classifyRegion(x, y).icon} ${lib.classifyRegion(x, y).label}</span>
         </div>
 
         <div class="cosmos-hex-map">
@@ -526,7 +526,7 @@
       <section class="t-messenger wander fade-in">
         <div class="msg-room-header">
           <span class="msg-room-title">📚 Зал X:${x} Y:${y}</span>
-          <span class="msg-room-sub">Сектор ${hallInfo.sector} · Зал ${hallInfo.hall}</span>
+          <span class="msg-room-sub">${lib.classifyRegion(x, y).icon} ${lib.classifyRegion(x, y).label} · Сектор ${hallInfo.sector}</span>
         </div>
         <div class="msg-chat" id="msgChat">
           ${chatHTML}
@@ -686,10 +686,11 @@
         const pageCoords = { sector: BigInt(data.coords.sector), hall: BigInt(data.coords.hall), wall: BigInt(data.coords.wall), shelf: BigInt(data.coords.shelf), volume: BigInt(data.coords.volume), page: BigInt(data.coords.page) };
         const stats = charStats(indices);
 
-        /* Update density badge */
+        /* Update density badge — show genre classification */
         if (densityEl) {
+          const classification = lib.classifyPageText(u.indicesToString(indices));
           densityEl.className = `msg-density ${stats.label === 'Читаемая' ? 'msg-d-read' : stats.label === 'Разреженная' ? 'msg-d-sparse' : 'msg-d-noise'}`;
-          densityEl.textContent = `${stats.label} ${stats.readability}%`;
+          densityEl.textContent = `${classification.label} ${Math.round(classification.score * 100)}%`;
         }
 
         /* Render page text as chat messages — \n is a line break
@@ -780,8 +781,8 @@
         </div>
         <div class="msg-input-bar">
           <div class="msg-filler-row">
-            ${['empty', 'noise', 'words'].map(m =>
-              `<button class="msg-filler-btn ${mode === m ? 'active' : ''}" data-mode="${m}">${m === 'empty' ? 'Пустота' : m === 'noise' ? 'Шум' : 'Слова'}</button>`
+            ${['empty', 'dialogue', 'post', 'diary', 'log', 'words', 'noise', 'human'].map(m =>
+              `<button class="msg-filler-btn ${mode === m ? 'active' : ''}" data-mode="${m}">${m === 'empty' ? 'Пустота' : m === 'noise' ? 'Шум' : m === 'words' ? 'Слова' : m === 'dialogue' ? '💬 Диалог' : m === 'post' ? '📱 Пост' : m === 'diary' ? '📔 Дневник' : m === 'log' ? '⌨️ Лог' : '🧑 Человек'}</button>`
             ).join('')}
           </div>
           <div class="msg-input-row">
@@ -1175,6 +1176,7 @@
             </div>
             <div class="term-line term-output-text">
 Сектор ${hallInfo.sector} · Зал ${hallInfo.hall} · Стена ${wall}<br>
+${lib.classifyRegion(x, y).icon} ${lib.classifyRegion(x, y).label}<br>
 Полка 1 — ${Math.min(Number(ALG.volumesPerShelf), 10)} из ${ALG.volumesPerShelf} томов:<br><br>
 ${bookList}
             </div>
