@@ -80,27 +80,18 @@
       source: "«Вавилонская библиотека»",
     },
     INTRO: "Вавилон — это не про шифры. Это про оцепенение, когда ты стоишь в бесконечном зале, тянешь наугад пыльную книгу с полки, и там — дневник твоей смерти. Или рецепт борща. Или просто шум.",
-    /* 10000 русских слов — lazy fetch from internet */
-    WORD_BANK_URL: 'https://raw.githubusercontent.com/hingston/russian/master/10000-russian-words-cyrillic-only.txt',
-    WORD_BANK: [
+    /* 10000 Russian words — loaded from embedded offline file (js/words.js) */
+    WORD_BANK: window.BABEL_WORD_BANK || [
       "архив", "книга", "сумрак", "пыль", "каталог", "лестница", "галерея", "полка",
       "переплет", "тишина", "страж", "лампа", "письмо", "зеркало", "индекс", "том",
       "лист", "коридор", "узор", "шёпот", "словарь", "лабиринт", "шестигранник",
       "предел", "слово", "рукопись", "описание", "число", "перестановка", "алфавит",
       "формула", "ночь", "свет", "порог", "перила", "символ", "строка", "координата",
     ],
-    _wordBankLoaded: false,
+    /* Offline-first: no network fetch needed. Word bank is embedded in words.js. */
+    _wordBankLoaded: true,
     ensureWordBank() {
-      if (this._wordBankLoaded || this.WORD_BANK.length > 100) return Promise.resolve(this.WORD_BANK);
-      this._wordBankLoaded = true;
-      return fetch(this.WORD_BANK_URL)
-        .then(r => r.text())
-        .then(text => {
-          const words = text.split('\n').map(w => w.trim()).filter(w => w.length > 0);
-          if (words.length > 100) this.WORD_BANK = words;
-          return this.WORD_BANK;
-        })
-        .catch(() => this.WORD_BANK);
+      return Promise.resolve(this.WORD_BANK);
     },
   };
 })();

@@ -441,7 +441,7 @@ bookIndex     = (contentNumber − OFFSET) × I  mod 2^32768</code></pre>
     /* Apply saved theme immediately */
     themes.setTheme(themes.getTheme());
 
-    /* Pre-load dictionary from internet in background */
+    /* Offline-first: word bank is embedded in words.js, no fetch needed */
     app.config.ensureWordBank();
 
     /* First render */

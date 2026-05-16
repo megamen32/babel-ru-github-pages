@@ -1,0 +1,20 @@
+{
+  "name": "Вавилон — Гексагональная Бесконечность",
+  "short_name": "Вавилон",
+  "description": "Библиотека Вавилона: блуждай по бесконечным шестигранным залам, ищи любой текст во вселенной. Полностью офлайн.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0e1621",
+  "theme_color": "#0e1621",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬡</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["books", "entertainment", "utilities"],
+  "lang": "ru",
+  "scope": "./"
+}

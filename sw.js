@@ -1,0 +1,73 @@
+/* ═══════════════════════════════════════════════════════════
+   ВАВИЛОН — Service Worker for Offline-First
+   Caches all assets on first install, serves from cache.
+   ═══════════════════════════════════════════════════════════ */
+
+const CACHE_NAME = 'babel-v8-offline';
+
+const ASSETS = [
+  './',
+  './index.html',
+  './css/style.css',
+  './js/config.js',
+  './js/utils.js',
+  './js/library.js',
+  './js/storage.js',
+  './js/worker-bridge.js',
+  './js/themes.js',
+  './js/app.js',
+  './js/words.js',
+  './js/worker.js',
+  './404.html',
+];
+
+/* Install: pre-cache all static assets */
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS);
+    }).then(() => self.skipWaiting())
+  );
+});
+
+/* Activate: clean up old caches */
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+/* Fetch: cache-first strategy for all static assets */
+self.addEventListener('fetch', (event) => {
+  /* Only handle GET requests */
+  if (event.request.method !== 'GET') return;
+
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+
+      /* For navigation requests (HTML pages), serve cached index.html */
+      if (event.request.mode === 'navigate') {
+        return caches.match('./index.html');
+      }
+
+      /* Try network, cache on success */
+      return fetch(event.request).then((response) => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, clone);
+          });
+        }
+        return response;
+      }).catch(() => {
+        /* If offline and not cached, serve index.html for SPA routing */
+        return caches.match('./index.html');
+      });
+    })
+  );
+});

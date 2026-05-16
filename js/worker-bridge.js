@@ -90,16 +90,16 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
-     MULTI-SOURCE JOKE / QUOTE SYSTEM
+     OFFLINE-FIRST JOKE / QUOTE SYSTEM
      ═══════════════════════════════════════════════════════════
-     Local Russian quips / quotes generated deterministically from the query.
-     This avoids flaky public APIs, CORS problems, and broken encodings. */
+     Pure local Russian quips/quotes — no network fetch needed.
+     Previously fetched from forismatic.com via CORS proxies.
+     Now fully offline: deterministic generation from query. */
 
   let jokesCache = [];
   let jokesFetched = false;
   let jokesFetchPromise = null;
   let jokesCacheKey = '';
-  const FORISMATIC_URL = 'http://api.forismatic.com/api/1.0/?method=getQuote&format=json&lang=ru';
 
   const JOKE_OPENERS = [
     'Библиотекарь шепчет',
@@ -135,51 +135,7 @@
     '— Дальше остаётся только открыть том.',
   ];
 
-  function isLocalHttpContext() {
-    const host = window.location.hostname;
-    return window.location.protocol === 'http:' || host === 'localhost' || host === '127.0.0.1';
-  }
-
-  function buildForismaticUrls() {
-    const urls = [];
-    if (isLocalHttpContext()) urls.push(FORISMATIC_URL);
-    urls.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(FORISMATIC_URL)}`);
-    urls.push(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(FORISMATIC_URL)}`);
-    return urls;
-  }
-
-  function parseForismaticQuotePayload(text) {
-    const normalized = String(text || '').replace(/^\uFEFF/, '').trim();
-    const data = JSON.parse(normalized);
-    const quoteText = String(data.quoteText || '').trim();
-    const quoteAuthor = String(data.quoteAuthor || '').trim();
-    if (!quoteText) return null;
-
-    return {
-      label: 'Цитата',
-      text: quoteAuthor ? `${quoteText}\n— ${quoteAuthor}` : quoteText,
-    };
-  }
-
-  function fetchForismaticQuote(signal) {
-    const urls = buildForismaticUrls();
-
-    function tryUrl(index) {
-      if (index >= urls.length) return Promise.resolve(null);
-      return fetch(urls[index], { signal })
-        .then((response) => {
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          return response.text();
-        })
-        .then(parseForismaticQuotePayload)
-        .catch((error) => {
-          if (error && error.name === 'AbortError') throw error;
-          return tryUrl(index + 1);
-        });
-    }
-
-    return tryUrl(0);
-  }
+  /* Offline: no forismatic fetch */
 
   function normalizeJokeSeed(seedText) {
     return String(seedText || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -243,7 +199,6 @@
     let jokeEl = null;
     let stopped = false;
     let jokes = [];
-    const quoteController = typeof AbortController !== 'undefined' ? new AbortController() : null;
 
     function renderJoke(joke) {
       if (!jokeEl || !joke) return;
@@ -259,7 +214,6 @@
       stopped = true;
       if (intervalId) clearInterval(intervalId);
       if (transitionTimeoutId) clearTimeout(transitionTimeoutId);
-      if (quoteController) quoteController.abort();
       if (jokeEl && jokeEl.parentNode) jokeEl.parentNode.removeChild(jokeEl);
     }
 
@@ -300,17 +254,6 @@
           }, 300);
         }
       }, 4000);
-
-      return fetchForismaticQuote(quoteController ? quoteController.signal : undefined).then((remoteQuote) => {
-        if (!remoteQuote || stopped || !jokeEl || !jokeEl.isConnected) return;
-        jokes.unshift(remoteQuote);
-        jokeIndex = 0;
-        renderJoke(remoteQuote);
-      }).catch((error) => {
-        if (error && error.name !== 'AbortError') {
-          console.warn('Forismatic quote fetch failed:', error);
-        }
-      });
     });
 
     return {

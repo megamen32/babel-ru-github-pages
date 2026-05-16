@@ -5,28 +5,19 @@
 
 'use strict';
 
-/* ═══════════════════════════════════════════════════════════
-   Lazy word bank — fetch from internet when first needed
-   ═══════════════════════════════════════════════════════════ */
-const WORD_BANK_URL = 'https://raw.githubusercontent.com/hingston/russian/master/10000-russian-words-cyrillic-only.txt';
+/* 10000 Russian words — embedded for offline use (inline copy) */
 let WORD_BANK = [
-  "архив", "книга", "сумрак", "пыль", "каталог", "лестница", "галерея", "полка",
-  "переплет", "тишина", "страж", "лампа", "письмо", "зеркало", "индекс", "том",
+  "и","в","не","на","я","что","быть","с","он","а","это","как","то","этот","по","к","но","они","мы","она",
+  "который","из","у","свой","вы","весь","за","для","от","о","так","мочь","все","ты","же","год","человек","один","такой","тот",
+  "или","если","только","его","бы","себя","время","когда","еще","уже","другой","сказать","до","мой","наш","чтобы","говорить","самый","знать","вот",
+  "два","дело","есть","жизнь","новый","рука","может","этот","надо","хотеть","стать","первый","очень","тоже","сейчас","может","понимать","смотреть","работа","место",
+  "книга","день","слово","ребенок","лицо","большой","дом","сторона","должен","писать","земля","имя","раз","глаз","город","вопрос","сидеть","стоять","начало","конец",
+  "вода","ночь","мать","думать","помнить","мир","народ","дверь","друг","путь","да","нет","окно","свет","ждать","искать","верить","любить","видеть","слышать",
+  "дорога","небо","огонь","сила","ветер","дерево","звезда","река","гора","лес","поле","море","зима","лето","весна","осень","утро","вечер","тишина","глубина",
+  "архив","каталог","лестница","галерея","полка","переплет","страж","лампа","письмо","зеркало","индекс","коридор","узор","шёпот","словарь","лабиринт","шестигранник","предел","рукопись","описание",
+  "число","перестановка","алфавит","формула","порог","перила","символ","строка","координата","сумрак","пыль","том","лист","сумрак","ночь","свет"
 ];
-let wordBankFetched = false;
-
-function ensureWordBank() {
-  if (wordBankFetched || WORD_BANK.length > 100) return Promise.resolve(WORD_BANK);
-  wordBankFetched = true;
-  return fetch(WORD_BANK_URL)
-    .then(r => r.text())
-    .then(text => {
-      const words = text.split('\n').map(w => w.trim()).filter(w => w.length > 0);
-      if (words.length > 100) WORD_BANK = words;
-      return WORD_BANK;
-    })
-    .catch(() => WORD_BANK);
-}
+let wordBankLoaded = true;
 
 /* ═══════════════════════════════════════════════════════════
    ALPHABET — 256 characters = 2^8
@@ -696,76 +687,68 @@ function getPageData(numberStr) {
 self.onmessage = function(e) {
   const { id, type, payload } = e.data;
 
-  /* For search with 'words' mode, ensure dictionary is loaded first */
-  const maybeFetch = (type === 'search' && payload.mode === 'words')
-    ? ensureWordBank()
-    : Promise.resolve();
-
-  maybeFetch.then(() => {
-    try {
-      let result;
-      switch (type) {
-        case 'search': {
-          const { phrase, mode, count } = payload;
-          result = createSearchVariants(phrase, mode, count);
-          break;
-        }
-        case 'pageData': {
-          const { number } = payload;
-          result = getPageData(number);
-          break;
-        }
-        case 'bookSpines': {
-          const { x, y, wall } = payload;
-          result = getBookSpines(x, y, wall);
-          break;
-        }
-        case 'bookSpine': {
-          const { x, y, wall, shelf, volume } = payload;
-          const spineText = getBookSpine(x, y, wall, shelf, volume);
-          const cls = classifySpine(spineText);
-          result = { spineText, cls };
-          break;
-        }
-        case 'numberToIndices': {
-          const { number } = payload;
-          result = numberToIndices(BigInt(number));
-          break;
-        }
-        case 'coordinatesToNumber': {
-          const c = payload.coordinates;
-          const coords = {
-            sector: BigInt(c.sector || 1), hall: BigInt(c.hall || 1),
-            wall: BigInt(c.wall || 1), shelf: BigInt(c.shelf || 1),
-            volume: BigInt(c.volume || 1), page: BigInt(c.page || 1),
-          };
-          result = coordinatesToNumber(coords).toString();
-          break;
-        }
-        case 'numberToB64': {
-          result = numberToB64(BigInt(payload.number));
-          break;
-        }
-        case 'xyToHallXY': {
-          const { x, y } = payload;
-          const hi = xyToHallXY(x, y);
-          result = { sector: hi.sector.toString(), hall: hi.hall.toString() };
-          break;
-        }
-        case 'hallToXY': {
-          const { sector, hall } = payload;
-          const xy = hallToXY(sector, hall);
-          result = { x: xy.x.toString(), y: xy.y.toString() };
-          break;
-        }
-        default:
-          throw new Error(`Unknown worker operation: ${type}`);
+  /* Offline-first: word bank is embedded, no fetch needed */
+  try {
+    let result;
+    switch (type) {
+      case 'search': {
+        const { phrase, mode, count } = payload;
+        result = createSearchVariants(phrase, mode, count);
+        break;
       }
-      self.postMessage({ id, result, error: null });
-    } catch (err) {
-      self.postMessage({ id, result: null, error: err.message });
+      case 'pageData': {
+        const { number } = payload;
+        result = getPageData(number);
+        break;
+      }
+      case 'bookSpines': {
+        const { x, y, wall } = payload;
+        result = getBookSpines(x, y, wall);
+        break;
+      }
+      case 'bookSpine': {
+        const { x, y, wall, shelf, volume } = payload;
+        const spineText = getBookSpine(x, y, wall, shelf, volume);
+        const cls = classifySpine(spineText);
+        result = { spineText, cls };
+        break;
+      }
+      case 'numberToIndices': {
+        const { number } = payload;
+        result = numberToIndices(BigInt(number));
+        break;
+      }
+      case 'coordinatesToNumber': {
+        const c = payload.coordinates;
+        const coords = {
+          sector: BigInt(c.sector || 1), hall: BigInt(c.hall || 1),
+          wall: BigInt(c.wall || 1), shelf: BigInt(c.shelf || 1),
+          volume: BigInt(c.volume || 1), page: BigInt(c.page || 1),
+        };
+        result = coordinatesToNumber(coords).toString();
+        break;
+      }
+      case 'numberToB64': {
+        result = numberToB64(BigInt(payload.number));
+        break;
+      }
+      case 'xyToHallXY': {
+        const { x, y } = payload;
+        const hi = xyToHallXY(x, y);
+        result = { sector: hi.sector.toString(), hall: hi.hall.toString() };
+        break;
+      }
+      case 'hallToXY': {
+        const { sector, hall } = payload;
+        const xy = hallToXY(sector, hall);
+        result = { x: xy.x.toString(), y: xy.y.toString() };
+        break;
+      }
+      default:
+        throw new Error(`Unknown worker operation: ${type}`);
     }
-  }).catch(err => {
+    self.postMessage({ id, result, error: null });
+  } catch (err) {
     self.postMessage({ id, result: null, error: err.message });
-  });
+  }
 };
