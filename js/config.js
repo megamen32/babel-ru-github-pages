@@ -69,7 +69,7 @@
       pagesPerVolume: 410n,
       volumesPerShelf: 32n,
       shelvesPerWall: 5n,
-      wallsPerHall: 4n,
+      wallsPerHall: 6n,
       hallsPerSector: 20n,
     },
     SEARCH_VARIANTS_DEFAULT: 6,

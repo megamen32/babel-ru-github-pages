@@ -203,7 +203,7 @@
         <div class="bk-nav">${navHTML}</div>
 
         <div class="bk-wall-tabs">
-          ${[1,2,3,4].map(w => `<button class="bk-wall-tab ${wall === w ? 'active' : ''}" data-wall="${w}">Стена ${w}</button>`).join('')}
+          ${[1,2,3,4,5,6].map(w => `<button class="bk-wall-tab ${wall === w ? 'active' : ''}" data-wall="${w}">С${w}</button>`).join('')}
         </div>
 
         <div class="bk-shelves">${shelvesHTML}</div>
@@ -370,7 +370,7 @@
         </div>
 
         <div class="cosmos-wall-tabs">
-          ${[1,2,3,4].map(w => `<button class="cosmos-wall-tab ${wall === w ? 'active' : ''}" data-wall="${w}">Стена ${w}</button>`).join('')}
+          ${[1,2,3,4,5,6].map(w => `<button class="cosmos-wall-tab ${wall === w ? 'active' : ''}" data-wall="${w}">С${w}</button>`).join('')}
         </div>
 
         <div class="cosmos-shelves">${shelvesHTML}</div>
@@ -464,7 +464,7 @@
         type: 'them',
         name: 'Библиотекарь',
         avatar: '📚',
-        text: `Ты в зале <strong>X:${x} Y:${y}</strong>. Сектор ${hallInfo.sector}, зал ${hallInfo.hall}. На стене ${wall} — 5 полок по 32 тома.`,
+        text: `Ты в зале <strong>X:${x} Y:${y}</strong>. Сектор ${hallInfo.sector}, зал ${hallInfo.hall}. На стене ${wall} из 6 — 5 полок по 32 тома.`,
         time: timeStr(),
       });
 
@@ -506,8 +506,8 @@
         `<button class="msg-nav-btn" data-dq="${d.dq}" data-dr="${d.dr}">${d.label}</button>`
       ).join('');
 
-      const wallTabsHTML = [1,2,3,4].map(w =>
-        `<button class="msg-wall-btn ${wall === w ? 'active' : ''}" data-wall="${w}">Стена ${w}</button>`
+      const wallTabsHTML = [1,2,3,4,5,6].map(w =>
+        `<button class="msg-wall-btn ${wall === w ? 'active' : ''}" data-wall="${w}">С${w}</button>`
       ).join('');
 
       /* Render messages */
@@ -977,7 +977,7 @@
           <div class="feed-post-body">${u.esc(snippet)}</div>
           <div class="feed-post-footer">
             <a class="feed-action" href="${pageUrl}">📖 Читать</a>
-            <a class="feed-action" href="#/wander/x/${x}/y/${y}/wall/${wall === 4 ? 1 : wall + 1}">➡️ Стена</a>
+            <a class="feed-action" href="#/wander/x/${x}/y/${y}/wall/${wall === 6 ? 1 : wall + 1}">➡️ Стена</a>
           </div>
         </article>`;
       }
@@ -1002,7 +1002,7 @@
           ${dirs.map(d => `<button class="feed-nav-btn" data-dq="${d.dq}" data-dr="${d.dr}">${d.label}</button>`).join('')}
         </div>
         <div class="feed-wall-row">
-          ${[1,2,3,4].map(w => `<button class="feed-wall-btn ${wall === w ? 'active' : ''}" data-wall="${w}">С${w}</button>`).join('')}
+          ${[1,2,3,4,5,6].map(w => `<button class="feed-wall-btn ${wall === w ? 'active' : ''}" data-wall="${w}">С${w}</button>`).join('')}
         </div>
         <div class="feed-timeline">${posts}</div>
       </section>`;
@@ -1072,7 +1072,7 @@
               &nbsp;&nbsp;<span class="term-cmd">search [текст]</span> — найти текст<br>
               &nbsp;&nbsp;<span class="term-cmd">random</span> — случайный зал<br>
               &nbsp;&nbsp;<span class="term-cmd">read [том]</span> — прочитать том (1-32)<br>
-              &nbsp;&nbsp;<span class="term-cmd">wall [1-4]</span> — переключить стену
+              &nbsp;&nbsp;<span class="term-cmd">wall [1-6]</span> — переключить стену
             </div>
           </div>
           <div class="term-input-row">
@@ -1102,7 +1102,7 @@
         let response = '';
 
         if (cmd[0] === 'help') {
-          response = 'go [сз/св/з/в/юз/юв] · search [текст] · random · read [1-32] · wall [1-4]';
+          response = 'go [сз/св/з/в/юз/юв] · search [текст] · random · read [1-32] · wall [1-6]';
         } else if (cmd[0] === 'random') {
           const { x, y } = lib.randomHallXY();
           location.hash = `#/wander/x/${x}/y/${y}`;
@@ -1234,13 +1234,13 @@ ${bookList}
         }
         if (cmd[0] === 'wall' && cmd[1]) {
           const w = parseInt(cmd[1]);
-          if (w >= 1 && w <= 4) { location.hash = `#/wander/x/${x}/y/${y}/wall/${w}`; return; }
+          if (w >= 1 && w <= 6) { location.hash = `#/wander/x/${x}/y/${y}/wall/${w}`; return; }
         }
         if (cmd[0] === 'search') {
           location.hash = `#/search?q=${encodeURIComponent(val.slice(val.indexOf(' ') + 1))}`;
           return;
         }
-        output.innerHTML += `<div class="term-line term-output-text">Неизвестная команда. Набери: go [направление] · wall [1-4] · random · search [текст]</div>`;
+        output.innerHTML += `<div class="term-line term-output-text">Неизвестная команда. Набери: go [направление] · wall [1-6] · random · search [текст]</div>`;
         output.scrollTop = output.scrollHeight;
       });
     },
@@ -1419,7 +1419,7 @@ ${highlighted}
       <div class="page-header">
         <div>
           <h2>Том ${coords.volume} · Лист ${pageNum}</h2>
-          <span class="page-header-sub">Полка ${coords.shelf} · Стена ${coords.wall}</span>
+          <span class="page-header-sub">Полка ${coords.shelf} · Стена ${coords.wall} из 6</span>
         </div>
         <div class="page-density">
           <span class="density-badge density-${stats.label === 'Читаемая' ? 'readable' : stats.label === 'Разреженная' ? 'sparse' : 'noise'}">${stats.label}</span>

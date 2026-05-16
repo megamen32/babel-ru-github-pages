@@ -253,7 +253,11 @@
       return `Сектор ${coordinates.sector} · Зал ${coordinates.hall} · Стена ${coordinates.wall} · Полка ${coordinates.shelf} · Том ${coordinates.volume} · Лист ${coordinates.page}`;
     },
 
-    /* Coordinate-based page URL: #/page/s/{sector}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
+    /* Coordinate-based page URL: human-readable parts first, big seed at end in base64url
+       New format: #/page/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url}
+       Old format: #/page/s/{sector_decimal}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
+       seed = sector - 1 (0-indexed), encoded as base64url for compactness.
+       Decimal sector ≈ 9860 digits; base64url seed ≈ 5458 chars — 45% shorter. */
     coordsToPageUrl(coords, params) {
       const c = {
         sector: BigInt(coords.sector || 1),
@@ -263,7 +267,9 @@
         volume: BigInt(coords.volume || 1),
         page: BigInt(coords.page || 1),
       };
-      const base = `#/page/s/${c.sector}/h/${c.hall}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}`;
+      const seed = c.sector - 1n; // 0-indexed
+      const seedB64 = app.library.numberToB64(seed);
+      const base = `#/page/h/${c.hall}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}/s/${seedB64}`;
       if (params) {
         const qs = new URLSearchParams(params).toString();
         return `${base}?${qs}`;
@@ -380,7 +386,40 @@
     parseAnyAddress(raw, kind) {
       const value = String(raw || "").trim();
       if (!value) throw new Error("Нечего распознавать.");
-      if (value.includes("#/page/")) return app.library.b64ToNumber(value.split("#/page/").pop().split("?")[0]);
+      if (value.includes("#/page/")) {
+        const pagePart = value.split("#/page/").pop().split("?")[0];
+        const parts = pagePart.split("/").filter(Boolean);
+        /* New coordinate format: h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url} */
+        const coords = {};
+        for (let i = 0; i < parts.length - 1; i += 2) {
+          switch (parts[i]) {
+            case 's': coords.sector = parts[i + 1]; break;
+            case 'h': coords.hall = parts[i + 1]; break;
+            case 'w': coords.wall = parts[i + 1]; break;
+            case 'sh': coords.shelf = parts[i + 1]; break;
+            case 'v': coords.volume = parts[i + 1]; break;
+            case 'p': coords.page = parts[i + 1]; break;
+          }
+        }
+        if (coords.sector || coords.hall) {
+          /* If sector is present, decode it — could be base64url (new) or decimal (old) */
+          if (coords.sector) {
+            const sectorStr = String(coords.sector);
+            /* Old format: sector starts first and is decimal */
+            /* New format: sector is last and is base64url */
+            /* Heuristic: if sector contains only digits, treat as decimal; otherwise base64url */
+            if (/^\d+$/.test(sectorStr)) {
+              coords.sector = BigInt(sectorStr);
+            } else {
+              coords.sector = app.library.b64ToNumber(sectorStr) + 1n;
+            }
+          }
+          try { return app.library.coordinatesToNumber(coords); }
+          catch { /* fall through to raw parse */ }
+        }
+        /* Legacy raw base64 page number */
+        return app.library.b64ToNumber(pagePart);
+      }
       if (kind === "b64" || /^[A-Za-z0-9_-]+$/.test(value)) {
         try { return app.library.b64ToNumber(value.replace(/[^A-Za-z0-9_-]/g, "")); }
         catch (error) { if (kind === "b64") throw new Error("Не удалось разобрать base64url."); }

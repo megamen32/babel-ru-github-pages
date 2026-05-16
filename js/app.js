@@ -20,21 +20,27 @@
     let name = 'home';
     let pageCoords = null;
     let pageB64 = null;
+    let isOldCoordFormat = false; // for redirect to new format
     if (parts[0] === 'wander') name = 'wander';
     else if (parts[0] === 'search') name = 'search';
     else if (parts[0] === 'page') {
       name = 'page';
-      if (parts[1] === 's') {
-        /* Coordinate format: /page/s/{sector}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
+      /* Detect coordinate format: any of the known keys (s, h, w, sh, v, p) */
+      const coordKeys = new Set(['s', 'h', 'w', 'sh', 'v', 'p']);
+      if (parts.length >= 3 && coordKeys.has(parts[1])) {
+        /* Coordinate format (old: s first with decimal, new: h/w/sh/v/p first, s last with base64url) */
         pageCoords = {};
+        isOldCoordFormat = parts[1] === 's'; // old format starts with /s/{decimal_sector}/...
         for (let i = 1; i < parts.length - 1; i += 2) {
-          switch (parts[i]) {
-            case 's': pageCoords.sector = parts[i + 1]; break;
-            case 'h': pageCoords.hall = parts[i + 1]; break;
-            case 'w': pageCoords.wall = parts[i + 1]; break;
-            case 'sh': pageCoords.shelf = parts[i + 1]; break;
-            case 'v': pageCoords.volume = parts[i + 1]; break;
-            case 'p': pageCoords.page = parts[i + 1]; break;
+          if (coordKeys.has(parts[i])) {
+            switch (parts[i]) {
+              case 's': pageCoords.sector = parts[i + 1]; break;
+              case 'h': pageCoords.hall = parts[i + 1]; break;
+              case 'w': pageCoords.wall = parts[i + 1]; break;
+              case 'sh': pageCoords.shelf = parts[i + 1]; break;
+              case 'v': pageCoords.volume = parts[i + 1]; break;
+              case 'p': pageCoords.page = parts[i + 1]; break;
+            }
           }
         }
       } else if (parts[1] && parts[1] !== 'random') {
@@ -43,7 +49,7 @@
     }
     else if (parts[0] === 'about') name = 'about';
     else if (parts[0] === 'favorites') name = 'favorites';
-    return { name, parts, params, pageCoords, pageB64 };
+    return { name, parts, params, pageCoords, pageB64, isOldCoordFormat };
   }
 
   function navigate() {
@@ -105,9 +111,33 @@
           /* Resolve page number from either coordinate URL or legacy base64 */
           try {
             if (route.pageCoords) {
+              /* Decode sector: old format = decimal, new format = base64url */
+              if (route.pageCoords.sector) {
+                const sectorStr = String(route.pageCoords.sector);
+                if (/^\d+$/.test(sectorStr) && route.isOldCoordFormat) {
+                  /* Old format: sector is decimal number */
+                  route.pageCoords.sector = BigInt(sectorStr);
+                } else if (/^\d+$/.test(sectorStr) && !route.isOldCoordFormat) {
+                  /* New format but pure-digit sector — treat as base64url */
+                  try { route.pageCoords.sector = lib.b64ToNumber(sectorStr) + 1n; }
+                  catch { route.pageCoords.sector = BigInt(sectorStr); }
+                } else {
+                  /* New format: sector is base64url-encoded seed */
+                  route.pageCoords.sector = lib.b64ToNumber(sectorStr) + 1n;
+                }
+              }
               route.pageNumber = lib.coordinatesToNumber(route.pageCoords);
+
+              /* Old coordinate format → redirect to new format */
+              if (route.isOldCoordFormat) {
+                const coords = lib.numberToCoordinates(route.pageNumber);
+                const hl = route.params.get('hl');
+                const params = hl ? { hl } : undefined;
+                location.replace(lib.coordsToPageUrl(coords, params));
+                return;
+              }
             } else if (route.pageB64) {
-              /* Legacy base64 URL — resolve and redirect to coordinate URL */
+              /* Legacy raw base64 page number — resolve and redirect to coordinate URL */
               const number = lib.b64ToNumber(route.pageB64);
               const coords = lib.numberToCoordinates(number);
               const hl = route.params.get('hl');
@@ -276,7 +306,7 @@
 
       <h2>Страница = Telegram-пост</h2>
       <p>Длина страницы — 4096 символов, что совпадает с максимальной длиной сообщения в Telegram. Это не случайное совпадение, а осознанный выбор: библиотека XXI века, где единицей текста является не бумажная страница, а цифровой пост. Борхес работал с книгой; мы работаем с сообщением. Каждая мысль, каждый диалог, каждая заметка, когда-либо отправленная в Telegram, существует здесь — и получает собственный адрес в бесконечности.</p>
-      <p>Геометрия библиотеки: 410 страниц в томе, 32 тома на полке, 5 полок на стене, 4 стены в зале, 20 залов в секторе. Секторы нумеруются от 1 до бесконечности. Полное пространство: 256<sup>4096</sup> = 2<sup>32768</sup> возможных страниц.</p>
+      <p>Геометрия библиотеки: 410 страниц в томе, 32 тома на полке, 5 полок на стене, 6 стен в шестигранном зале, 20 залов в секторе. Секторы нумеруются от 1 до бесконечности. Полное пространство: 256<sup>4096</sup> = 2<sup>32768</sup> возможных страниц.</p>
 
       <h2>Аффинная перестановка</h2>
       <p>Чтобы соседние координаты не давали похожие тексты, применяется аффинный шифр над Z/(2<sup>32768</sup>):</p>
