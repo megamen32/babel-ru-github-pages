@@ -1,0 +1,1493 @@
+(() => {
+  'use strict';
+  const app = window.BabelApp = window.BabelApp || {};
+  const ALG = app.config.ALG;
+  const lib = app.library;
+  const store = app.storage;
+  const u = app.utils;
+
+  /* ═══════════════════════════════════════════════════════════
+     5 VISUAL THEMES FOR THE LIBRARY OF BABEL
+     ═══════════════════════════════════════════════════════════
+     Each theme reimagines how the infinite library looks & feels.
+     CSS custom properties handle colors/fonts; JS handles layout. */
+
+  const THEMES = {
+    bookshelf: {
+      id: 'bookshelf',
+      name: 'Книжная полка',
+      icon: '📖',
+      desc: 'Уютный читатель — тёплые тона, деревянные полки',
+    },
+    cosmos: {
+      id: 'cosmos',
+      name: 'Космос',
+      icon: '🌌',
+      desc: 'Звёздный атлас — глубокий космос, голограммы',
+    },
+    messenger: {
+      id: 'messenger',
+      name: 'Мессенджер',
+      icon: '💬',
+      desc: 'Библиотека как чат — страницы-сообщения от Библиотекаря',
+    },
+    feed: {
+      id: 'feed',
+      name: 'Лента',
+      icon: '📱',
+      desc: 'Социальная лента — бесконечный скролл постов',
+    },
+    terminal: {
+      id: 'terminal',
+      name: 'Терминал',
+      icon: '⌨️',
+      desc: 'Хакерский интерфейс — зелёный текст, команды',
+    },
+  };
+
+  const DEFAULT_THEME = 'messenger';
+
+  function getTheme() {
+    try { return localStorage.getItem('babelTheme') || DEFAULT_THEME; }
+    catch { return DEFAULT_THEME; }
+  }
+
+  function setTheme(id) {
+    if (!THEMES[id]) return;
+    try { localStorage.setItem('babelTheme', id); } catch {}
+    document.documentElement.setAttribute('data-theme', id);
+  }
+
+  /* ---- Shared helpers ---- */
+
+  function fmtXY(v) {
+    if (typeof v === 'bigint') {
+      const s = String(v);
+      return s.length > 20 ? s.slice(0, 8) + '…' + s.slice(-8) : s;
+    }
+    return String(v);
+  }
+
+  function fmtCoord(v) {
+    if (typeof v === 'bigint') {
+      const s = String(v);
+      return s.length > 10 ? s.slice(0, 5) + '…' + s.slice(-4) : s;
+    }
+    return String(v);
+  }
+
+  /* Format timestamp for chat messages */
+  function timeStr() {
+    const d = new Date();
+    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+  }
+
+  /* Character stats from indices */
+  function charStats(indices) {
+    let s = { cyrillic: 0, latin: 0, spaces: 0, digits: 0, punctuation: 0, emoji: 0 };
+    for (const idx of indices) {
+      if (idx === 0) s.spaces++;
+      else if (idx <= 33) s.cyrillic++;
+      else if (idx <= 51) s.latin++;
+      else if (idx <= 61) s.digits++;
+      else if (idx <= 77) s.punctuation++;
+      else s.emoji++;
+    }
+    const total = indices.length;
+    const letters = s.cyrillic + s.latin;
+    const readability = Math.round(letters / total * 100);
+    const label = readability > 60 ? 'Читаемая' : readability > 30 ? 'Разреженная' : 'Шум';
+    return { ...s, total, letters, readability, label };
+  }
+
+  /* Snippet: first N non-space characters */
+  function pageSnippet(indices, maxLen) {
+    let result = '';
+    for (let i = 0; i < indices.length && result.length < maxLen; i++) {
+      const ch = ALG.alphabet[indices[i]];
+      if (ch === ' ' && result.length > 0 && result[result.length - 1] !== ' ') result += ' ';
+      else if (ch !== ' ' && ch !== '\n') result += ch;
+    }
+    return result.trim() || 'пустая страница';
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     THEME 1: BOOKSHELF
+     ═══════════════════════════════════════════════════════════ */
+
+  const bookshelfTheme = {
+    renderHome() {
+      return `
+      <section class="t-bookshelf home fade-in">
+        <div class="bk-hero">
+          <div class="bk-emblem">📖</div>
+          <h1 class="bk-title">Вавилон</h1>
+          <p class="bk-subtitle">Гексагональная Бесконечность</p>
+        </div>
+        <div class="bk-cards">
+          <a class="bk-card" href="#/wander">
+            <span class="bk-card-icon">🏛</span>
+            <h2>Залы</h2>
+            <p>Блуждай по бесконечным шестигранным залам</p>
+          </a>
+          <a class="bk-card" href="#/search">
+            <span class="bk-card-icon">🔍</span>
+            <h2>Каталог</h2>
+            <p>Найди любой текст во вселенной</p>
+          </a>
+        </div>
+        <blockquote class="bk-quote">
+          Всё что когда-либо было или будет написано уже хранится здесь.
+          Здесь — <em>дневник твоей смерти</em>, все твои мысли,
+          изобретения, и даже <em>рецепт борща мамы</em>.
+        </blockquote>
+      </section>`;
+    },
+
+    renderWander(route) {
+      const parts = route.parts;
+      let x = 0, y = 0, wall = 1;
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+      }
+      const hallInfo = lib.xyToHallXY(x, y);
+
+      /* Shelves with book spines */
+      let shelvesHTML = '';
+      for (let s = 1; s <= ALG.shelvesPerWall; s++) {
+        let spines = '';
+        for (let v = 1; v <= ALG.volumesPerShelf; v++) {
+          const spineText = lib.getBookSpine(x, y, wall, s, v);
+          const cls = lib.classifySpine(spineText);
+          const display = u.esc(spineText || 'пусто');
+          const pageUrl = `#/page/${lib.numberToB64(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, s, v, 1)))}`;
+          spines += `<a class="bk-spine ${cls === 'text' ? 'bk-has-text' : cls === 'noise' ? 'bk-noise' : ''}" href="${pageUrl}" title="Том ${v}">${display}</a>`;
+        }
+        shelvesHTML += `
+        <div class="bk-shelf">
+          <div class="bk-shelf-label">Полка ${s}</div>
+          <div class="bk-shelf-books">${spines}</div>
+          <div class="bk-shelf-wood"></div>
+        </div>`;
+      }
+
+      /* Direction buttons */
+      const dirs = [
+        { key: 'nw', label: '↖ СЗ', dq: 0, dr: -1 },
+        { key: 'ne', label: 'СВ ↗', dq: 1, dr: -1 },
+        { key: 'w',  label: '← З',  dq: -1, dr: 0 },
+        { key: 'e',  label: 'В →',  dq: 1, dr: 0 },
+        { key: 'sw', label: '↙ ЮЗ', dq: -1, dr: 1 },
+        { key: 'se', label: 'ЮВ ↘', dq: 0, dr: 1 },
+      ];
+      const navHTML = dirs.map(d =>
+        `<button class="bk-nav-btn" data-dq="${d.dq}" data-dr="${d.dr}">${d.label}</button>`
+      ).join('');
+
+      return `
+      <section class="t-bookshelf wander fade-in">
+        <div class="bk-room-header">
+          <h1>Шестигранный зал</h1>
+          <span class="bk-coords">X: ${x} · Y: ${y} · Сектор ${hallInfo.sector} · Зал ${hallInfo.hall}</span>
+        </div>
+
+        <div class="bk-nav">${navHTML}</div>
+
+        <div class="bk-wall-tabs">
+          ${[1,2,3,4].map(w => `<button class="bk-wall-tab ${wall === w ? 'active' : ''}" data-wall="${w}">Стена ${w}</button>`).join('')}
+        </div>
+
+        <div class="bk-shelves">${shelvesHTML}</div>
+
+        <div class="bk-actions">
+          <button class="bk-btn" id="randomHallBtn">🎲 Случайный зал</button>
+          <a class="bk-btn-outline" href="#/search">🔍 Искать текст</a>
+        </div>
+      </section>`;
+    },
+
+    bindWander(route) {
+      const parts = route.parts;
+      let x = 0, y = 0;
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+      }
+      u.$$('.bk-nav-btn[data-dq]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
+          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+        });
+      });
+      u.$$('.bk-wall-tab[data-wall]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+        });
+      });
+      const rb = u.$('#randomHallBtn');
+      if (rb) rb.addEventListener('click', () => {
+        const { x: rx, y: ry } = lib.randomHallXY();
+        location.hash = `#/wander/x/${rx}/y/${ry}`;
+      });
+    },
+
+    renderPage(route) { return sharedPageRender(route, 't-bookshelf'); },
+  };
+
+  /* ═══════════════════════════════════════════════════════════
+     THEME 2: COSMOS
+     ═══════════════════════════════════════════════════════════ */
+
+  const cosmosTheme = {
+    renderHome() {
+      return `
+      <section class="t-cosmos home fade-in">
+        <canvas class="cosmos-canvas" id="cosmosCanvas"></canvas>
+        <div class="cosmos-hero">
+          <div class="cosmos-emblem">🌌</div>
+          <h1 class="cosmos-title">Вавилон</h1>
+          <p class="cosmos-subtitle">Звёздный Атлас · Бесконечность</p>
+        </div>
+        <div class="cosmos-cards">
+          <a class="cosmos-card" href="#/wander">
+            <span class="cosmos-card-icon">🪐</span>
+            <h2>Карта секторов</h2>
+            <p>Навигация по звёздным залам библиотеки</p>
+          </a>
+          <a class="cosmos-card" href="#/search">
+            <span class="cosmos-card-icon">🔭</span>
+            <h2>Поиск</h2>
+            <p>Найди любой текст в бесконечности</p>
+          </a>
+        </div>
+        <blockquote class="cosmos-quote">
+          Каждая звезда — зал. Каждая планета — книга. Каждое слово — уже здесь.
+        </blockquote>
+      </section>`;
+    },
+
+    bindHome() {
+      const canvas = document.getElementById('cosmosCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let stars = [];
+      let w, h;
+
+      function resize() {
+        w = canvas.width = canvas.clientWidth;
+        h = canvas.height = canvas.clientHeight;
+        stars = [];
+        for (let i = 0; i < 120; i++) {
+          stars.push({
+            x: Math.random() * w, y: Math.random() * h,
+            r: Math.random() * 1.5 + 0.3,
+            speed: Math.random() * 0.3 + 0.05,
+            phase: Math.random() * Math.PI * 2,
+          });
+        }
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      let raf;
+      function draw() {
+        ctx.clearRect(0, 0, w, h);
+        const t = Date.now() * 0.001;
+        for (const s of stars) {
+          const alpha = 0.3 + 0.7 * Math.abs(Math.sin(t * s.speed + s.phase));
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(180,200,255,${alpha})`;
+          ctx.fill();
+        }
+        raf = requestAnimationFrame(draw);
+      }
+      draw();
+      canvas._cleanup = () => cancelAnimationFrame(raf);
+    },
+
+    renderWander(route) {
+      const parts = route.parts;
+      let x = 0, y = 0, wall = 1;
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+      }
+      const hallInfo = lib.xyToHallXY(x, y);
+
+      /* Hex map — CSS hexagons */
+      const hexDirs = [
+        { label: '↖ СЗ', dq: 0, dr: -1 },
+        { label: '↗ СВ', dq: 1, dr: -1 },
+        { label: '← З',  dq: -1, dr: 0 },
+        { label: '→ В',  dq: 1, dr: 0 },
+        { label: '↙ ЮЗ', dq: -1, dr: 1 },
+        { label: '↘ ЮВ', dq: 0, dr: 1 },
+      ];
+
+      const hexCells = hexDirs.map((d, i) => {
+        const nx = x + d.dq, ny = y + d.dr;
+        const spineText = lib.getBookSpine(nx, ny, 1, 1, 1);
+        const preview = u.esc(pageSnippet(lib.numberToIndices(lib.coordinatesToNumber(lib.xyToCoordinates(nx, ny, 1, 1, 1, 1))), 30));
+        return `<button class="cosmos-hex-cell" data-dq="${d.dq}" data-dr="${d.dr}" title="${d.label}">
+          <span class="cosmos-hex-label">${d.label}</span>
+          <span class="cosmos-hex-preview">${preview}</span>
+        </button>`;
+      });
+
+      /* Shelves */
+      let shelvesHTML = '';
+      for (let s = 1; s <= ALG.shelvesPerWall; s++) {
+        let books = '';
+        for (let v = 1; v <= ALG.volumesPerShelf; v++) {
+          const spineText = lib.getBookSpine(x, y, wall, s, v);
+          const pageUrl = `#/page/${lib.numberToB64(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, s, v, 1)))}`;
+          books += `<a class="cosmos-book" href="${pageUrl}">Т.${v}</a>`;
+        }
+        shelvesHTML += `<div class="cosmos-shelf"><span class="cosmos-shelf-num">П.${s}</span>${books}</div>`;
+      }
+
+      return `
+      <section class="t-cosmos wander fade-in">
+        <div class="cosmos-room-header">
+          <h1>Звёздный зал</h1>
+          <span class="cosmos-coords">⭐ X:${x} Y:${y} · Сектор ${hallInfo.sector}</span>
+        </div>
+
+        <div class="cosmos-hex-map">
+          <div class="cosmos-hex-center">⬡<br><small>X:${x} Y:${y}</small></div>
+          ${hexCells.join('')}
+        </div>
+
+        <div class="cosmos-wall-tabs">
+          ${[1,2,3,4].map(w => `<button class="cosmos-wall-tab ${wall === w ? 'active' : ''}" data-wall="${w}">Стена ${w}</button>`).join('')}
+        </div>
+
+        <div class="cosmos-shelves">${shelvesHTML}</div>
+
+        <div class="cosmos-actions">
+          <button class="cosmos-btn" id="randomHallBtn">🎲 Случайный зал</button>
+          <a class="cosmos-btn-outline" href="#/search">🔭 Искать</a>
+        </div>
+      </section>`;
+    },
+
+    bindWander(route) {
+      const parts = route.parts;
+      let x = 0, y = 0;
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+      }
+      u.$$('.cosmos-hex-cell[data-dq]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
+          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+        });
+      });
+      u.$$('.cosmos-wall-tab[data-wall]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+        });
+      });
+      const rb = u.$('#randomHallBtn');
+      if (rb) rb.addEventListener('click', () => {
+        const { x: rx, y: ry } = lib.randomHallXY();
+        location.hash = `#/wander/x/${rx}/y/${ry}`;
+      });
+    },
+
+    renderPage(route) { return sharedPageRender(route, 't-cosmos'); },
+  };
+
+  /* ═══════════════════════════════════════════════════════════
+     THEME 3: MESSENGER — Библиотека как чат (DEFAULT)
+     ═══════════════════════════════════════════════════════════ */
+
+  const messengerTheme = {
+    renderHome() {
+      return `
+      <section class="t-messenger home fade-in">
+        <div class="msg-chat" id="msgChat">
+          <div class="msg-date-divider">сегодня</div>
+          <div class="msg msg-them">
+            <div class="msg-avatar">📚</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Библиотекарь</div>
+              <p>Добро пожаловать в Вавилон. Здесь хранится <strong>всё</strong>, что когда-либо было или будет написано.</p>
+              <p>Дневник твоей смерти. Рецепт борща мамы. Или просто шум.</p>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>
+          <div class="msg msg-them">
+            <div class="msg-avatar">📚</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Библиотекарь</div>
+              <p>Выбери, что хочешь:</p>
+              <div class="msg-quick-actions">
+                <a class="msg-qa" href="#/wander">🏛 Блуждать по залам</a>
+                <a class="msg-qa" href="#/search">🔍 Искать текст</a>
+                <a class="msg-qa" href="#/page/random">🎲 Случайная страница</a>
+              </div>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>
+        </div>
+      </section>`;
+    },
+
+    renderWander(route) {
+      const parts = route.parts;
+      let x = 0, y = 0, wall = 1;
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+      }
+      const hallInfo = lib.xyToHallXY(x, y);
+
+      /* Build chat messages showing the room content */
+      const messages = [];
+
+      /* Librarian greets you */
+      messages.push({
+        type: 'them',
+        name: 'Библиотекарь',
+        avatar: '📚',
+        text: `Ты в зале <strong>X:${x} Y:${y}</strong>. Сектор ${hallInfo.sector}, зал ${hallInfo.hall}. На стене ${wall} — 5 полок по 32 тома.`,
+        time: timeStr(),
+      });
+
+      /* Show book spines as message */
+      for (let s = 1; s <= ALG.shelvesPerWall; s++) {
+        const spines = [];
+        for (let v = 1; v <= Math.min(ALG.volumesPerShelf, 8); v++) {
+          const spineText = lib.getBookSpine(x, y, wall, s, v);
+          const cls = lib.classifySpine(spineText);
+          if (cls === 'text') spines.push(`<a class="msg-book-link" href="#/page/${lib.numberToB64(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, s, v, 1)))}">📖 Том ${v}: ${u.esc(spineText.slice(0, 30))}</a>`);
+          else if (cls === 'noise') spines.push(`<span class="msg-book-noise">📕 Том ${v}</span>`);
+          else spines.push(`<span class="msg-book-empty">📄 Том ${v}</span>`);
+        }
+        const more = ALG.volumesPerShelf > 8 ? `<span class="msg-book-more">…и ещё ${ALG.volumesPerShelf - 8}</span>` : '';
+        messages.push({
+          type: 'them',
+          name: 'Библиотекарь',
+          avatar: '📚',
+          text: `<strong>Полка ${s}</strong><br>${spines.join('<br>')}${more}`,
+          time: timeStr(),
+        });
+      }
+
+      /* Navigation hints */
+      const navBtns = [
+        { label: '↖ СЗ', dq: 0, dr: -1 },
+        { label: '↗ СВ', dq: 1, dr: -1 },
+        { label: '← З',  dq: -1, dr: 0 },
+        { label: '→ В',  dq: 1, dr: 0 },
+        { label: '↙ ЮЗ', dq: -1, dr: 1 },
+        { label: '↘ ЮВ', dq: 0, dr: 1 },
+      ];
+
+      const navHTML = navBtns.map(d =>
+        `<button class="msg-nav-btn" data-dq="${d.dq}" data-dr="${d.dr}">${d.label}</button>`
+      ).join('');
+
+      const wallTabsHTML = [1,2,3,4].map(w =>
+        `<button class="msg-wall-btn ${wall === w ? 'active' : ''}" data-wall="${w}">Стена ${w}</button>`
+      ).join('');
+
+      /* Render messages */
+      const chatHTML = messages.map(m => `
+        <div class="msg msg-${m.type}">
+          <div class="msg-avatar">${m.avatar}</div>
+          <div class="msg-bubble">
+            <div class="msg-name">${m.name}</div>
+            <div class="msg-text">${m.text}</div>
+            <span class="msg-time">${m.time}</span>
+          </div>
+        </div>
+      `).join('');
+
+      return `
+      <section class="t-messenger wander fade-in">
+        <div class="msg-room-header">
+          <span class="msg-room-title">📚 Зал X:${x} Y:${y}</span>
+          <span class="msg-room-sub">Сектор ${hallInfo.sector} · Зал ${hallInfo.hall}</span>
+        </div>
+        <div class="msg-chat" id="msgChat">
+          ${chatHTML}
+          <div class="msg msg-them">
+            <div class="msg-avatar">📚</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Библиотекарь</div>
+              <p>Куда идём? Выбери стену или направление:</p>
+              <div class="msg-wall-row">${wallTabsHTML}</div>
+              <div class="msg-nav-row">${navHTML}</div>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>
+        </div>
+        <div class="msg-input-bar">
+          <button class="msg-input-btn" id="randomHallBtn" title="Случайный зал">🎲</button>
+          <input type="text" class="msg-input" id="msgInput" placeholder="Набери координаты или /random…">
+          <button class="msg-send-btn" id="msgSendBtn">→</button>
+        </div>
+      </section>`;
+    },
+
+    bindWander(route) {
+      const parts = route.parts;
+      let x = 0, y = 0;
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+      }
+      /* Navigation buttons */
+      u.$$('.msg-nav-btn[data-dq]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
+          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+        });
+      });
+      /* Wall tabs */
+      u.$$('.msg-wall-btn[data-wall]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+        });
+      });
+      /* Random */
+      const rb = u.$('#randomHallBtn');
+      if (rb) rb.addEventListener('click', () => {
+        const { x: rx, y: ry } = lib.randomHallXY();
+        location.hash = `#/wander/x/${rx}/y/${ry}`;
+      });
+      /* Chat input */
+      const input = u.$('#msgInput');
+      const sendBtn = u.$('#msgSendBtn');
+      function handleSend() {
+        const val = (input.value || '').trim();
+        if (!val) return;
+        if (val === '/random' || val === '/r') {
+          const { x: rx, y: ry } = lib.randomHallXY();
+          location.hash = `#/wander/x/${rx}/y/${ry}`;
+          return;
+        }
+        /* Try to parse "x N y M" */
+        const match = val.match(/x\s*(-?\d+)\s*y\s*(-?\d+)/i);
+        if (match) {
+          location.hash = `#/wander/x/${match[1]}/y/${match[2]}`;
+          return;
+        }
+        /* Otherwise search */
+        location.hash = `#/search?q=${encodeURIComponent(val)}`;
+      }
+      if (sendBtn) sendBtn.addEventListener('click', handleSend);
+      if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') handleSend(); });
+
+      /* Scroll chat to bottom */
+      const chat = u.$('#msgChat');
+      if (chat) chat.scrollTop = chat.scrollHeight;
+    },
+
+    renderPage(route) {
+      const b64 = route.parts[1];
+      if (!b64) return `<div class="msg-chat"><div class="msg msg-them"><div class="msg-bubble"><p>Страница не указана</p></div></div></div>`;
+
+      let number;
+      try { number = lib.b64ToNumber(b64); } catch {
+        return `<div class="msg-chat"><div class="msg msg-them"><div class="msg-bubble"><p>Неверный адрес</p></div></div></div>`;
+      }
+
+      const indices = lib.numberToIndices(number);
+      const coords = lib.numberToCoordinates(number);
+      const xy = lib.coordinatesToXY(coords);
+      const stats = charStats(indices);
+      const pageTextHTML = u.renderPageFromIndices(indices, lib.parseHighlight(route.params));
+
+      /* Save history */
+      try { store.pushHistory({ url: location.hash, title: lib.pageTitle(coords) }); } catch {}
+
+      /* Page navigation */
+      const pageNum = Number(coords.page);
+      const totalPages = Number(ALG.pagesPerVolume);
+      const prevPage = pageNum > 1
+        ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum - 1)}))}`
+        : null;
+      const nextPage = pageNum < totalPages
+        ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum + 1)}))}`
+        : null;
+
+      /* Break page text into chat-friendly chunks */
+      const fullText = u.indicesToString(indices);
+      const paragraphs = fullText.split('\n').filter(p => p.trim());
+      const bubbleChunks = [];
+      let chunk = '';
+      for (const p of paragraphs) {
+        if (chunk.length + p.length > 600) {
+          if (chunk) bubbleChunks.push(chunk);
+          chunk = p;
+        } else {
+          chunk += (chunk ? '\n' : '') + p;
+        }
+      }
+      if (chunk) bubbleChunks.push(chunk);
+
+      const bubblesHTML = bubbleChunks.map((b, i) => `
+        <div class="msg msg-them">
+          <div class="msg-avatar">${i === 0 ? '📖' : '📜'}</div>
+          <div class="msg-bubble msg-bubble-page">
+            <div class="msg-text">${u.esc(b)}</div>
+            <span class="msg-time">${timeStr()}</span>
+          </div>
+        </div>
+      `).join('');
+
+      return `
+      <section class="t-messenger page-view fade-in">
+        <div class="msg-room-header">
+          <a class="msg-back" href="#/wander/x/${fmtXY(xy.x)}/y/${fmtXY(xy.y)}/wall/${coords.wall}">← Зал</a>
+          <div>
+            <span class="msg-room-title">📖 Том ${coords.volume} · Лист ${pageNum}</span>
+            <span class="msg-room-sub">Стена ${coords.wall} · Полка ${coords.shelf}</span>
+          </div>
+          <span class="msg-density ${stats.label === 'Читаемая' ? 'msg-d-read' : stats.label === 'Разреженная' ? 'msg-d-sparse' : 'msg-d-noise'}">${stats.label} ${stats.readability}%</span>
+        </div>
+        <div class="msg-chat" id="msgChat">
+          <div class="msg msg-them">
+            <div class="msg-avatar">📚</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Библиотекарь</div>
+              <p>Открываю том ${coords.volume}, лист ${pageNum} из ${totalPages}…</p>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>
+          ${bubblesHTML}
+          <div class="msg msg-them">
+            <div class="msg-avatar">📚</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Библиотекарь</div>
+              <div class="msg-page-nav">
+                ${prevPage ? `<a class="msg-nav-link" href="${prevPage}">← Лист ${pageNum - 1}</a>` : ''}
+                <span>Лист ${pageNum}/${totalPages}</span>
+                ${nextPage ? `<a class="msg-nav-link" href="${nextPage}">Лист ${pageNum + 1} →</a>` : ''}
+              </div>
+              <div class="msg-page-actions">
+                <button class="msg-act-btn" id="favBtn">★</button>
+                <button class="msg-act-btn" id="copyTextBtn">📋</button>
+                <button class="msg-act-btn" id="copyLinkBtn">🔗</button>
+              </div>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>
+        </div>
+      </section>`;
+    },
+
+    bindPage(route) {
+      const b64 = route.parts[1];
+      if (!b64) return;
+      let number;
+      try { number = lib.b64ToNumber(b64); } catch { return; }
+      const coords = lib.numberToCoordinates(number);
+
+      const favBtn = u.$('#favBtn');
+      if (favBtn) favBtn.addEventListener('click', () => {
+        store.addFavorite({ url: location.hash, title: lib.pageTitle(coords) });
+        favBtn.textContent = '★';
+        favBtn.classList.add('msg-act-saved');
+      });
+
+      const copyBtn = u.$('#copyTextBtn');
+      if (copyBtn) copyBtn.addEventListener('click', () => {
+        u.copyText(lib.numberToText(number), 'Скопировано');
+      });
+
+      const linkBtn = u.$('#copyLinkBtn');
+      if (linkBtn) linkBtn.addEventListener('click', () => {
+        u.copyText(location.href, 'Ссылка скопирована');
+      });
+
+      /* Scroll chat to bottom */
+      const chat = u.$('#msgChat');
+      if (chat) chat.scrollTop = chat.scrollHeight;
+    },
+
+    renderSearch(route) {
+      const q = route.params.get('q') || '';
+      const mode = route.params.get('mode') || 'empty';
+
+      let resultsHTML = '';
+      if (q) {
+        try {
+          const variants = lib.createSearchVariants(q, mode, 6);
+          resultsHTML = variants.map(v => {
+            const snippet = u.snippetByRange(v.text, v.range, 60);
+            const phraseEsc = u.esc(v.phrase);
+            const snippetEsc = u.esc(snippet);
+            const highlightedSnippet = snippetEsc.replace(phraseEsc, `<mark>${phraseEsc}</mark>`);
+            const pageUrl = `#/page/${lib.numberToB64(v.number)}?hl=${v.range.start}:${v.range.length}`;
+            return `
+            <div class="msg msg-them">
+              <div class="msg-avatar">🔍</div>
+              <div class="msg-bubble">
+                <div class="msg-name">Каталог · Вариант ${v.variant}</div>
+                <div class="msg-search-snippet">${highlightedSnippet}</div>
+                <div class="msg-search-coords">
+                  <span>X:${fmtXY(v.xy.x)}</span>
+                  <span>Y:${fmtXY(v.xy.y)}</span>
+                  <span>Т.${v.coordinates.volume}</span>
+                </div>
+                <div class="msg-search-actions">
+                  <a class="msg-qa" href="${pageUrl}">📖 Открыть</a>
+                  <a class="msg-qa" href="#/wander/x/${fmtXY(v.xy.x)}/y/${fmtXY(v.xy.y)}">🏛 Зал</a>
+                </div>
+                <span class="msg-time">${timeStr()}</span>
+              </div>
+            </div>`;
+          }).join('');
+        } catch (err) {
+          resultsHTML = `<div class="msg msg-them"><div class="msg-bubble"><p>Ошибка: ${u.esc(err.message)}</p></div></div>`;
+        }
+      }
+
+      return `
+      <section class="t-messenger search-view fade-in">
+        <div class="msg-room-header">
+          <a class="msg-back" href="#/">← Назад</a>
+          <span class="msg-room-title">🔍 Каталог Мира</span>
+        </div>
+        <div class="msg-chat" id="msgChat">
+          <div class="msg msg-them">
+            <div class="msg-avatar">📚</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Библиотекарь</div>
+              <p>Любой текст уже существует. Напиши, что ищешь — я найду координаты.</p>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>
+          ${resultsHTML}
+          ${!q ? `<div class="msg msg-them">
+            <div class="msg-avatar">📚</div>
+            <div class="msg-bubble">
+              <div class="msg-name">Библиотекарь</div>
+              <p>Напиши что-нибудь в поле ниже…</p>
+              <span class="msg-time">${timeStr()}</span>
+            </div>
+          </div>` : ''}
+        </div>
+        <div class="msg-input-bar">
+          <div class="msg-filler-row">
+            ${['empty', 'noise', 'words'].map(m =>
+              `<button class="msg-filler-btn ${mode === m ? 'active' : ''}" data-mode="${m}">${m === 'empty' ? 'Пустота' : m === 'noise' ? 'Шум' : 'Слова'}</button>`
+            ).join('')}
+          </div>
+          <div class="msg-input-row">
+            <input type="text" class="msg-input" id="msgSearchInput" placeholder="Что ищешь в бесконечности?" value="${u.esc(q)}">
+            <button class="msg-send-btn" id="msgSearchBtn">🔍</button>
+          </div>
+        </div>
+      </section>`;
+    },
+
+    bindSearch(route) {
+      const input = u.$('#msgSearchInput');
+      const sendBtn = u.$('#msgSearchBtn');
+      let currentMode = route.params.get('mode') || 'empty';
+
+      u.$$('.msg-filler-btn[data-mode]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          u.$$('.msg-filler-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentMode = btn.dataset.mode;
+        });
+      });
+
+      function doSearch() {
+        const val = (input.value || '').trim();
+        if (val) location.hash = `#/search?q=${encodeURIComponent(val)}&mode=${currentMode}`;
+      }
+      if (sendBtn) sendBtn.addEventListener('click', doSearch);
+      if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+      /* Scroll chat to bottom */
+      const chat = u.$('#msgChat');
+      if (chat) chat.scrollTop = chat.scrollHeight;
+    },
+  };
+
+  /* ═══════════════════════════════════════════════════════════
+     THEME 4: FEED — Лента
+     ═══════════════════════════════════════════════════════════ */
+
+  const feedTheme = {
+    renderHome() {
+      /* Show a feed of random pages as posts */
+      let posts = '';
+      for (let i = 0; i < 6; i++) {
+        const rx = Math.floor(Math.random() * 200) - 100;
+        const ry = Math.floor(Math.random() * 200) - 100;
+        const data = lib.getPageByXY(rx, ry, 1, 1, 1, 1);
+        const stats = charStats(data.indices);
+        const snippet = pageSnippet(data.indices, 120);
+        const pageUrl = `#/page/${lib.numberToB64(data.number)}`;
+        posts += `
+        <article class="feed-post">
+          <div class="feed-post-header">
+            <span class="feed-avatar">📖</span>
+            <div class="feed-author">
+              <span class="feed-author-name">Зал X:${rx} Y:${ry}</span>
+              <span class="feed-author-sub">Сектор ${data.coordinates.sector} · Том ${data.coordinates.volume}</span>
+            </div>
+            <span class="feed-density ${stats.label === 'Читаемая' ? 'fd-read' : stats.label === 'Разреженная' ? 'fd-sparse' : 'fd-noise'}">${stats.label}</span>
+          </div>
+          <div class="feed-post-body">${u.esc(snippet)}</div>
+          <div class="feed-post-footer">
+            <a class="feed-action" href="${pageUrl}">📖 Читать</a>
+            <a class="feed-action" href="#/wander/x/${rx}/y/${ry}">🏛 Зал</a>
+          </div>
+        </article>`;
+      }
+
+      return `
+      <section class="t-feed home fade-in">
+        <div class="feed-header-sticky">
+          <h1 class="feed-logo">Вавилон</h1>
+          <div class="feed-header-actions">
+            <a class="feed-header-btn" href="#/search">🔍</a>
+            <a class="feed-header-btn" href="#/wander">🗺</a>
+          </div>
+        </div>
+        <div class="feed-stories">
+          <a class="feed-story" href="#/wander/x/0/y/0">
+            <div class="feed-story-avatar">🏛</div>
+            <span>Зал 0:0</span>
+          </a>
+          <a class="feed-story" href="#/search">
+            <div class="feed-story-avatar">🔍</div>
+            <span>Поиск</span>
+          </a>
+          <a class="feed-story" href="#/page/random">
+            <div class="feed-story-avatar">🎲</div>
+            <span>Случайная</span>
+          </a>
+          <a class="feed-story" href="#/about">
+            <div class="feed-story-avatar">ℹ️</div>
+            <span>Алгоритм</span>
+          </a>
+        </div>
+        <div class="feed-timeline">${posts}</div>
+      </section>`;
+    },
+
+    renderWander(route) {
+      const parts = route.parts;
+      let x = 0, y = 0, wall = 1;
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+      }
+      const hallInfo = lib.xyToHallXY(x, y);
+
+      /* All books on current wall as feed posts */
+      let posts = '';
+      for (let v = 1; v <= Math.min(ALG.volumesPerShelf, 16); v++) {
+        const data = lib.getPageByXY(x, y, wall, 1, v, 1);
+        const stats = charStats(data.indices);
+        const snippet = pageSnippet(data.indices, 150);
+        const pageUrl = `#/page/${lib.numberToB64(data.number)}`;
+        posts += `
+        <article class="feed-post">
+          <div class="feed-post-header">
+            <span class="feed-avatar">📖</span>
+            <div class="feed-author">
+              <span class="feed-author-name">Том ${v}</span>
+              <span class="feed-author-sub">Полка 1 · Стена ${wall}</span>
+            </div>
+            <span class="feed-density ${stats.label === 'Читаемая' ? 'fd-read' : stats.label === 'Разреженная' ? 'fd-sparse' : 'fd-noise'}">${stats.label}</span>
+          </div>
+          <div class="feed-post-body">${u.esc(snippet)}</div>
+          <div class="feed-post-footer">
+            <a class="feed-action" href="${pageUrl}">📖 Читать</a>
+            <a class="feed-action" href="#/wander/x/${x}/y/${y}/wall/${wall === 4 ? 1 : wall + 1}">➡️ Стена</a>
+          </div>
+        </article>`;
+      }
+
+      const dirs = [
+        { label: '↖', dq: 0, dr: -1 },
+        { label: '↗', dq: 1, dr: -1 },
+        { label: '←', dq: -1, dr: 0 },
+        { label: '→', dq: 1, dr: 0 },
+        { label: '↙', dq: -1, dr: 1 },
+        { label: '↘', dq: 0, dr: 1 },
+      ];
+
+      return `
+      <section class="t-feed wander fade-in">
+        <div class="feed-header-sticky">
+          <a class="feed-back" href="#/">←</a>
+          <h1 class="feed-logo">Зал X:${x} Y:${y}</h1>
+          <button class="feed-header-btn" id="randomHallBtn">🎲</button>
+        </div>
+        <div class="feed-nav-row">
+          ${dirs.map(d => `<button class="feed-nav-btn" data-dq="${d.dq}" data-dr="${d.dr}">${d.label}</button>`).join('')}
+        </div>
+        <div class="feed-wall-row">
+          ${[1,2,3,4].map(w => `<button class="feed-wall-btn ${wall === w ? 'active' : ''}" data-wall="${w}">С${w}</button>`).join('')}
+        </div>
+        <div class="feed-timeline">${posts}</div>
+      </section>`;
+    },
+
+    bindWander(route) {
+      const parts = route.parts;
+      let x = 0, y = 0;
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+      }
+      u.$$('.feed-nav-btn[data-dq]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
+          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+        });
+      });
+      u.$$('.feed-wall-btn[data-wall]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+        });
+      });
+      const rb = u.$('#randomHallBtn');
+      if (rb) rb.addEventListener('click', () => {
+        const { x: rx, y: ry } = lib.randomHallXY();
+        location.hash = `#/wander/x/${rx}/y/${ry}`;
+      });
+    },
+
+    renderPage(route) { return sharedPageRender(route, 't-feed'); },
+  };
+
+  /* ═══════════════════════════════════════════════════════════
+     THEME 5: TERMINAL
+     ═══════════════════════════════════════════════════════════ */
+
+  const terminalTheme = {
+    renderHome() {
+      return `
+      <section class="t-terminal home fade-in">
+        <div class="term-screen">
+          <div class="term-titlebar">Вавилон v8.0 — Гексагональная Бесконечность</div>
+          <div class="term-output" id="termOutput">
+            <div class="term-line term-prompt">babel:// ~$ cat welcome.txt</div>
+            <div class="term-line term-output-text">
+              ╔══════════════════════════════════════════════════╗
+              ║     В А В И Л О Н — Бесконечная Библиотека     ║
+              ║     256 символов · 4096 на страницу            ║
+              ║     2^32768 страниц во вселенной               ║
+              ╚══════════════════════════════════════════════════╝
+            </div>
+            <div class="term-line term-output-text">
+              Всё что когда-либо было или будет написано уже хранится здесь.<br>
+              Дневник твоей смерти. Рецепт борща. Или просто шум.
+            </div>
+            <div class="term-line term-prompt">babel:// ~$ ls /залы/</div>
+            <div class="term-line term-output-text">
+              <a class="term-link" href="#/wander">drwxr-x---  залы/</a>&nbsp;&nbsp;&nbsp;
+              <a class="term-link" href="#/search">-rwxr-x---  каталог</a>&nbsp;&nbsp;&nbsp;
+              <a class="term-link" href="#/about">-r--r-----  алгоритм</a>
+            </div>
+            <div class="term-line term-output-text">
+              <br>Доступные команды:<br>
+              &nbsp;&nbsp;<span class="term-cmd">help</span> — справка<br>
+              &nbsp;&nbsp;<span class="term-cmd">go [направление]</span> — перейти в зал (сз/св/з/в/юз/юв)<br>
+              &nbsp;&nbsp;<span class="term-cmd">search [текст]</span> — найти текст<br>
+              &nbsp;&nbsp;<span class="term-cmd">random</span> — случайный зал<br>
+              &nbsp;&nbsp;<span class="term-cmd">read [том]</span> — прочитать том (1-32)<br>
+              &nbsp;&nbsp;<span class="term-cmd">wall [1-4]</span> — переключить стену
+            </div>
+          </div>
+          <div class="term-input-row">
+            <span class="term-prompt-label">babel:// ~$</span>
+            <input type="text" class="term-input" id="termInput" autofocus autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+      </section>`;
+    },
+
+    bindHome() {
+      const input = u.$('#termInput');
+      const output = u.$('#termOutput');
+      if (!input || !output) return;
+
+      input.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        const val = input.value.trim();
+        input.value = '';
+        if (!val) return;
+
+        /* Echo command */
+        output.innerHTML += `<div class="term-line term-prompt">babel:// ~$ ${u.esc(val)}</div>`;
+
+        /* Parse */
+        const cmd = val.toLowerCase().split(/\s+/);
+        let response = '';
+
+        if (cmd[0] === 'help') {
+          response = 'go [сз/св/з/в/юз/юв] · search [текст] · random · read [1-32] · wall [1-4]';
+        } else if (cmd[0] === 'random') {
+          const { x, y } = lib.randomHallXY();
+          location.hash = `#/wander/x/${x}/y/${y}`;
+          return;
+        } else if (cmd[0] === 'search' && cmd[1]) {
+          location.hash = `#/search?q=${encodeURIComponent(val.slice(val.indexOf(' ') + 1))}`;
+          return;
+        } else if (cmd[0] === 'go') {
+          const dirMap = { 'сз': [0,-1], 'св': [1,-1], 'з': [-1,0], 'в': [1,0], 'юз': [-1,1], 'юв': [0,1] };
+          const d = dirMap[cmd[1]];
+          if (d) { location.hash = `#/wander/x/${d[0]}/y/${d[1]}`; return; }
+          response = 'Неизвестное направление. Используй: сз св з в юз юв';
+        } else {
+          response = `Команда не найдена: ${u.esc(cmd[0])}. Набери help для справки.`;
+        }
+
+        output.innerHTML += `<div class="term-line term-output-text">${response}</div>`;
+        output.scrollTop = output.scrollHeight;
+      });
+    },
+
+    renderWander(route) {
+      const parts = route.parts;
+      let x = 0, y = 0, wall = 1;
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+      }
+      const hallInfo = lib.xyToHallXY(x, y);
+
+      /* ASCII hex map */
+      const mapLines = [];
+      const dirs = [
+        { dq: 0, dr: -1, label: 'СЗ' },
+        { dq: 1, dr: -1, label: 'СВ' },
+        { dq: -1, dr: 0, label: 'З' },
+        { dq: 1, dr: 0, label: 'В' },
+        { dq: -1, dr: 1, label: 'ЮЗ' },
+        { dq: 0, dr: 1, label: 'ЮВ' },
+      ];
+
+      mapLines.push('       ┌───┐');
+      mapLines.push('      / СЗ \\');
+      mapLines.push('  ┌───┐     ┌───┐');
+      mapLines.push(' / З  \\ ⬡  / СВ \\');
+      mapLines.push('│     │ X:'+x+' │     │');
+      mapLines.push(' \\ ЮЗ /  Y:'+y+' \\  В /');
+      mapLines.push('  └───┘     └───┘');
+      mapLines.push('      \\ ЮВ /');
+      mapLines.push('       └───┘');
+
+      /* Book listing */
+      let bookList = '';
+      for (let v = 1; v <= Math.min(ALG.volumesPerShelf, 10); v++) {
+        const spineText = lib.getBookSpine(x, y, wall, 1, v);
+        const stats = charStats(lib.numberToIndices(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, 1, v, 1))));
+        const pageUrl = `#/page/${lib.numberToB64(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, 1, v, 1)))}`;
+        const label = spineText ? u.esc(spineText.slice(0, 30)) : '(пусто)';
+        bookList += `<a class="term-link" href="${pageUrl}">Том ${v}</a> [${stats.label}] ${label}<br>`;
+      }
+
+      return `
+      <section class="t-terminal wander fade-in">
+        <div class="term-screen">
+          <div class="term-titlebar">babel:// залы/x:${x}/y:${y}/стена:${wall}</div>
+          <div class="term-output" id="termOutput">
+            <div class="term-line term-output-text">
+<pre class="term-ascii-map">${mapLines.join('\n')}</pre>
+            </div>
+            <div class="term-line term-output-text">
+Сектор ${hallInfo.sector} · Зал ${hallInfo.hall} · Стена ${wall}<br>
+Полка 1 — ${Math.min(ALG.volumesPerShelf, 10)} из ${ALG.volumesPerShelf} томов:<br><br>
+${bookList}
+            </div>
+            <div class="term-line term-output-text">
+Направления: ${dirs.map(d => `<span class="term-cmd term-dir" data-dq="${d.dq}" data-dr="${d.dr}">${d.label}</span>`).join(' · ')}
+            </div>
+          </div>
+          <div class="term-input-row">
+            <span class="term-prompt-label">babel:// з:${x},${y} $</span>
+            <input type="text" class="term-input" id="termInput" autofocus autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+      </section>`;
+    },
+
+    bindWander(route) {
+      const parts = route.parts;
+      let x = 0, y = 0, wall = 1;
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+      }
+
+      /* Direction links */
+      u.$$('.term-dir[data-dq]').forEach(el => {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', () => {
+          const dq = parseInt(el.dataset.dq), dr = parseInt(el.dataset.dr);
+          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+        });
+      });
+
+      /* Terminal input */
+      const input = u.$('#termInput');
+      const output = u.$('#termOutput');
+      if (!input || !output) return;
+
+      input.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        const val = input.value.trim();
+        input.value = '';
+        if (!val) return;
+
+        output.innerHTML += `<div class="term-line term-prompt">babel:// з:${x},${y} $ ${u.esc(val)}</div>`;
+
+        const cmd = val.toLowerCase().split(/\s+/);
+        if (cmd[0] === 'random') {
+          const { x: rx, y: ry } = lib.randomHallXY();
+          location.hash = `#/wander/x/${rx}/y/${ry}`;
+          return;
+        }
+        if (cmd[0] === 'go') {
+          const dirMap = { 'сз': [0,-1], 'св': [1,-1], 'з': [-1,0], 'в': [1,0], 'юз': [-1,1], 'юв': [0,1] };
+          const d = dirMap[cmd[1]];
+          if (d) { location.hash = `#/wander/x/${x + d[0]}/y/${y + d[1]}`; return; }
+        }
+        if (cmd[0] === 'wall' && cmd[1]) {
+          const w = parseInt(cmd[1]);
+          if (w >= 1 && w <= 4) { location.hash = `#/wander/x/${x}/y/${y}/wall/${w}`; return; }
+        }
+        if (cmd[0] === 'search') {
+          location.hash = `#/search?q=${encodeURIComponent(val.slice(val.indexOf(' ') + 1))}`;
+          return;
+        }
+        output.innerHTML += `<div class="term-line term-output-text">Неизвестная команда. Набери: go [направление] · wall [1-4] · random · search [текст]</div>`;
+        output.scrollTop = output.scrollHeight;
+      });
+    },
+
+    renderPage(route) {
+      const b64 = route.parts[1];
+      if (!b64) return `<div class="term-screen"><div class="term-output"><div class="term-line term-output-text">Страница не указана</div></div></div>`;
+      let number;
+      try { number = lib.b64ToNumber(b64); } catch {
+        return `<div class="term-screen"><div class="term-output"><div class="term-line term-output-text">Неверный адрес</div></div></div>`;
+      }
+      const indices = lib.numberToIndices(number);
+      const text = u.indicesToString(indices);
+      const coords = lib.numberToCoordinates(number);
+      const stats = charStats(indices);
+      const xy = lib.coordinatesToXY(coords);
+
+      try { store.pushHistory({ url: location.hash, title: lib.pageTitle(coords) }); } catch {}
+
+      const pageNum = Number(coords.page);
+      const totalPages = Number(ALG.pagesPerVolume);
+      const prevUrl = pageNum > 1 ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum - 1)}))}` : null;
+      const nextUrl = pageNum < totalPages ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum + 1)}))}` : null;
+
+      /* Show text in terminal style */
+      const lines = text.split('\n');
+      const lineHTML = lines.map(l => u.esc(l) || '&nbsp;').join('<br>');
+
+      return `
+      <section class="t-terminal page-view fade-in">
+        <div class="term-screen">
+          <div class="term-titlebar">babel:// том:${coords.volume}/лист:${pageNum}</div>
+          <div class="term-output" id="termOutput">
+            <div class="term-line term-output-text">
+Зал X:${fmtXY(xy.x)} Y:${fmtXY(xy.y)} · Стена ${coords.wall} · Полка ${coords.shelf} · Том ${coords.volume} · Лист ${pageNum}/${totalPages} · ${stats.label} ${stats.readability}%
+            </div>
+            <div class="term-line term-separator">────────────────────────────────────────</div>
+            <div class="term-line term-page-text">${lineHTML}</div>
+            <div class="term-line term-separator">────────────────────────────────────────</div>
+            <div class="term-line term-output-text">
+              ${prevUrl ? `<a class="term-link" href="${prevUrl}">← Лист ${pageNum - 1}</a> · ` : ''}
+              Лист ${pageNum}/${totalPages}
+              ${nextUrl ? ` · <a class="term-link" href="${nextUrl}">Лист ${pageNum + 1} →</a>` : ''}
+            </div>
+            <div class="term-line term-output-text">
+              <span class="term-cmd" id="termFav">★</span> избранное ·
+              <span class="term-cmd" id="termCopy">📋</span> копировать ·
+              <span class="term-cmd" id="termLink">🔗</span> ссылка ·
+              <a class="term-link" href="#/wander/x/${fmtXY(xy.x)}/y/${fmtXY(xy.y)}/wall/${coords.wall}">зал</a>
+            </div>
+          </div>
+        </div>
+      </section>`;
+    },
+
+    bindPage(route) {
+      const b64 = route.parts[1];
+      if (!b64) return;
+      let number;
+      try { number = lib.b64ToNumber(b64); } catch { return; }
+      const coords = lib.numberToCoordinates(number);
+
+      const favBtn = u.$('#termFav');
+      if (favBtn) favBtn.addEventListener('click', () => {
+        store.addFavorite({ url: location.hash, title: lib.pageTitle(coords) });
+        favBtn.textContent = '★ (сохранено)';
+      });
+      const copyBtn = u.$('#termCopy');
+      if (copyBtn) copyBtn.addEventListener('click', () => {
+        u.copyText(lib.numberToText(number), 'Скопировано');
+      });
+      const linkBtn = u.$('#termLink');
+      if (linkBtn) linkBtn.addEventListener('click', () => {
+        u.copyText(location.href, 'Ссылка скопирована');
+      });
+    },
+
+    renderSearch(route) {
+      const q = route.params.get('q') || '';
+      const mode = route.params.get('mode') || 'empty';
+
+      let resultsHTML = '';
+      if (q) {
+        try {
+          const variants = lib.createSearchVariants(q, mode, 6);
+          resultsHTML = variants.map(v => {
+            const snippet = u.snippetByRange(v.text, v.range, 50);
+            const highlighted = u.esc(snippet).replace(u.esc(v.phrase), `<mark>${u.esc(v.phrase)}</mark>`);
+            const pageUrl = `#/page/${lib.numberToB64(v.number)}?hl=${v.range.start}:${v.range.length}`;
+            return `<div class="term-line term-output-text">
+[${v.variant}] <a class="term-link" href="${pageUrl}">X:${fmtXY(v.xy.x)} Y:${fmtXY(v.xy.y)} Т.${v.coordinates.volume}</a>
+${highlighted}
+</div>`;
+          }).join('');
+        } catch (err) {
+          resultsHTML = `<div class="term-line term-output-text">ОШИБКА: ${u.esc(err.message)}</div>`;
+        }
+      }
+
+      return `
+      <section class="t-terminal search-view fade-in">
+        <div class="term-screen">
+          <div class="term-titlebar">babel:// каталог</div>
+          <div class="term-output" id="termOutput">
+            <div class="term-line term-output-text">Поиск по всем 2^32768 страницам…</div>
+            ${resultsHTML}
+            ${!q ? `<div class="term-line term-output-text">Набери: search [текст]</div>` : ''}
+          </div>
+          <div class="term-input-row">
+            <span class="term-prompt-label">babel:// search$</span>
+            <input type="text" class="term-input" id="termInput" value="${u.esc(q)}" autofocus autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+      </section>`;
+    },
+
+    bindSearch(route) {
+      const input = u.$('#termInput');
+      if (!input) return;
+      input.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        const val = input.value.trim();
+        if (val) location.hash = `#/search?q=${encodeURIComponent(val)}`;
+      });
+    },
+  };
+
+  /* ═══════════════════════════════════════════════════════════
+     SHARED PAGE RENDER (for themes that don't override)
+     ═══════════════════════════════════════════════════════════ */
+
+  function sharedPageRender(route, themeClass) {
+    const b64 = route.parts[1];
+    if (!b64) return `<div class="${themeClass}"><div class="notice">Страница не указана</div></div>`;
+
+    let number;
+    try { number = lib.b64ToNumber(b64); } catch {
+      return `<div class="${themeClass}"><div class="notice">Неверный адрес страницы</div></div>`;
+    }
+
+    const indices = lib.numberToIndices(number);
+    const coords = lib.numberToCoordinates(number);
+    const xy = lib.coordinatesToXY(coords);
+    const highlight = lib.parseHighlight(route.params);
+    const pageTextHTML = u.renderPageFromIndices(indices, highlight);
+    const stats = charStats(indices);
+    const b36 = lib.prettyBase36(number);
+
+    const pageNum = Number(coords.page);
+    const totalPages = Number(ALG.pagesPerVolume);
+    const prevPage = pageNum > 1
+      ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum - 1)}))}`
+      : null;
+    const nextPage = pageNum < totalPages
+      ? `#/page/${lib.numberToB64(lib.coordinatesToNumber({...coords, page: BigInt(pageNum + 1)}))}`
+      : null;
+
+    try { store.pushHistory({ url: location.hash, title: lib.pageTitle(coords) }); } catch {}
+
+    /* Fingerprint */
+    const fingerprintColors = [];
+    for (let i = 0; i < 64; i++) {
+      const idx = indices[i] || 0;
+      const h = (idx * 29 + i * 7) % 360;
+      const s = 50 + (idx % 40);
+      const l = 30 + (idx % 30);
+      fingerprintColors.push(`hsl(${h},${s}%,${l}%)`);
+    }
+    const fpHTML = fingerprintColors.map(c => `<span class="fp-cell" style="background:${c}"></span>`).join('');
+
+    return `
+    <section class="${themeClass} page-view fade-in">
+      <div class="page-breadcrumbs">
+        <a href="#/">Вавилон</a><span class="sep">›</span>
+        <a href="#/wander/x/${fmtXY(xy.x)}/y/${fmtXY(xy.y)}/wall/${coords.wall}">Зал X:${fmtXY(xy.x)} Y:${fmtXY(xy.y)}</a><span class="sep">›</span>
+        <span>Том ${coords.volume} · Лист ${pageNum}</span>
+      </div>
+
+      <div class="page-header">
+        <div>
+          <h2>Том ${coords.volume} · Лист ${pageNum}</h2>
+          <span class="page-header-sub">Полка ${coords.shelf} · Стена ${coords.wall}</span>
+        </div>
+        <div class="page-density">
+          <span class="density-badge density-${stats.label === 'Читаемая' ? 'readable' : stats.label === 'Разреженная' ? 'sparse' : 'noise'}">${stats.label}</span>
+          <span class="density-pct">${stats.readability}%</span>
+        </div>
+      </div>
+
+      <div class="page-fingerprint">${fpHTML}</div>
+
+      <div class="page-text-box">
+        <div class="page-text">${pageTextHTML}</div>
+      </div>
+
+      <div class="page-stats">
+        <div class="stat-row"><span class="stat-label">Буквы</span><div class="stat-bar-track"><div class="stat-bar-fill" style="width:${Math.round(stats.letters/stats.total*100)}%;background:var(--accent);"></div></div><span class="stat-value">${stats.letters}</span></div>
+        <div class="stat-row"><span class="stat-label">Пробелы</span><div class="stat-bar-track"><div class="stat-bar-fill" style="width:${Math.round(stats.spaces/stats.total*100)}%;background:var(--accent2);"></div></div><span class="stat-value">${stats.spaces}</span></div>
+        <div class="stat-row"><span class="stat-label">Знаки</span><div class="stat-bar-track"><div class="stat-bar-fill" style="width:${Math.round((stats.punctuation+stats.emoji)/stats.total*100)}%;background:var(--accent);"></div></div><span class="stat-value">${stats.punctuation + stats.emoji}</span></div>
+      </div>
+
+      <div class="page-nav">
+        ${prevPage ? `<a class="btn-outline" href="${prevPage}">← Лист ${pageNum - 1}</a>` : '<span></span>'}
+        <span class="page-num">Лист ${pageNum} из ${totalPages}</span>
+        ${nextPage ? `<a class="btn-outline" href="${nextPage}">Лист ${pageNum + 1} →</a>` : '<span></span>'}
+      </div>
+
+      <div class="page-actions">
+        <button class="btn-neon" id="favBtn">★ В избранное</button>
+        <button class="btn-outline" id="copyTextBtn">Копировать</button>
+        <button class="btn-outline" id="copyLinkBtn">Ссылка</button>
+      </div>
+    </section>`;
+  }
+
+  function bindSharedPage(route) {
+    const b64 = route.parts[1];
+    if (!b64) return;
+    let number;
+    try { number = lib.b64ToNumber(b64); } catch { return; }
+    const coords = lib.numberToCoordinates(number);
+
+    const favBtn = u.$('#favBtn');
+    if (favBtn) favBtn.addEventListener('click', () => {
+      store.addFavorite({ url: location.hash, title: lib.pageTitle(coords) });
+      favBtn.textContent = '★ Сохранено';
+      favBtn.disabled = true;
+    });
+    const copyBtn = u.$('#copyTextBtn');
+    if (copyBtn) copyBtn.addEventListener('click', () => {
+      u.copyText(lib.numberToText(number), 'Текст скопирован');
+    });
+    const linkBtn = u.$('#copyLinkBtn');
+    if (linkBtn) linkBtn.addEventListener('click', () => {
+      u.copyText(location.href, 'Ссылка скопирована');
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     THEME REGISTRY — public API
+     ═══════════════════════════════════════════════════════════ */
+
+  const themeRegistry = {
+    bookshelf: bookshelfTheme,
+    cosmos: cosmosTheme,
+    messenger: messengerTheme,
+    feed: feedTheme,
+    terminal: terminalTheme,
+  };
+
+  function getThemeRenderer() {
+    const id = getTheme();
+    return themeRegistry[id] || themeRegistry[DEFAULT_THEME];
+  }
+
+  /* Theme picker HTML */
+  function renderThemePicker() {
+    const current = getTheme();
+    return `<div class="theme-picker" id="themePicker">
+      <button class="theme-picker-toggle" id="themePickerToggle" title="Сменить тему">${THEMES[current].icon} ${THEMES[current].name}</button>
+      <div class="theme-picker-dropdown" id="themePickerDropdown">
+        ${Object.values(THEMES).map(t => `
+          <button class="theme-picker-option ${t.id === current ? 'active' : ''}" data-theme="${t.id}">
+            <span class="tp-icon">${t.icon}</span>
+            <span class="tp-name">${t.name}</span>
+            <span class="tp-desc">${t.desc}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>`;
+  }
+
+  function bindThemePicker() {
+    const toggle = u.$('#themePickerToggle');
+    const dropdown = u.$('#themePickerDropdown');
+    if (!toggle || !dropdown) return;
+
+    toggle.addEventListener('click', () => {
+      dropdown.classList.toggle('open');
+    });
+
+    /* Close on outside click */
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.theme-picker')) {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    u.$$('.theme-picker-option[data-theme]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setTheme(btn.dataset.theme);
+        dropdown.classList.remove('open');
+        /* Re-render current view */
+        window.dispatchEvent(new Event('hashchange'));
+      });
+    });
+  }
+
+  app.themes = {
+    THEMES,
+    DEFAULT_THEME,
+    getTheme,
+    setTheme,
+    getThemeRenderer,
+    renderThemePicker,
+    bindThemePicker,
+    fmtXY,
+    fmtCoord,
+    charStats,
+    pageSnippet,
+    sharedPageRender,
+    bindSharedPage,
+    timeStr,
+  };
+})();

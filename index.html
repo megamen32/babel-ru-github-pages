@@ -1,17 +1,15 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="messenger">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Вавилон — Гексагональная Бесконечность</title>
-  <meta name="description" content="Библиотека Вавилона: блуждай по бесконечным шестигранным залам, ищи любой текст во вселенной.">
+  <meta name="description" content="Библиотека Вавилона: блуждай по бесконечным шестигранным залам, ищи любой текст во вселенной. 5 визуальных тем.">
+  <meta name="theme-color" content="#0e1621">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬡</text></svg>">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div class="bg-atmosphere"></div>
-  <div class="scanlines"></div>
-  <div class="particles" id="particles"></div>
   <div class="shell" id="shell">
     <header class="site-header">
       <a class="brand" href="#/">
@@ -20,25 +18,25 @@
       </a>
       <nav class="top-nav" id="topNav">
         <a href="#/">Главная</a>
-        <a href="#/wander/x/0/y/0">Блуждание</a>
+        <a href="#/wander/x/0/y/0">Залы</a>
         <a href="#/search">Каталог</a>
         <a href="#/about">Алгоритм</a>
         <a href="#/favorites">Избранное</a>
       </nav>
+      <div id="themePickerSlot"></div>
     </header>
     <main id="view"></main>
     <footer class="site-footer">
       <p class="borges">Вселенная, которую другие называют Библиотекой…</p>
-      <p style="margin-top:0.5rem">4096 символов · 256 символов · Бесконечность</p>
+      <p style="margin-top:0.3rem; font-size:0.7rem;">256 символов · 4096 на страницу · 5 тем</p>
     </footer>
   </div>
 
-  <script defer src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script defer src="js/config.js"></script>
   <script defer src="js/utils.js"></script>
   <script defer src="js/library.js"></script>
   <script defer src="js/storage.js"></script>
-  <script defer src="js/hexweb.js"></script>
+  <script defer src="js/themes.js"></script>
   <script defer src="js/app.js"></script>
 </body>
 </html>
