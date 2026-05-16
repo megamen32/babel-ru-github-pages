@@ -1720,5 +1720,7 @@ ${highlighted}
     sharedPageRender,
     bindSharedPage,
     timeStr,
+    /* Reusable mini-map hex drawing for wander views */
+    drawMiniHex,
   };
 })();

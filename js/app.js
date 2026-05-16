@@ -595,6 +595,12 @@ bookIndex     = (contentNumber − OFFSET) × I  mod 2^32768</code></pre>
     ctx.stroke();
   }
 
+  /* Register atlas renderers on themes object for backwards compat
+     (prevents "themes.renderAtlas is not a function" if any code
+      references themes.renderAtlas instead of the local function) */
+  themes.renderAtlas = renderAtlas;
+  themes.bindAtlas = bindAtlas;
+
   /* ═══════════════════════════════════════════════════════════
      INIT
      ═══════════════════════════════════════════════════════════ */
