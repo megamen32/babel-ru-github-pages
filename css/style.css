@@ -366,7 +366,7 @@ main#view {
 }
 
 /* ============================================
-   WANDER MODE — 2.5D Hexagonal Room
+   WANDER MODE — 3D Hexagonal Web
    ============================================ */
 .wander {
   padding: 1.5rem 2rem;
@@ -380,7 +380,7 @@ main#view {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 .wander-title {
   font-family: var(--font-display);
@@ -393,13 +393,59 @@ main#view {
   font-family: var(--font-mono);
   font-size: 0.95rem;
 }
-.wander-nav {
-  display: flex; gap: 0.5rem; flex-wrap: wrap;
+
+/* ---- 3D Hexagonal Web Container ---- */
+.hex-web-container {
+  position: relative;
+  width: 100%;
+  height: 550px;
+  margin-bottom: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg-deep);
 }
-.nav-btn {
-  padding: 0.4rem 1rem;
+.hex-web-container canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ---- Hex Navigation Ring ---- */
+.hex-nav-ring {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  margin: -40px auto 1rem;
+  z-index: 10;
+}
+
+.hex-nav-center {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 52px; height: 52px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.6rem;
+  color: var(--purple-neon);
+  background: rgba(176, 38, 255, 0.15);
+  border: 2px solid rgba(176, 38, 255, 0.5);
+  border-radius: 50%;
+  text-shadow: 0 0 15px rgba(176, 38, 255, 0.6);
+  animation: hexCenterPulse 3s ease-in-out infinite;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  width: 48px; height: 48px;
+}
+@keyframes hexCenterPulse {
+  0%, 100% { box-shadow: 0 0 15px rgba(176, 38, 255, 0.4); }
+  50%      { box-shadow: 0 0 30px rgba(176, 38, 255, 0.7); }
+}
+
+.hex-nav-btn {
+  position: absolute;
+  padding: 0.3rem 0.6rem;
   font-family: var(--font-display);
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -409,241 +455,32 @@ main#view {
   border-radius: var(--radius);
   cursor: pointer;
   transition: all var(--transition);
+  white-space: nowrap;
+  z-index: 2;
 }
-.nav-btn:hover {
+
+/* Position 6 buttons in hex pattern around center */
+.hex-nav-nw { top: 15%; left: 5%; }
+.hex-nav-ne { top: 15%; right: 5%; }
+.hex-nav-w  { top: 50%; left: 0; transform: translateY(-50%); }
+.hex-nav-e  { top: 50%; right: 0; transform: translateY(-50%); }
+.hex-nav-sw { bottom: 15%; left: 5%; }
+.hex-nav-se { bottom: 15%; right: 5%; }
+
+.hex-nav-btn:hover {
   color: var(--purple-neon);
   border-color: var(--border-hover);
   box-shadow: var(--glow-purple);
+  background: rgba(176, 38, 255, 0.08);
 }
 
-/* ---- 3D Hexagonal Room ---- */
-.hex-room {
-  position: relative;
-  width: 100%;
-  height: 480px;
-  margin-bottom: 1.5rem;
-  perspective: 900px;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: radial-gradient(ellipse at 50% 30%, hsla(var(--room-hue, 270), 50%, 15%, 0.4), var(--bg-deep) 70%);
-}
-
-/* Ceiling */
-.hex-ceiling {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 60px;
-  background: linear-gradient(180deg, rgba(5, 0, 15, 0.95) 0%, rgba(5, 0, 15, 0.5) 60%, transparent 100%);
-  z-index: 10;
-}
-.ceiling-light {
-  position: absolute;
-  top: -20px; left: 50%;
-  transform: translateX(-50%);
-  width: 200px; height: 80px;
-  background: radial-gradient(ellipse, hsla(var(--room-hue, 270), 80%, 70%, 0.25) 0%, transparent 70%);
-  border-radius: 50%;
-  animation: ceilingPulse 4s ease-in-out infinite;
-}
-@keyframes ceilingPulse {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
-}
-
-/* Floor */
-.hex-floor {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 100px;
-  z-index: 5;
-  background: linear-gradient(0deg, rgba(5, 0, 15, 0.95) 0%, rgba(5, 0, 15, 0.6) 40%, transparent 100%);
-}
-.floor-grid {
-  position: absolute;
-  bottom: 0; left: -10%; right: -10%;
-  height: 120px;
-  background:
-    repeating-linear-gradient(90deg, hsla(var(--room-hue, 270), 60%, 50%, 0.08) 0px, hsla(var(--room-hue, 270), 60%, 50%, 0.08) 1px, transparent 1px, transparent 60px),
-    repeating-linear-gradient(0deg, hsla(var(--room-hue, 270), 60%, 50%, 0.05) 0px, hsla(var(--room-hue, 270), 60%, 50%, 0.05) 1px, transparent 1px, transparent 40px);
-  transform: perspective(300px) rotateX(45deg);
-  transform-origin: bottom center;
-  animation: floorScroll 3s linear infinite;
-}
-@keyframes floorScroll {
-  0%   { background-position: 0 0, 0 0; }
-  100% { background-position: 0 40px, 0 40px; }
-}
-
-/* Corridors — dark passages on left and right */
-.hex-corridor {
-  position: absolute;
-  top: 50px; bottom: 80px;
-  width: 120px;
-  z-index: 8;
-  overflow: hidden;
-}
-.hex-corridor-left {
-  left: 0;
-  background: linear-gradient(90deg, rgba(3, 0, 8, 0.95) 0%, rgba(3, 0, 8, 0.7) 50%, transparent 100%);
-}
-.hex-corridor-right {
-  right: 0;
-  background: linear-gradient(-90deg, rgba(3, 0, 8, 0.95) 0%, rgba(3, 0, 8, 0.7) 50%, transparent 100%);
-}
-.corridor-depth {
-  position: absolute;
-  top: 20%; bottom: 20%;
-  width: 30px;
-  border: 1px solid rgba(176, 38, 255, 0.08);
-  border-radius: 2px;
-}
-.hex-corridor-left .corridor-depth {
-  left: 15px;
-  animation: corridorPulse 5s ease-in-out infinite;
-}
-.hex-corridor-right .corridor-depth {
-  right: 15px;
-  animation: corridorPulse 5s ease-in-out infinite 2.5s;
-}
-.corridor-depth.cd-2 {
-  top: 30%; bottom: 30%;
-  opacity: 0.5;
-}
-.hex-corridor-left .corridor-depth.cd-2 { left: 35px; }
-.hex-corridor-right .corridor-depth.cd-2 { right: 35px; }
-@keyframes corridorPulse {
-  0%, 100% { border-color: rgba(176, 38, 255, 0.05); }
-  50% { border-color: rgba(176, 38, 255, 0.15); }
-}
-
-/* ---- Walls ---- */
-.hex-wall {
-  position: absolute;
-  z-index: 6;
-  overflow: hidden;
-}
-
-/* Back wall — main, flat, centered */
-.hex-wall-back {
-  top: 55px; bottom: 85px;
-  left: 15%; right: 15%;
-  background: linear-gradient(180deg, rgba(15, 5, 35, 0.85), rgba(8, 2, 20, 0.9));
-  border: 1px solid rgba(176, 38, 255, 0.12);
-  border-radius: 4px;
-  box-shadow: inset 0 0 40px rgba(176, 38, 255, 0.05);
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-/* Side walls — angled with perspective */
-.hex-wall-left {
-  top: 65px; bottom: 95px;
-  left: 2%; width: 20%;
-  transform: perspective(600px) rotateY(25deg);
-  transform-origin: right center;
-  background: linear-gradient(90deg, rgba(10, 3, 25, 0.95), rgba(15, 5, 35, 0.8));
-  border: 1px solid rgba(176, 38, 255, 0.06);
-  border-radius: 4px;
-  padding: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  opacity: 0.7;
-}
-.hex-wall-right {
-  top: 65px; bottom: 95px;
-  right: 2%; width: 20%;
-  transform: perspective(600px) rotateY(-25deg);
-  transform-origin: left center;
-  background: linear-gradient(-90deg, rgba(10, 3, 25, 0.95), rgba(15, 5, 35, 0.8));
-  border: 1px solid rgba(176, 38, 255, 0.06);
-  border-radius: 4px;
-  padding: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  opacity: 0.7;
-}
-
-/* Wall labels */
-.wall-label {
-  font-family: var(--font-display);
-  font-size: 0.5rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  text-align: center;
-  padding: 0.2rem;
-  border-bottom: 1px solid rgba(176, 38, 255, 0.1);
-  margin-bottom: 0.2rem;
-}
-.wall-label-active {
-  color: var(--purple-neon);
-  text-shadow: 0 0 10px rgba(176, 38, 255, 0.5);
-}
-
-/* Mini shelves inside 3D room */
-.hex-wall-back .shelf-row {
-  margin-bottom: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-.hex-wall-back .shelf-header {
-  display: none;
-}
-.hex-wall-back .book-spines {
-  flex: 1;
-  gap: 2px;
-  padding: 0.25rem 0.2rem;
-  min-height: auto;
-  background: rgba(5, 0, 15, 0.5);
-}
-.hex-wall-back .book-spine {
-  writing-mode: vertical-rl;
-  width: 22px;
-  min-height: auto;
-  max-height: none;
-  flex: 1;
-  padding: 0.25rem 0.15rem;
-  font-size: 0.45rem;
-}
-
-/* Mini spines for side walls */
-.mini-shelf {
-  display: flex;
-  gap: 1px;
-  flex: 1;
-  padding: 0.15rem;
-  background: rgba(5, 0, 15, 0.4);
-  border-radius: 2px;
-}
-.mini-spine {
-  flex: 1;
-  min-height: 30px;
-  border-radius: 1px;
-  cursor: pointer;
-  transition: all var(--transition);
-  text-decoration: none;
-  display: block;
-}
-.mini-spine.noise {
-  background: linear-gradient(180deg, rgba(40, 20, 60, 0.6), rgba(20, 8, 40, 0.8));
-  border: 1px solid rgba(80, 40, 120, 0.1);
-}
-.mini-spine.has-text {
-  background: linear-gradient(180deg, rgba(60, 20, 100, 0.7), rgba(30, 10, 60, 0.9));
-  border: 1px solid rgba(176, 38, 255, 0.2);
-  box-shadow: 0 0 4px rgba(176, 38, 255, 0.15);
-}
-.mini-spine:hover {
-  box-shadow: 0 0 8px rgba(176, 38, 255, 0.5);
-  transform: scale(1.1);
-  z-index: 2;
+/* Direction labels for ⬡ diagonal buttons */
+.hex-nav-nw::before, .hex-nav-ne::before,
+.hex-nav-sw::before, .hex-nav-se::before {
+  content: '⬡';
+  margin-right: 0.2rem;
+  font-size: 0.7rem;
+  opacity: 0.6;
 }
 
 /* Wall Tabs */
@@ -1366,6 +1203,8 @@ main#view {
   .home-title { font-size: clamp(2rem, 10vw, 3.5rem); }
   .intro-quote { padding: 1.5rem; font-size: 0.95rem; }
   .wander { padding: 1rem; }
+  .hex-web-container { height: 400px; }
+  .hex-nav-ring { width: 180px; height: 180px; margin: -30px auto 1rem; }
   .search-view, .page-view, .about, .favorites { padding: 1rem; }
   .book-spines { gap: 2px; }
   .book-spine { width: 24px; min-height: 50px; font-size: 0.5rem; }
@@ -1375,7 +1214,9 @@ main#view {
   .site-header { flex-direction: column; gap: 0.5rem; }
   .top-nav { flex-wrap: wrap; justify-content: center; }
   .wander-header { flex-direction: column; align-items: flex-start; }
-  .wander-nav { width: 100%; justify-content: space-between; }
+  .hex-web-container { height: 320px; }
+  .hex-nav-ring { width: 160px; height: 160px; margin: -25px auto 0.5rem; }
+  .hex-nav-btn { font-size: 0.5rem; padding: 0.2rem 0.4rem; }
   .book-spine { writing-mode: horizontal-tb; width: auto; min-height: auto; padding: 0.3rem 0.5rem; }
   .book-spines { flex-direction: column; }
   .filler-selector { flex-direction: column; align-items: flex-start; }

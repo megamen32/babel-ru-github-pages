@@ -46,6 +46,9 @@
     const view = document.getElementById("view");
     if (!view) return;
 
+    // Cleanup previous 3D scene
+    if (app.hexweb) app.hexweb.destroy();
+
     updateNav(route.name);
 
     try {
@@ -118,7 +121,7 @@
         <a class="cta-card cta-wander" href="#/wander/x/0/y/0">
           <span class="cta-icon">⬡</span>
           <h2>Блуждание</h2>
-          <p>Войди в шестигранный зал. Тяни книги с полок. Блуждай по бесконечности.</p>
+          <p>Паутина шестигранных залов в 3D. Крути, приближай, кликай соседние залы.</p>
         </a>
         <a class="cta-card cta-search" href="#/search">
           <span class="cta-icon">◈</span>
@@ -143,10 +146,23 @@
   }
 
   /* ============================================
-     WANDER VIEW
+     WANDER VIEW — 3D Hexagonal Web
      ============================================ */
 
   let wanderState = { x: 0, y: 0, wall: 1 };
+
+  /* Hex-grid 6-direction navigation (flat-top axial coords)
+     NW=(0,-1)  NE=(+1,-1)
+     W =(-1,0)  E =( +1,0)
+     SW=(-1,+1) SE=( 0,+1)  */
+  const HEX_DIRS = [
+    { key: "nw", label: "⬡ СЗ", dq: 0,  dr: -1 },
+    { key: "ne", label: "⬡ СВ", dq: 1,  dr: -1 },
+    { key: "w",  label: "◄ З",  dq: -1, dr: 0  },
+    { key: "e",  label: "В ►",  dq: 1,  dr: 0  },
+    { key: "sw", label: "⬡ ЮЗ", dq: -1, dr: 1  },
+    { key: "se", label: "⬡ ЮВ", dq: 0,  dr: 1  },
+  ];
 
   function renderWander(route) {
     const parts = route.parts;
@@ -161,22 +177,14 @@
     wanderState = { x, y, wall };
     const hallInfo = lib.xyToHallXY(x, y);
 
-    // Adjacent walls for side panels
-    const leftWall = wall > 1 ? wall - 1 : 4;
-    const rightWall = wall < 4 ? wall + 1 : 1;
+    // Build shelves for current wall
+    const wallShelves = [];
+    for (let s = 1; s <= 5; s++) wallShelves.push(renderWallShelves(x, y, wall, s));
 
-    // Build shelves for back wall (main)
-    const backShelves = [];
-    for (let s = 1; s <= 5; s++) backShelves.push(renderWallShelves(x, y, wall, s));
-
-    // Build mini-shelves for side walls (just 3 visible)
-    const leftShelves = [];
-    for (let s = 1; s <= 3; s++) leftShelves.push(renderMiniShelves(x, y, leftWall, s));
-    const rightShelves = [];
-    for (let s = 1; s <= 3; s++) rightShelves.push(renderMiniShelves(x, y, rightWall, s));
-
-    // Hall hue based on coordinates
-    const hallHue = ((x * 73 + y * 137 + wall * 51) % 360 + 360) % 360;
+    // Hex nav buttons — arranged in a hex pattern
+    const hexNavHTML = HEX_DIRS.map(d =>
+      `<button class="hex-nav-btn hex-nav-${d.key}" data-dq="${d.dq}" data-dr="${d.dr}" title="${d.label}">${d.label}</button>`
+    ).join("");
 
     return `
     <section class="wander fade-in">
@@ -185,55 +193,15 @@
           <h1 class="wander-title">Шестигранный зал</h1>
           <span class="wander-coords">X: ${x} · Y: ${y} · Сектор ${hallInfo.sector} · Зал ${hallInfo.hall}</span>
         </div>
-        <div class="wander-nav">
-          <button class="nav-btn" data-dir="n" title="Север (Y-1)">▲ Север</button>
-          <button class="nav-btn" data-dir="w" title="Запад (X-1)">◄ Запад</button>
-          <button class="nav-btn" data-dir="e" title="Восток (X+1)">Восток ►</button>
-          <button class="nav-btn" data-dir="s" title="Юг (Y+1)">Юг ▼</button>
-        </div>
       </div>
 
-      <!-- 3D Hexagonal Room -->
-      <div class="hex-room" style="--room-hue: ${hallHue};">
-        <!-- Ceiling -->
-        <div class="hex-ceiling">
-          <div class="ceiling-light"></div>
-        </div>
+      <!-- 3D Hexagonal Web -->
+      <div class="hex-web-container" id="hexWebContainer"></div>
 
-        <!-- Left corridor -->
-        <div class="hex-corridor hex-corridor-left">
-          <div class="corridor-depth"></div>
-          <div class="corridor-depth cd-2"></div>
-        </div>
-
-        <!-- Right corridor -->
-        <div class="hex-corridor hex-corridor-right">
-          <div class="corridor-depth"></div>
-          <div class="corridor-depth cd-2"></div>
-        </div>
-
-        <!-- Left wall (angled) -->
-        <div class="hex-wall hex-wall-left">
-          <div class="wall-label">Стена ${leftWall}</div>
-          ${leftShelves.join("")}
-        </div>
-
-        <!-- Back wall (main, flat) -->
-        <div class="hex-wall hex-wall-back">
-          <div class="wall-label wall-label-active">Стена ${wall}</div>
-          ${backShelves.join("")}
-        </div>
-
-        <!-- Right wall (angled) -->
-        <div class="hex-wall hex-wall-right">
-          <div class="wall-label">Стена ${rightWall}</div>
-          ${rightShelves.join("")}
-        </div>
-
-        <!-- Floor -->
-        <div class="hex-floor">
-          <div class="floor-grid"></div>
-        </div>
+      <!-- Hex navigation overlay -->
+      <div class="hex-nav-ring">
+        ${hexNavHTML}
+        <div class="hex-nav-center" title="Вы здесь">⬡</div>
       </div>
 
       <!-- Wall selector tabs -->
@@ -244,9 +212,9 @@
         <button class="wall-tab ${wall === 4 ? 'active' : ''}" data-wall="4">Стена IV</button>
       </div>
 
-      <!-- Full shelf list (below room) -->
+      <!-- Shelf list -->
       <div class="shelves" id="shelvesContainer">
-        ${backShelves.join("")}
+        ${wallShelves.join("")}
       </div>
 
       <div class="wander-actions">
@@ -278,31 +246,30 @@
     </div>`;
   }
 
-  function renderMiniShelves(x, y, wall, shelf) {
-    // Show only first 12 books for side walls (smaller)
-    let spines = "";
-    for (let v = 1; v <= 12; v++) {
-      const spineText = lib.getBookSpine(x, y, wall, shelf, v);
-      const classification = lib.classifySpine(spineText);
-      const cls = classification === "noise" ? "noise" : (classification === "text" ? "has-text" : "");
-      const pageUrl = `#/page/${lib.numberToB64(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, shelf, v, 1)))}`;
-      spines += `<a class="mini-spine ${cls}" href="${pageUrl}" title="Том ${v}"></a>`;
-    }
-    return `<div class="mini-shelf">${spines}</div>`;
-  }
-
   function bindWander(route) {
     const { x, y } = wanderState;
 
-    // Navigation buttons
-    $$(".nav-btn[data-dir]").forEach(btn => {
+    // Initialize 3D hexagonal web
+    const hexContainer = document.getElementById("hexWebContainer");
+    if (hexContainer && app.hexweb) {
+      app.hexweb.init(hexContainer, {
+        onHexClick: (dq, dr) => {
+          // Navigate to clicked adjacent hex
+          const nx = x + dq;
+          const ny = y + dr;
+          location.hash = `#/wander/x/${nx}/y/${ny}`;
+        }
+      });
+      app.hexweb.navigateTo(x, y);
+    }
+
+    // Hex navigation buttons (6-direction)
+    $$(".hex-nav-btn[data-dq]").forEach(btn => {
       btn.addEventListener("click", () => {
-        const dir = btn.dataset.dir;
-        let nx = x, ny = y;
-        if (dir === "n") ny -= 1;
-        if (dir === "s") ny += 1;
-        if (dir === "w") nx -= 1;
-        if (dir === "e") nx += 1;
+        const dq = parseInt(btn.dataset.dq);
+        const dr = parseInt(btn.dataset.dr);
+        const nx = x + dq;
+        const ny = y + dr;
         location.hash = `#/wander/x/${nx}/y/${ny}`;
       });
     });
