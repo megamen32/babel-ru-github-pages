@@ -402,6 +402,35 @@
     const accentGlow = `0 0 20px hsla(${hueBase}, 80%, 65%, 0.35), 0 0 60px hsla(${hueBase}, 80%, 65%, 0.1)`;
     const accentBorder = `hsla(${hueBase}, 80%, 65%, 0.25)`;
 
+    // Page fingerprint — visual hash from first 80 characters
+    const fingerprintColors = [];
+    for (let i = 0; i < 60; i++) {
+      const ch = text.charCodeAt(i) || 0;
+      const h = (ch * 29 + i * 7) % 360;
+      const s = 50 + (ch % 40);
+      const l = 30 + (ch % 30);
+      fingerprintColors.push(`hsl(${h},${s}%,${l}%)`);
+    }
+    const fingerprintHTML = fingerprintColors.map(c => `<span class="fp-cell" style="background:${c}"></span>`).join("");
+
+    // Character statistics
+    let stats = { letters: 0, spaces: 0, digits: 0, punctuation: 0 };
+    for (const ch of text) {
+      if (ch === " ") stats.spaces++;
+      else if (/[а-яё]/i.test(ch)) stats.letters++;
+      else if (/[0-9]/.test(ch)) stats.digits++;
+      else stats.punctuation++;
+    }
+    const total = text.length;
+    const readability = Math.round(stats.letters / total * 100);
+    const densityLabel = readability > 60 ? "Читаемая" : readability > 30 ? "Разреженная" : "Шум";
+
+    // Stats bars
+    const barLetters = Math.round(stats.letters / total * 100);
+    const barSpaces = Math.round(stats.spaces / total * 100);
+    const barDigits = Math.round(stats.digits / total * 100);
+    const barPunct = Math.round(stats.punctuation / total * 100);
+
     // Build breadcrumbs
     const crumbs = [
       { label: "Вавилон", href: "#/" },
@@ -441,12 +470,43 @@
       </div>
 
       <div class="page-header" style="border-color:${accentBorder};">
-        <h2 style="color:${accentColor}; text-shadow:${accentGlow};">Том ${coords.volume} · Лист ${pageNum}</h2>
-        <span style="color:var(--text-dim); font-family:var(--font-mono); font-size:0.8rem;">Полка ${coords.shelf} · Стена ${coords.wall}</span>
+        <div>
+          <h2 style="color:${accentColor}; text-shadow:${accentGlow};">Том ${coords.volume} · Лист ${pageNum}</h2>
+          <span style="color:var(--text-dim); font-family:var(--font-mono); font-size:0.8rem;">Полка ${coords.shelf} · Стена ${coords.wall}</span>
+        </div>
+        <div class="page-density">
+          <span class="density-badge density-${densityLabel === 'Читаемая' ? 'readable' : densityLabel === 'Разреженная' ? 'sparse' : 'noise'}">${densityLabel}</span>
+          <span class="density-pct">${readability}% букв</span>
+        </div>
       </div>
+
+      <div class="page-fingerprint">${fingerprintHTML}</div>
 
       <div class="page-text-box" style="border-color:${accentBorder}; box-shadow:${accentGlow};">
         <div class="page-text">${pageTextHTML}</div>
+      </div>
+
+      <div class="page-stats">
+        <div class="stat-row">
+          <span class="stat-label">Буквы</span>
+          <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${barLetters}%; background:var(--purple-neon);"></div></div>
+          <span class="stat-value">${stats.letters}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Пробелы</span>
+          <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${barSpaces}%; background:var(--cyan-neon);"></div></div>
+          <span class="stat-value">${stats.spaces}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Знаки</span>
+          <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${barPunct}%; background:var(--pink-neon);"></div></div>
+          <span class="stat-value">${stats.punctuation}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Цифры</span>
+          <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${barDigits}%; background:var(--purple-mid);"></div></div>
+          <span class="stat-value">${stats.digits}</span>
+        </div>
       </div>
 
       <div class="page-nav">
