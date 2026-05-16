@@ -100,16 +100,20 @@
       17=Блондинки, 18=Студенческие)
      ═══════════════════════════════════════════════════════════ */
 
-  /* CORS proxy — rzhunemogu.ru doesn't send CORS headers,
-     and GitHub Pages is HTTPS (mixed content blocks HTTP).
-     Use allorigins.win as a free CORS proxy. */
-  const JOKE_API_RAW = 'http://rzhunemogu.ru/Rand.aspx';
-  const JOKE_API = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(JOKE_API_RAW);
+  /* ═══════════════════════════════════════════════════════════
+     MULTI-SOURCE JOKE / QUOTE SYSTEM
+     ═══════════════════════════════════════════════════════════
+     Sources (in priority order):
+     1. rzhunemogu.ru — jokes, anecdotes, aphorisms, stories (18 categories)
+        via api.codetabs.com CORS proxy (allorigins.win is unreliable)
+     2. forismatic.com — wise quotes in Russian (CORS-friendly JSON API)
+     3. Built-in fallback — librarian-themed quips */
+
   let jokesCache = [];
   let jokesFetched = false;
   let jokesFetchPromise = null;
 
-  /* CType descriptions for display */
+  /* CType descriptions for rzhunemogu.ru */
   const CTYPE_LABELS = {
     1: 'Анекдот', 2: 'Стишок', 3: 'История', 4: 'Афоризм',
     5: 'Цитата', 6: 'Тост', 7: 'Анекдот', 8: 'Стишок',
@@ -118,36 +122,82 @@
     16: 'Животные', 17: 'Блондинки', 18: 'Студенческий',
   };
 
+  /* CORS proxies to try in order for rzhunemogu.ru */
+  const CORS_PROXIES = [
+    (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  ];
+
+  /* Fetch a single joke from rzhunemogu.ru via CORS proxy cascade */
+  function fetchRzhunemogu(cType) {
+    const rawUrl = `http://rzhunemogu.ru/Rand.aspx?CType=${cType}`;
+
+    /* Try each proxy in sequence */
+    function tryProxy(proxyIndex) {
+      if (proxyIndex >= CORS_PROXIES.length) return Promise.resolve(null);
+      const proxyUrl = CORS_PROXIES[proxyIndex](rawUrl);
+      return fetch(proxyUrl)
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.text();
+        })
+        .then(text => {
+          /* API returns XML with windows-1251 encoding via proxy.
+             Extract content from <content> tag. */
+          const content = text
+            .replace(/<[^>]+>/g, '')
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+            .replace(/&nbsp;/g, ' ')
+            .trim();
+          if (content.length > 5) {
+            return { text: content, label: CTYPE_LABELS[cType] || 'Юмор' };
+          }
+          return null;
+        })
+        .catch(() => tryProxy(proxyIndex + 1));
+    }
+
+    return tryProxy(0);
+  }
+
+  /* Fetch a wise quote from forismatic.com (CORS-friendly, no proxy needed) */
+  function fetchForismaticQuote() {
+    return fetch('https://api.forismatic.com/api/1.0/?method=getQuote&format=json&lang=ru')
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(data => {
+        const text = (data.quoteText || '').trim();
+        const author = (data.quoteAuthor || '').trim();
+        if (text.length > 5) {
+          return {
+            text: author ? `${text}\n— ${author}` : text,
+            label: 'Мудрость',
+          };
+        }
+        return null;
+      })
+      .catch(() => null);
+  }
+
+  /* Fetch jokes from all sources, collect a diverse set */
   function fetchJokes() {
     if (jokesFetched && jokesCache.length > 0) return Promise.resolve(jokesCache);
     if (jokesFetchPromise) return jokesFetchPromise;
 
-    /* Fetch several jokes with random CType for variety.
-       Each joke has its own CType, so each URL is unique -> needs its own proxy URL. */
-    const fetchCount = 8;
     const promises = [];
-    for (let i = 0; i < fetchCount; i++) {
+
+    /* 4 jokes from rzhunemogu.ru with random CType for variety */
+    for (let i = 0; i < 4; i++) {
       const cType = Math.floor(Math.random() * 18) + 1;
-      const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(`${JOKE_API_RAW}?CType=${cType}`);
-      promises.push(
-        fetch(proxyUrl)
-          .then(r => r.text())
-          .then(text => {
-            /* API returns XML/HTML, extract content between tags */
-            const content = text
-              .replace(/<[^>]+>/g, '')   /* strip any HTML/XML tags */
-              .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-              .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
-              .replace(/&nbsp;/g, ' ')
-              .trim();
-            if (content.length > 5) {
-              return { text: content, label: CTYPE_LABELS[cType] || 'Юмор' };
-            }
-            return null;
-          })
-          .catch(() => null)
-      );
+      promises.push(fetchRzhunemogu(cType));
     }
+
+    /* 2 wise quotes from forismatic */
+    promises.push(fetchForismaticQuote());
+    promises.push(fetchForismaticQuote());
 
     jokesFetchPromise = Promise.all(promises).then(results => {
       const jokes = results.filter(r => r !== null);
@@ -156,6 +206,8 @@
           { text: 'Библиотека бесконечна, а анекдоты всё равно конечны.', label: 'Библиотекарь' },
           { text: 'Вавилон считает. Анекдоты загружаются. Жизнь прекрасна.', label: 'Библиотекарь' },
           { text: 'Каждый анекдот уже существует в библиотеке. И каждый раз — на другой странице.', label: 'Библиотекарь' },
+          { text: 'Книга — это устройство для перелистывания времени. Борхес это знал.', label: 'Библиотекарь' },
+          { text: 'Если бы Борхес мог программировать, он бы написал Вавилон на JavaScript.', label: 'Библиотекарь' },
         ];
       } else {
         jokesCache = jokes;
@@ -184,8 +236,9 @@
       jokeEl = document.createElement('div');
       jokeEl.className = 'msg msg-them babel-joke-msg';
       const joke = jokes[0];
+      const avatar = joke.label === 'Мудрость' ? '🧠' : '😂';
       jokeEl.innerHTML = `
-        <div class="msg-avatar">😂</div>
+        <div class="msg-avatar">${avatar}</div>
         <div class="msg-bubble">
           <div class="msg-name">${escJoke(joke.label || 'Анекдот')} пока ждёшь</div>
           <div class="babel-joke-text">${escJoke(joke.text)}</div>
@@ -198,12 +251,14 @@
         jokeIndex = (jokeIndex + 1) % jokes.length;
         const textEl = jokeEl.querySelector('.babel-joke-text');
         const nameEl = jokeEl.querySelector('.msg-name');
+        const avatarEl = jokeEl.querySelector('.msg-avatar');
         if (textEl) {
           textEl.style.opacity = '0';
           setTimeout(() => {
             const j = jokes[jokeIndex];
             textEl.innerHTML = escJoke(j.text);
             if (nameEl) nameEl.textContent = `${escJoke(j.label || 'Анекдот')} пока ждёшь`;
+            if (avatarEl) avatarEl.textContent = j.label === 'Мудрость' ? '🧠' : '😂';
             textEl.style.opacity = '1';
             container.scrollTop = container.scrollHeight;
           }, 300);
