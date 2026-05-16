@@ -52,7 +52,6 @@
         pageB64 = parts[1];
       }
     }
-    else if (parts[0] === 'atlas') name = 'atlas';
     else if (parts[0] === 'about') name = 'about';
     else if (parts[0] === 'favorites') name = 'favorites';
     return { name, parts, params, pageCoords, pageB64, isOldCoordFormat };
@@ -89,11 +88,6 @@
         case 'home': {
           view.innerHTML = renderer.renderHome();
           keepCleanup(renderer.bindHome ? renderer.bindHome() : null);
-          break;
-        }
-        case 'atlas': {
-          view.innerHTML = themes.renderAtlas();
-          themes.bindAtlas();
           break;
         }
         case 'wander': {
