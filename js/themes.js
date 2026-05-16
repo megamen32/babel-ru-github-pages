@@ -464,19 +464,23 @@
       /* Show book spines as message */
       for (let s = 1; s <= Number(ALG.shelvesPerWall); s++) {
         const spines = [];
-        for (let v = 1; v <= Math.min(Number(ALG.volumesPerShelf), 8); v++) {
+        for (let v = 1; v <= Number(ALG.volumesPerShelf); v++) {
           const spineText = lib.getBookSpine(x, y, wall, s, v);
           const cls = lib.classifySpine(spineText);
-          if (cls === 'text') spines.push(`<a class="msg-book-link" href="${lib.coordsToPageUrl(lib.xyToCoordinates(x, y, wall, s, v, 1))}">📖 Том ${v}: ${u.esc(spineText.slice(0, 30))}</a>`);
-          else if (cls === 'noise') spines.push(`<span class="msg-book-noise">📕 Том ${v}</span>`);
-          else spines.push(`<span class="msg-book-empty">📄 Том ${v}</span>`);
+          const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(x, y, wall, s, v, 1));
+          if (cls === 'text') {
+            spines.push(`<a class="msg-book-link" href="${pageUrl}">📖 Том ${v}: ${u.esc(spineText.slice(0, 30))}</a>`);
+          } else if (cls === 'noise') {
+            spines.push(`<a class="msg-book-link msg-book-noise" href="${pageUrl}">📕 Том ${v}: шум</a>`);
+          } else {
+            spines.push(`<a class="msg-book-link msg-book-empty" href="${pageUrl}">📄 Том ${v}: пусто</a>`);
+          }
         }
-        const more = ALG.volumesPerShelf > 8n ? `<span class="msg-book-more">…и ещё ${Number(ALG.volumesPerShelf) - 8}</span>` : '';
         messages.push({
           type: 'them',
           name: 'Библиотекарь',
           avatar: '📚',
-          text: `<strong>Полка ${s}</strong><br>${spines.join('<br>')}${more}`,
+          text: `<strong>Полка ${s}</strong><br>${spines.join('<br>')}`,
           time: timeStr(),
         });
       }
