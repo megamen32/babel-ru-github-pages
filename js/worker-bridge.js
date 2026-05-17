@@ -148,7 +148,7 @@
   function buildJokes(seedText) {
     const normalizedSeed = normalizeJokeSeed(seedText);
     const rng = app.utils.rngFrom(`joke:${normalizedSeed || 'default'}`);
-    const seedMention = normalizedSeed ? ` Фраза «${normalizedSeed.slice(0, 48)}» уже строит себе адрес.` : '';
+    const seedMention = normalizedSeed ? ` Фраза «${normalizedSeed.slice(0, 120)}» уже строит себе адрес.` : '';
     const jokes = [];
 
     for (let index = 0; index < 4; index += 1) {

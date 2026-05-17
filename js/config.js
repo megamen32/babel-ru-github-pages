@@ -73,7 +73,7 @@
       hallsPerSector: 20n,
     },
     SEARCH_VARIANTS_DEFAULT: 6,
-    SEARCH_VARIANTS_MAX: 18,
+    SEARCH_VARIANTS_MAX: 100,
     QUOTE: {
       text: "Вселенная, которую другие называют Библиотекой...",
       author: "Хорхе Луис Борхес",

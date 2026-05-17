@@ -401,7 +401,7 @@
     /* log10(absZ) через длину десятичного представления */
     const s = absZ.toString();
     const log10 = s.length - 1 + (s.length > 1 ? (Number(s[0] + '.' + s.slice(1, 4)) - Number(s[0])) : 0);
-    return Math.min(1.0, log10 * 0.1);
+    return log10 * 0.1;
   }
 
   /* ═══════════════════════════════════════════════════════════
@@ -424,27 +424,21 @@
     if (arr.length === 0) return '';
     if (arr.length === 1) return arr[0];
 
-    /* Top-K: при низкой температуре ограничиваем выбор */
-    let k = arr.length;
-    if (temperature < 0.2) k = Math.min(arr.length, Math.max(50, Math.floor(arr.length * 0.1)));
-    else if (temperature < 0.5) k = Math.min(arr.length, Math.max(200, Math.floor(arr.length * 0.4)));
-    const subset = arr.slice(0, k);
-
-    /* Вычисляем веса */
-    const weights = new Float64Array(subset.length);
+    /* Вычисляем веса — Zipf распределение работает при любой температуре */
+    const weights = new Float64Array(arr.length);
     let total = 0;
-    for (let i = 0; i < subset.length; i++) {
-      weights[i] = zipfWeight(i, subset.length, temperature);
+    for (let i = 0; i < arr.length; i++) {
+      weights[i] = zipfWeight(i, arr.length, temperature);
       total += weights[i];
     }
 
     /* Roulette selection */
     let roll = prng() * total;
-    for (let i = 0; i < subset.length; i++) {
+    for (let i = 0; i < arr.length; i++) {
       roll -= weights[i];
-      if (roll <= 0) return subset[i];
+      if (roll <= 0) return arr[i];
     }
-    return subset[subset.length - 1];
+    return arr[arr.length - 1];
   }
 
   /* Выбор из малого массива (пунктуация, эмодзи) — равномерно с небольшим перекосом */
@@ -613,11 +607,11 @@
     const forcedTokens = normalized.split(/(\s+)/).filter(t => t.length > 0);
 
     /* Выбираем случайные координаты зала */
-    const x = Math.floor(Math.random() * 2000) - 1000;
-    const y = Math.floor(Math.random() * 2000) - 1000;
+    const x = Math.floor(Math.random() * 200000) - 100000;
+    const y = Math.floor(Math.random() * 200000) - 100000;
 
     /* Малый z → низкая температура → читаемый контекст */
-    const z = 1n + BigInt(Math.floor(Math.random() * 1000));
+    const z = 1n + BigInt(Math.floor(Math.random() * 100000));
 
     /* Генерируем страницу с принудительными токенами */
     const text = decodePage(x, y, z, forcedTokens);
@@ -643,11 +637,12 @@
 
   function classifyPageByTemp(z) {
     const temp = computeTemperature(z);
-    if (temp < 0.15) return { kind: 'text', label: 'Читаемый текст', score: 1 - temp, icon: '📖' };
+    if (temp < 0.15) return { kind: 'text', label: 'Читаемый текст', score: 1 - Math.min(temp, 1), icon: '📖' };
     if (temp < 0.35) return { kind: 'dialogue', label: 'Разговорный', score: 0.8, icon: '💬' };
     if (temp < 0.55) return { kind: 'sparse', label: 'Разреженный', score: 0.5, icon: '🌫️' };
     if (temp < 0.75) return { kind: 'noise', label: 'Шум', score: 0.3, icon: '🔇' };
-    return { kind: 'raw', label: 'Хаос', score: 0.1, icon: '💀' };
+    if (temp < 1.5) return { kind: 'raw', label: 'Хаос', score: 0.1, icon: '💀' };
+    return { kind: 'raw', label: 'Глубокий хаос', score: 0, icon: '🕳️' };
   }
 
   /* ═══════════════════════════════════════════════════════════

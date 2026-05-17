@@ -212,9 +212,9 @@
     },
 
     randomPageCoords() {
-      const x = BigInt(Math.floor(Math.random() * 2000) - 1000);
-      const y = BigInt(Math.floor(Math.random() * 2000) - 1000);
-      const z = 1n + BigInt(Math.floor(Math.random() * 10000));
+      const x = BigInt(Math.floor(Math.random() * 200000) - 100000);
+      const y = BigInt(Math.floor(Math.random() * 200000) - 100000);
+      const z = 1n + BigInt(Math.floor(Math.random() * 1000000));
       return { x, y, z, sector: 1n, hall: 1n, wall: 1n, shelf: 1n, volume: 1n, page: z };
     },
 
@@ -353,17 +353,17 @@
       return indicesToNumber(createNoiseFillerIndices(`${Date.now()}:${Math.random()}`, ALG.pageLength));
     },
     randomHallXY() {
-      return { x: Math.floor(Math.random() * 2000) - 1000, y: Math.floor(Math.random() * 2000) - 1000 };
+      return { x: Math.floor(Math.random() * 200000) - 100000, y: Math.floor(Math.random() * 200000) - 100000 };
     },
 
     findRandomHallOfGenre(kind, maxTries) {
-      const limit = maxTries || 200;
+      const limit = maxTries || 500;
       for (let i = 0; i < limit; i++) {
-        const x = Math.floor(Math.random() * 2000) - 1000;
-        const y = Math.floor(Math.random() * 2000) - 1000;
+        const x = Math.floor(Math.random() * 200000) - 100000;
+        const y = Math.floor(Math.random() * 200000) - 100000;
         if (classifyRegion(x, y).kind === kind) return { x, y };
       }
-      return { x: Math.floor(Math.random() * 2000) - 1000, y: Math.floor(Math.random() * 2000) - 1000 };
+      return { x: Math.floor(Math.random() * 200000) - 100000, y: Math.floor(Math.random() * 200000) - 100000 };
     },
 
     /* Генерация обитаемой страницы */
@@ -384,9 +384,9 @@
       /* Legacy fallback */
       const result = _tokens.findPhraseInTokenSpace(phrase);
       if (!result) {
-        const x = BigInt(Math.floor(rng() * 2000) - 1000);
-        const y = BigInt(Math.floor(rng() * 2000) - 1000);
-        const z = 1n + BigInt(Math.floor(rng() * 1000));
+        const x = BigInt(Math.floor(rng() * 200000) - 100000);
+        const y = BigInt(Math.floor(rng() * 200000) - 100000);
+        const z = 1n + BigInt(Math.floor(rng() * 100000));
         const text = decodePageByCoords(x, y, z);
         const coords = xyToCoordinates(x, y, z);
         return { mode: genre, number: 0n, coordinates: coords, xy: { x, y }, phrase, position: 0, text, variant: 1, range: { start: 0, length: 0 } };
@@ -410,7 +410,7 @@
 
     /* Scan forward */
     scanNextInhabitedPage(startNumber, genre, maxScan) {
-      const limit = maxScan || 50;
+      const limit = maxScan || 200;
       const startCoords = rawIndexToCoordinates(app.library.unpermuteIndex(startNumber));
 
       for (let i = 1; i <= limit; i++) {
@@ -442,7 +442,7 @@
       const y = typeof coords.y === 'bigint' ? coords.y : BigInt(coords.y || 0);
       let z = typeof coords.z === 'bigint' ? coords.z : BigInt(coords.z || 1);
 
-      for (let i = 1; i <= 50; i++) {
+      for (let i = 1; i <= 200; i++) {
         const newZ = z + BigInt(i);
         const text = decodePageByCoords(x, y, newZ);
 
@@ -482,7 +482,7 @@
     },
 
     scanInhabitedNearby(x, y, maxDist) {
-      const limit = maxDist || 2;
+      const limit = maxDist || 6;
       const results = [];
       for (let dist = 1; dist <= limit; dist++) {
         for (let dq = -dist; dq <= dist; dq++) {

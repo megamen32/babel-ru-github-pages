@@ -80,7 +80,7 @@ const ALG = {
 };
 
 const SEARCH_VARIANTS_DEFAULT = 6;
-const SEARCH_VARIANTS_MAX = 18;
+const SEARCH_VARIANTS_MAX = 100;
 
 /* ═══════════════════════════════════════════════════════════
    CORE BigInt ENGINE
