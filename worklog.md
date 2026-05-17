@@ -106,27 +106,25 @@ Stage Summary:
 - Mode persists in localStorage, switchable via theme picker dropdown
 - All 5 themes now consistently use the same decode engine (prefix codec by default)
 - Commit: c6ea0f9
+
 ---
-Task ID: 3
+Task ID: 1
 Agent: main
-Task: Fix 5 critical bugs in v8.0 — search variants, temperature, RAW_CHAR, phrase reliability, inhabited filtering
+Task: Fix buildTokenTable undefined error, verify UI changes, push and update manifest
 
 Work Log:
-- Identified 5 critical bugs through code review of lib-address-codec.js, lib-api.js, lib-tokens.js, worker.js, worker-bridge.js
-- BUG 1 (CRITICAL): searchPhraseToAddress() was fully deterministic — all 100 variants returned identical addresses. Fixed by adding `variant` parameter that modifies the hash seed and context generation. Different variants now produce different surrounding text → different addresses.
-- BUG 2 (CRITICAL): computeTemperature() was inconsistent between main thread (log10*0.1, uncapped) and worker (Math.min(1.0, 0.1+logZ*0.09), capped). Unified to log10*0.1 (uncapped) in both.
-- BUG 3 (CRITICAL): RAW_CHAR bit width mismatch — lib-address-codec.js used 21-bit, worker.js used 17-bit. This caused garbled decoding when RAW_CHAR tokens were present. Unified to 21-bit (full Unicode 0..0x10FFFF).
-- BUG 4 (IMPORTANT): findPhraseInTokenSpace could return phrasePos=0 when phrase wasn't found. Added retry logic (up to 5 attempts) and `phraseFound` field for honest signaling.
-- BUG 5 (IMPROVEMENT): findNextInhabitedFromCoords could return noisy 'sparse' pages. Added score threshold (sparse with score < 0.3 is skipped). Added 'Глубокий хаос' classification (humanRatio < 0.1).
-- Added 5 new unit tests (tests 10-14): search variant uniqueness, temperature compatibility, phraseFound correctness, createSearchVariants uniqueness, deep chaos classification
-- Fixed test 1 (roundtrip test was comparing prefix-decoded with token-decoded — two different decoders)
-- All 68/68 tests pass
+- Diagnosed root cause: lib-api.js line 52 overwrites app.library with new object, losing private namespaces (_prefix, _tokenTable, _addressCodec, _coordPerm)
+- Functions in lib-token-table.js and lib-address-codec.js reference app.library._prefix and app.library._tokenTable at runtime, causing "Cannot read properties of undefined" errors
+- Fixed lib-api.js: added _prefix capture at top + namespace restoration after app.library reassignment
+- Fixed lib-address-codec.js: replaced app.library._tokenTable and app.library._prefix runtime lookups with captured closure variables
+- Verified all UI changes from previous session are in place: toggle in top nav, Поиск nav item, ★ icon for favorites+map
+- Verified maps are consistent: drawJourneyMap used for all travel maps, drawWanderMap only for Atlas
+- Verified large number formatting: fmtBigNum uses Unicode superscripts (1.234×10⁶)
+- Updated SW cache version: babel-v12.0 → babel-v13.0-fix-buildTokenTable
+- Resolved rebase conflicts and pushed to origin/main
 
 Stage Summary:
-- Search now produces genuinely different addresses per variant (6/6 unique)
-- Temperature is consistent between main thread and worker (delta=0.0000)
-- RAW_CHAR encode/decode unified to 21-bit (no more garbled output)
-- Legacy search retries until phrase is found (phraseFound field)
-- 'Next inhabited' page filter improved (no noisy sparse pages)
-- 'Глубокий хаос' classification added for very low humanRatio
-- 5 new + 1 fixed test = 68/68 passing
+- Critical bug fix: buildTokenTable undefined error resolved by preserving private namespaces
+- All previous session UI changes confirmed working
+- SW cache bumped to v13.0 for deployment
+- Pushed to GitHub: 56c78d6
