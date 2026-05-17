@@ -843,11 +843,13 @@
     createLogFillerIndices,
     createHumanFillerIndices,
 
-    /* Coordinate-based page URL: human-readable parts first, big seed at end in base64url
-       New format: #/page/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url}
-       Old format: #/page/s/{sector_decimal}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
-       seed = sector - 1 (0-indexed), encoded as base64url for compactness.
-       Decimal sector ≈ 9860 digits; base64url seed ≈ 5458 chars — 45% shorter. */
+    /* Coordinate-based page URL: x,y coordinates first (small integers),
+       then wall/shelf/volume/page.
+       New format: #/page/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
+       Old format: #/page/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url}
+       Ancient format: #/page/s/{sector_decimal}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
+       x,y are derived from sector+hall via hallToXY() — bijective mapping.
+       Sector is no longer needed in the URL since x,y fully determine it. */
     coordsToPageUrl(coords, params) {
       const c = {
         sector: BigInt(coords.sector || 1),
@@ -857,9 +859,9 @@
         volume: BigInt(coords.volume || 1),
         page: BigInt(coords.page || 1),
       };
-      const seed = c.sector - 1n; // 0-indexed
-      const seedB64 = app.library.numberToB64(seed);
-      const base = `#/page/h/${c.hall}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}/s/${seedB64}`;
+      // Derive x,y from sector+hall
+      const xy = hallToXY(c.sector, c.hall);
+      const base = `#/page/x/${xy.x}/y/${xy.y}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}`;
       if (params) {
         const qs = new URLSearchParams(params).toString();
         return `${base}?${qs}`;
@@ -901,16 +903,37 @@
       return "noise";
     },
 
-    /* Encoding helpers */
+    /* Custom base62 encoding — URL-safe, no atob/btoa limitations */
     bytesToBase64Url(bytes) {
-      let binary = "";
-      for (const byte of bytes) binary += String.fromCharCode(byte);
-      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      let num = 0n;
+      for (const byte of bytes) num = (num << 8n) | BigInt(byte);
+      if (num === 0n) return '0';
+      let result = '';
+      const BASE62_CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const base = 62n;
+      while (num > 0n) {
+        result = BASE62_CHARS[Number(num % base)] + result;
+        num /= base;
+      }
+      return result;
     },
     base64UrlToBytes(value) {
-      const base = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
-      const padded = base + "=".repeat((4 - base.length % 4) % 4);
-      return Uint8Array.from([...atob(padded)].map(c => c.charCodeAt(0)));
+      const base = 62n;
+      let num = 0n;
+      for (const char of String(value || '')) {
+        const code = char.charCodeAt(0);
+        let digit;
+        if (code >= 48 && code <= 57) digit = code - 48;        // 0-9
+        else if (code >= 97 && code <= 122) digit = code - 87;   // a-z
+        else if (code >= 65 && code <= 90) digit = code - 29;    // A-Z
+        else continue; // skip invalid chars
+        num = num * base + BigInt(digit);
+      }
+      // Convert BigInt to bytes
+      if (num === 0n) return new Uint8Array([0]);
+      const bytes = [];
+      while (num > 0n) { bytes.push(Number(num & 255n)); num >>= 8n; }
+      return Uint8Array.from(bytes.reverse());
     },
     bigIntToBytes(number) {
       let value = BigInt(number);
@@ -1133,7 +1156,30 @@
       if (value.includes("#/page/")) {
         const pagePart = value.split("#/page/").pop().split("?")[0];
         const parts = pagePart.split("/").filter(Boolean);
-        /* New coordinate format: h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url} */
+
+        /* NEW format: x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
+        if (parts[0] === 'x' && parts.length >= 4) {
+          const parsed = {};
+          for (let i = 0; i < parts.length - 1; i += 2) {
+            switch (parts[i]) {
+              case 'x': parsed.x = parts[i + 1]; break;
+              case 'y': parsed.y = parts[i + 1]; break;
+              case 'w': parsed.wall = parts[i + 1]; break;
+              case 'sh': parsed.shelf = parts[i + 1]; break;
+              case 'v': parsed.volume = parts[i + 1]; break;
+              case 'p': parsed.page = parts[i + 1]; break;
+            }
+          }
+          if (parsed.x != null && parsed.y != null) {
+            try {
+              const coords = xyToCoordinates(parsed.x, parsed.y, parsed.wall, parsed.shelf, parsed.volume, parsed.page);
+              return app.library.coordinatesToNumber(coords);
+            } catch { /* fall through */ }
+          }
+        }
+
+        /* OLD format: h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url}
+           ANCIENT format: s/{sector_decimal}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
         const coords = {};
         for (let i = 0; i < parts.length - 1; i += 2) {
           switch (parts[i]) {
@@ -1146,12 +1192,9 @@
           }
         }
         if (coords.sector || coords.hall) {
-          /* If sector is present, decode it — could be base64url (new) or decimal (old) */
+          /* If sector is present, decode it — could be base64url (old) or decimal (ancient) */
           if (coords.sector) {
             const sectorStr = String(coords.sector);
-            /* Old format: sector starts first and is decimal */
-            /* New format: sector is last and is base64url */
-            /* Heuristic: if sector contains only digits, treat as decimal; otherwise base64url */
             if (/^\d+$/.test(sectorStr)) {
               coords.sector = BigInt(sectorStr);
             } else {

@@ -621,17 +621,39 @@ function getBookSpines(x, y, wall) {
   return results;
 }
 
-/* ---- Encoding helpers ---- */
+/* ---- Encoding helpers (custom base62 — no atob/btoa) ---- */
+const BASE62_CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
 function bytesToBase64Url(bytes) {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  let num = 0n;
+  for (const byte of bytes) num = (num << 8n) | BigInt(byte);
+  if (num === 0n) return '0';
+  let result = '';
+  const base = 62n;
+  while (num > 0n) {
+    result = BASE62_CHARS[Number(num % base)] + result;
+    num /= base;
+  }
+  return result;
 }
 
 function base64UrlToBytes(value) {
-  const base = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base + "=".repeat((4 - base.length % 4) % 4);
-  return Uint8Array.from([...atob(padded)].map(c => c.charCodeAt(0)));
+  const base = 62n;
+  let num = 0n;
+  for (const char of String(value || '')) {
+    const code = char.charCodeAt(0);
+    let digit;
+    if (code >= 48 && code <= 57) digit = code - 48;        // 0-9
+    else if (code >= 97 && code <= 122) digit = code - 87;   // a-z
+    else if (code >= 65 && code <= 90) digit = code - 29;    // A-Z
+    else continue; // skip invalid chars
+    num = num * base + BigInt(digit);
+  }
+  // Convert BigInt to bytes
+  if (num === 0n) return new Uint8Array([0]);
+  const bytes = [];
+  while (num > 0n) { bytes.push(Number(num & 255n)); num >>= 8n; }
+  return Uint8Array.from(bytes.reverse());
 }
 
 function bigIntToBytes(number) {

@@ -23,39 +23,56 @@
     const params = new URLSearchParams(query || '');
     let name = 'home';
     let pageCoords = null;
+    let pageXY = null; // { x, y } for new x,y-based URLs
     let pageB64 = null;
-    let isOldCoordFormat = false; // for redirect to new format
+    let isOldCoordFormat = false; // for redirect to new format (h/ or s/ based)
     if (parts[0] === 'wander') name = 'wander';
     else if (parts[0] === 'atlas') name = 'atlas';
     else if (parts[0] === 'genre') name = 'genre';
     else if (parts[0] === 'search') name = 'search';
     else if (parts[0] === 'page') {
       name = 'page';
-      /* Detect coordinate format: any of the known keys (s, h, w, sh, v, p) */
-      const coordKeys = new Set(['s', 'h', 'w', 'sh', 'v', 'p']);
-      if (parts.length >= 3 && coordKeys.has(parts[1])) {
-        /* Coordinate format (old: s first with decimal, new: h/w/sh/v/p first, s last with base64url) */
-        pageCoords = {};
-        isOldCoordFormat = parts[1] === 's'; // old format starts with /s/{decimal_sector}/...
+      /* NEW format: #/page/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
+      if (parts[1] === 'x') {
+        pageXY = {};
         for (let i = 1; i < parts.length - 1; i += 2) {
-          if (coordKeys.has(parts[i])) {
-            switch (parts[i]) {
-              case 's': pageCoords.sector = parts[i + 1]; break;
-              case 'h': pageCoords.hall = parts[i + 1]; break;
-              case 'w': pageCoords.wall = parts[i + 1]; break;
-              case 'sh': pageCoords.shelf = parts[i + 1]; break;
-              case 'v': pageCoords.volume = parts[i + 1]; break;
-              case 'p': pageCoords.page = parts[i + 1]; break;
-            }
+          switch (parts[i]) {
+            case 'x': pageXY.x = parts[i + 1]; break;
+            case 'y': pageXY.y = parts[i + 1]; break;
+            case 'w': pageXY.wall = parts[i + 1]; break;
+            case 'sh': pageXY.shelf = parts[i + 1]; break;
+            case 'v': pageXY.volume = parts[i + 1]; break;
+            case 'p': pageXY.page = parts[i + 1]; break;
           }
         }
-      } else if (parts[1] && parts[1] !== 'random') {
-        pageB64 = parts[1];
+      }
+      /* OLD format: #/page/h/{hall}/w/.../s/{seed_b64url}
+         ANCIENT format: #/page/s/{sector_decimal}/h/{hall}/... */
+      else {
+        const coordKeys = new Set(['s', 'h', 'w', 'sh', 'v', 'p']);
+        if (parts.length >= 3 && coordKeys.has(parts[1])) {
+          pageCoords = {};
+          isOldCoordFormat = true; // both old and ancient need redirect
+          for (let i = 1; i < parts.length - 1; i += 2) {
+            if (coordKeys.has(parts[i])) {
+              switch (parts[i]) {
+                case 's': pageCoords.sector = parts[i + 1]; break;
+                case 'h': pageCoords.hall = parts[i + 1]; break;
+                case 'w': pageCoords.wall = parts[i + 1]; break;
+                case 'sh': pageCoords.shelf = parts[i + 1]; break;
+                case 'v': pageCoords.volume = parts[i + 1]; break;
+                case 'p': pageCoords.page = parts[i + 1]; break;
+              }
+            }
+          }
+        } else if (parts[1] && parts[1] !== 'random') {
+          pageB64 = parts[1];
+        }
       }
     }
     else if (parts[0] === 'about') name = 'about';
     else if (parts[0] === 'favorites') name = 'favorites';
-    return { name, parts, params, pageCoords, pageB64, isOldCoordFormat };
+    return { name, parts, params, pageCoords, pageXY, pageB64, isOldCoordFormat };
   }
 
   function navigate() {
@@ -115,27 +132,28 @@
             return;
           }
 
-          /* Resolve page number from either coordinate URL or legacy base64 */
+          /* Resolve page number from URL */
           try {
-            if (route.pageCoords) {
-              /* Decode sector: old format = decimal, new format = base64url */
+            if (route.pageXY) {
+              /* NEW format: x,y based — compute coords from x,y + wall/shelf/volume/page */
+              const xy = route.pageXY;
+              const coords = lib.xyToCoordinates(xy.x, xy.y, xy.wall, xy.shelf, xy.volume, xy.page);
+              route.pageNumber = lib.coordinatesToNumber(coords);
+            } else if (route.pageCoords) {
+              /* OLD/ANCIENT format: h/ or s/ based — decode sector, compute, then redirect */
               if (route.pageCoords.sector) {
                 const sectorStr = String(route.pageCoords.sector);
-                if (/^\d+$/.test(sectorStr) && route.isOldCoordFormat) {
-                  /* Old format: sector is decimal number */
+                if (/^\d+$/.test(sectorStr)) {
+                  /* Ancient format: sector is decimal number */
                   route.pageCoords.sector = BigInt(sectorStr);
-                } else if (/^\d+$/.test(sectorStr) && !route.isOldCoordFormat) {
-                  /* New format but pure-digit sector — treat as base64url */
-                  try { route.pageCoords.sector = lib.b64ToNumber(sectorStr) + 1n; }
-                  catch { route.pageCoords.sector = BigInt(sectorStr); }
                 } else {
-                  /* New format: sector is base64url-encoded seed */
+                  /* Old format: sector is base62-encoded seed */
                   route.pageCoords.sector = lib.b64ToNumber(sectorStr) + 1n;
                 }
               }
               route.pageNumber = lib.coordinatesToNumber(route.pageCoords);
 
-              /* Old coordinate format → redirect to new format */
+              /* Old/ancient coordinate format → redirect to new x,y format */
               if (route.isOldCoordFormat) {
                 const coords = lib.numberToCoordinates(route.pageNumber);
                 const hl = route.params.get('hl');
@@ -144,7 +162,7 @@
                 return;
               }
             } else if (route.pageB64) {
-              /* Legacy raw base64 page number — resolve and redirect to coordinate URL */
+              /* Legacy raw base64 page number — resolve and redirect to x,y-based URL */
               const number = lib.b64ToNumber(route.pageB64);
               const coords = lib.numberToCoordinates(number);
               const hl = route.params.get('hl');
