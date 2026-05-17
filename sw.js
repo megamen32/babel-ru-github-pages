@@ -3,7 +3,7 @@
    Caches all assets on first install, serves from cache.
    ═══════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'babel-v10.0-token-decoder';
+const CACHE_NAME = 'babel-v11.0-feistel-prefix-temp';
 
 const ASSETS = [
   './',
@@ -12,10 +12,15 @@ const ASSETS = [
   './js/config.js',
   './js/utils.js',
   './js/lib-tokens.js',
+  './js/lib-token-table.js',
+  './js/lib-prefix-codec.js',
+  './js/lib-address-codec.js',
+  './js/lib-coordinate-permutation.js',
   './js/lib-core.js',
   './js/lib-fillers.js',
   './js/lib-classifier.js',
   './js/lib-api.js',
+  './data/tokens.ru-en.v2.json',
   './js/storage.js',
   './js/worker-bridge.js',
   './js/theme-helpers.js',

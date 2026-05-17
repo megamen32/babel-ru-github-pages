@@ -74,6 +74,25 @@
     /* ─── Флаг архитектуры ─── */
     USE_PREFIX_CODEC,
 
+    /* ─── Загрузка словаря ─── */
+    async loadTokenDictionary() {
+      const tt = app.library._tokenTable;
+      const result = await tt.loadDictionary();
+      if (result) {
+        /* Сбрасываем кэш таблицы при загрузке нового словаря */
+        console.log('[babel] Token dictionary loaded, rebuilding table...');
+      }
+      return result;
+    },
+    isTokenDictionaryLoaded() {
+      return app.library._tokenTable.isDictionaryLoaded();
+    },
+
+    /* ─── Температурная коррекция ─── */
+    applyTemperature(weights, temp) {
+      return app.library._tokenTable.applyTemperature(weights, temp);
+    },
+
     /* ═══════════════════════════════════════════════════════════
        ПРЕФИКСНЫЙ КОДЕК — новые API
        ═══════════════════════════════════════════════════════════ */
@@ -148,10 +167,18 @@
     /* ─── Температура и классификация ─── */
 
     computeTemperature(z) {
-      return _tokens.computeTemperature(z);
+      /* Используем новый температурный слой из _tokenTable */
+      const tt = app.library._tokenTable;
+      return tt.computeTemperature(BigInt(z));
     },
     classifyPageByTemp(z) {
-      return _tokens.classifyPageByTemp(z);
+      /* Legacy: классификация по z через температуру */
+      const temp = app.library.computeTemperature(z);
+      if (temp < 0.2) return { kind: 'text', label: 'Читаемый текст', icon: '📖' };
+      if (temp < 0.4) return { kind: 'dialogue', label: 'Разговорный', icon: '💬' };
+      if (temp < 0.6) return { kind: 'sparse', label: 'Разреженный', icon: '🌫️' };
+      if (temp < 0.8) return { kind: 'noise', label: 'Шум', icon: '🔇' };
+      return { kind: 'raw', label: 'Хаос', icon: '💀' };
     },
 
     /* ─── Обитаемый слой — публичные API ─── */

@@ -24,19 +24,68 @@
 
      Ключевое свойство: частые токены имеют короткие коды,
      поэтому страницы с человеческим текстом кодируются
-     в меньшие адреса. Это и есть «гравитация языка». */
+     в меньшие адреса. Это и есть «гравитация языка».
+
+     ТЕМПЕРАТУРНЫЙ СЛОЙ:
+     decodeAddressToPage(address, totalBits, temperature)
+       temperature = 1.0  → стандартные веса (по умолчанию)
+       temperature < 1.0  → сглаживание весов → больше шум
+       temperature > 1.0  → обострение → чаще частые токены
+
+     Энкодинг всегда использует temperature=1.0 для обратимости. */
 
   const PAGE_LEN = 4096;
+
+  /* ═══════════════════════════════════════════════════════════
+     ТЕМПЕРАТУРНО-ЗАВИСИМЫЕ ДЕКОДЕРЫ
+     ═══════════════════════════════════════════════════════════
+     При temperature ≠ 1.0 пересчитываем Хаффман-коды для
+     переходов конечного автомата (Level 1).
+     Level 2 (токены внутри типа) не меняется —
+     язык остаётся языком, меняется лишь «грамматика». */
+
+  const _tempDecoderCache = new Map();
+
+  function buildTemperatureStateDecoders(temperature) {
+    if (temperature === 1.0) return null; // используем стандартные
+
+    const cacheKey = temperature.toFixed(4);
+    if (_tempDecoderCache.has(cacheKey)) return _tempDecoderCache.get(cacheKey);
+
+    const tt = _tokenTable;
+    const stateDecoders = new Array(tt.STATE_COUNT);
+
+    for (let state = 0; state < tt.STATE_COUNT; state++) {
+      const trans = tt.STATE_TRANSITIONS[state];
+      const weights = trans.map(t => t.w);
+      const adjusted = tt.applyTemperature(weights, temperature);
+      stateDecoders[state] = _prefix.buildDecoder(adjusted);
+    }
+
+    _tempDecoderCache.set(cacheKey, stateDecoders);
+
+    /* Ограничиваем размер кэша */
+    if (_tempDecoderCache.size > 32) {
+      const firstKey = _tempDecoderCache.keys().next().value;
+      _tempDecoderCache.delete(firstKey);
+    }
+
+    return stateDecoders;
+  }
 
   /* ═══════════════════════════════════════════════════════════
      ДЕКОДИРОВАНИЕ: адрес → страница
      ═══════════════════════════════════════════════════════════ */
 
-  function decodeAddressToPage(address, totalBits) {
+  function decodeAddressToPage(address, totalBits, temperature) {
     const tt = _tokenTable;
     const table = tt.buildTokenTable();
-    const { typeDecoders, stateDecoders, STATE_TRANSITIONS, allTokens, typeOffsets } = table;
+    const { typeDecoders, stateDecoders: baseStateDecoders, STATE_TRANSITIONS, allTokens, typeOffsets } = table;
     const T = tt.T;
+
+    /* Температурные декодеры для Level 1 (или стандартные при temp=1.0) */
+    const temp = (typeof temperature === 'number' && temperature > 0) ? temperature : 1.0;
+    const stateDecoders = (temp === 1.0) ? baseStateDecoders : (buildTemperatureStateDecoders(temp) || baseStateDecoders);
 
     const reader = _prefix.createBitReader(address, totalBits);
     const readBit = () => reader.readBit();
@@ -110,7 +159,8 @@
      КОДИРОВАНИЕ: текст → адрес
      ═══════════════════════════════════════════════════════════
      Это обратная операция: текст → токены → префиксные коды → биты → BigInt.
-     Позволяет найти «честный» адрес для любой фразы. */
+     Позволяет найти «честный» адрес для любой фразы.
+     Всегда использует temperature=1.0 (базовые веса) для обратимости. */
 
   function encodePageToAddress(text) {
     const tt = _tokenTable;
@@ -359,6 +409,7 @@
     encodePageToAddress,
     searchPhraseToAddress,
     classifyDecodedPage,
+    buildTemperatureStateDecoders,
     PAGE_LEN,
   };
 })();

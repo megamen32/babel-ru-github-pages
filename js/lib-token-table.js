@@ -23,7 +23,10 @@
        9: RAW_CHAR    — fallback: любой символ через кодовую точку
 
      Ключевое свойство: частые токены → короткие Хаффман-коды.
-     Пространство искривлено: язык «гравитирует» к началу координат. */
+     Пространство искривлено: язык «гравитирует» к началу координат.
+
+     v2: загрузка словаря из внешнего JSON, исправленный токенайзер,
+         уменьшенный вес RAW_CHAR, температурная коррекция весов. */
 
   /* ─── Типы токенов ─── */
   const T = {
@@ -132,13 +135,13 @@
     ],
   ];
 
-  /* ─── Пунктуация ─── */
+  /* ─── Пунктуация (fallback inline) ─── */
   const PUNCT_TOKENS = [
     ',', '!', '?', ';', ':', '—', '…', '«', '»',
     '(', ')', '#', '@', '-', '/', '*', '=', '+',
   ];
 
-  /* ─── Эмодзи ─── */
+  /* ─── Эмодзи (fallback inline) ─── */
   const EMOJI_TOKENS = [
     '🔥','⭐','💯','❌','✅','🎉','💀','👻','🧠','❤',
     '👍','👎','👋','💪','🙏','😂','😭','😤','🥺','🤔',
@@ -150,7 +153,7 @@
     '🐔','🐧','🐦','🦅','🦉','🐺','🐴','🦄','🐝','🐛',
   ];
 
-  /* ─── Русские фразы ─── */
+  /* ─── Русские фразы (fallback inline) ─── */
   const PHRASE_RU_TOKENS = [
     'я тебя','в том числе','с одной стороны','в общем','в конце концов',
     'в любом случае','по крайней мере','на самом деле','в первую очередь',
@@ -192,7 +195,7 @@
     'очень важно','очень интересно',
   ];
 
-  /* ─── Английские фразы ─── */
+  /* ─── Английские фразы (fallback inline) ─── */
   const PHRASE_EN_TOKENS = [
     'i love you','i want to','i need to','i have to','i am going to',
     'i would like','i think that','i know that','i believe that',
@@ -212,7 +215,7 @@
     'why do you think','why is it so','what does it mean',
   ];
 
-  /* ─── Английские слова (частотные ~500) ─── */
+  /* ─── Английские слова (fallback inline, ~500) ─── */
   const WORD_EN_TOKENS = [
     'the','be','to','of','and','a','in','that','have','i','it','for','not',
     'on','with','he','as','you','do','at','this','but','his','by','from',
@@ -337,6 +340,93 @@
     'youth','zone',
   ];
 
+  /* ═══════════════════════════════════════════════════════════
+     ЗАГРУЗКА ВНЕШНЕГО СЛОВАРЯ
+     ═══════════════════════════════════════════════════════════ */
+
+  let _loadedDictionary = null;
+
+  /* Маппинг имён типов из JSON в индексы T */
+  const TYPE_NAME_TO_IDX = {
+    space: T.SPACE, newline: T.NEWLINE, dot: T.DOT, punct: T.PUNCT,
+    word_ru: T.WORD_RU, word_en: T.WORD_EN,
+    phrase_ru: T.PHRASE_RU, phrase_en: T.PHRASE_EN,
+    emoji: T.EMOJI, raw_char: T.RAW_CHAR,
+  };
+
+  /* Преобразуем текстовое представление токена из JSON в реальный символ.
+     JSON-файл хранит "\n" как двухсимвольную строку — конвертируем. */
+  function unescapeJsonToken(s) {
+    if (s === '\\n') return '\n';
+    if (s === '\\t') return '\t';
+    if (s === '\\r') return '\r';
+    return s;
+  }
+
+  /* Парсим states из формата JSON: [[typeIdx, nextState, weight], ...]
+     во внутренний формат: [{ type, ns, w }, ...] */
+  function parseStatesFromJson(jsonStates) {
+    if (!jsonStates || !Array.isArray(jsonStates)) return null;
+    try {
+      return jsonStates.map(state => {
+        if (!state.transitions) return null;
+        return state.transitions.map(([typeIdx, ns, w]) => ({
+          type: typeIdx,
+          ns,
+          w,
+        }));
+      });
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  /**
+   * Асинхронно загружает словарь из data/tokens.ru-en.v2.json.
+   * При неудаче возвращает null (будет использован встроенный словарь).
+   */
+  async function loadDictionary() {
+    try {
+      const resp = await fetch('data/tokens.ru-en.v2.json');
+      if (!resp.ok) {
+        console.warn(`[token-table] fetch failed: ${resp.status}`);
+        return null;
+      }
+      const dict = await resp.json();
+
+      /* Минимальная валидация */
+      if (!dict.tokens || !dict.weights || !dict.types) {
+        console.warn('[token-table] invalid dictionary format');
+        return null;
+      }
+
+      _loadedDictionary = dict;
+      /* Сбрасываем кэш таблицы при загрузке нового словаря */
+      _table = null;
+
+      console.log(
+        `[token-table] loaded v${dict.version || '?'}: ` +
+        `word_ru=${(dict.tokens.word_ru||[]).length} ` +
+        `word_en=${(dict.tokens.word_en||[]).length} ` +
+        `phrase_ru=${(dict.tokens.phrase_ru||[]).length} ` +
+        `phrase_en=${(dict.tokens.phrase_en||[]).length} ` +
+        `emoji=${(dict.tokens.emoji||[]).length} ` +
+        `punct=${(dict.tokens.punct||[]).length}`
+      );
+      return dict;
+    } catch (e) {
+      console.warn('[token-table] loadDictionary failed:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Возвращает true, если внешний словарь загружен.
+   */
+  function isDictionaryLoaded() {
+    return _loadedDictionary !== null;
+  }
+
   /* ─── Zipf-веса: weight(i) = 1 / (i + 1)^alpha ─── */
   function zipfWeights(count, alpha = 1.0) {
     const weights = new Float64Array(count);
@@ -347,57 +437,130 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
+     ТЕМПЕРАТУРНАЯ КОРРЕКЦИЯ ВЕСОВ
+     ═══════════════════════════════════════════════════════════
+     temperature = 0.0 → все веса равны (плоское → шум)
+     temperature = 0.5 → умеренное сглаживание
+     temperature = 1.0 → оригинальные веса (без изменений)
+     temperature > 1.0 → обострение (частые токены ещё доминантнее) */
+
+  function applyTemperature(weights, temp) {
+    if (temp === 1.0) return weights;
+    if (temp <= 0) {
+      /* Плоское: все равны */
+      const avg = weights.reduce((s, w) => s + w, 0) / weights.length;
+      return weights.map(() => avg);
+    }
+    /* adjusted = weight ^ (1/temp)
+       temp < 1 → 1/temp > 1 → веса сближаются (сглаживание)
+       temp > 1 → 1/temp < 1 → веса раздвигаются (обострение) */
+    const exponent = 1.0 / temp;
+    return weights.map(w => Math.pow(w, exponent));
+  }
+
+  /**
+   * Вычисляет температуру по BigInt-координате z.
+   * Малый z → низкая температура → человекоподобный текст.
+   * Большой z → высокая температура → шум.
+   */
+  function computeTemperature(z) {
+    const absZ = z < 0n ? -z : z;
+    if (absZ <= 1n) return 0.1;
+    const logZ = Math.log10(Number(absZ));
+    return Math.min(1.0, 0.1 + logZ * 0.09);
+    /* 0.1 при z=1, ~0.4 при z=1000, 1.0 при z=10^10 */
+  }
+
+  /* ═══════════════════════════════════════════════════════════
      ПОСТРОЕНИЕ ПОЛНОЙ ТАБЛИЦЫ ТОКЕНОВ
      ═══════════════════════════════════════════════════════════ */
 
   let _table = null; // кэш
 
-  function buildTokenTable() {
-    if (_table) return _table;
+  /**
+   * Строит полную токенную таблицу.
+   * @param {Object|null} dictionary — внешний словарь (из loadDictionary).
+   *   Если null — используется встроенный inline-словарь.
+   */
+  function buildTokenTable(dictionary) {
+    if (_table && !dictionary) return _table;
 
+    const dict = dictionary || _loadedDictionary || null;
     const WORD_BANK = (window.BABEL_WORD_BANK || []);
 
     /* ─── Собираем все токены по типам ─── */
     const tokensByType = {};
 
-    /* Типы с одним токеном */
-    tokensByType[T.SPACE]   = [{ text: ' ', weight: 1000000 }];
-    tokensByType[T.NEWLINE] = [{ text: '\n', weight: 80000 }];
-    tokensByType[T.DOT]     = [{ text: '.', weight: 250000 }];
+    if (dict && dict.tokens && dict.weights) {
+      /* ─── Загружаем из внешнего словаря ─── */
+      const types = dict.types || [];
+      for (const typeName of types) {
+        const typeIdx = TYPE_NAME_TO_IDX[typeName];
+        if (typeIdx === undefined) continue;
 
-    /* Пунктуация */
-    tokensByType[T.PUNCT] = PUNCT_TOKENS.map((t, i) => ({
-      text: t, weight: 100000 / (i + 1),
-    }));
+        const rawTokens = (dict.tokens[typeName] || []).map(unescapeJsonToken);
+        const rawWeights = dict.weights[typeName] || [];
 
-    /* Русские слова (из WORD_BANK — уже частотно-упорядоченные) */
-    tokensByType[T.WORD_RU] = WORD_BANK.map((t, i) => ({
-      text: t, weight: 500000 / (i + 1),
-    }));
+        tokensByType[typeIdx] = rawTokens.map((t, i) => ({
+          text: t,
+          weight: i < rawWeights.length ? rawWeights[i] : (rawWeights.length > 0 ? rawWeights[rawWeights.length - 1] : 100),
+        }));
+      }
 
-    /* Английские слова */
-    tokensByType[T.WORD_EN] = WORD_EN_TOKENS.map((t, i) => ({
-      text: t, weight: 150000 / (i + 1),
-    }));
+      /* Если в словаре нет RAW_CHAR — добавляем fallback */
+      if (!dict.tokens.raw_char || dict.tokens.raw_char.length === 0) {
+        tokensByType[T.RAW_CHAR] = [{ text: '\x00', weight: 100 }];
+      }
+    } else {
+      /* ─── Fallback: встроенный inline-словарь ─── */
 
-    /* Русские фразы */
-    tokensByType[T.PHRASE_RU] = PHRASE_RU_TOKENS.map((t, i) => ({
-      text: t, weight: 60000 / (i + 1),
-    }));
+      /* Типы с одним токеном */
+      tokensByType[T.SPACE]   = [{ text: ' ', weight: 1000000 }];
+      tokensByType[T.NEWLINE] = [{ text: '\n', weight: 80000 }];
+      tokensByType[T.DOT]     = [{ text: '.', weight: 250000 }];
 
-    /* Английские фразы */
-    tokensByType[T.PHRASE_EN] = PHRASE_EN_TOKENS.map((t, i) => ({
-      text: t, weight: 20000 / (i + 1),
-    }));
+      /* Пунктуация */
+      tokensByType[T.PUNCT] = PUNCT_TOKENS.map((t, i) => ({
+        text: t, weight: 100000 / (i + 1),
+      }));
 
-    /* Эмодзи */
-    tokensByType[T.EMOJI] = EMOJI_TOKENS.map((t, i) => ({
-      text: t, weight: 5000 / (i + 1),
-    }));
+      /* Русские слова (из WORD_BANK — уже частотно-упорядоченные) */
+      tokensByType[T.WORD_RU] = WORD_BANK.map((t, i) => ({
+        text: t, weight: 500000 / (i + 1),
+      }));
 
-    /* RAW_CHAR — fallback: один специальный токен-маркер,
-       за которым следует 21-битный Unicode code point */
-    tokensByType[T.RAW_CHAR] = [{ text: '\x00', weight: 500 }];
+      /* Английские слова */
+      tokensByType[T.WORD_EN] = WORD_EN_TOKENS.map((t, i) => ({
+        text: t, weight: 150000 / (i + 1),
+      }));
+
+      /* Русские фразы */
+      tokensByType[T.PHRASE_RU] = PHRASE_RU_TOKENS.map((t, i) => ({
+        text: t, weight: 60000 / (i + 1),
+      }));
+
+      /* Английские фразы */
+      tokensByType[T.PHRASE_EN] = PHRASE_EN_TOKENS.map((t, i) => ({
+        text: t, weight: 20000 / (i + 1),
+      }));
+
+      /* Эмодзи */
+      tokensByType[T.EMOJI] = EMOJI_TOKENS.map((t, i) => ({
+        text: t, weight: 5000 / (i + 1),
+      }));
+
+      /* RAW_CHAR — fallback (вес 100 вместо 500) */
+      tokensByType[T.RAW_CHAR] = [{ text: '\x00', weight: 100 }];
+    }
+
+    /* ─── Определяем переходы состояний ─── */
+    let stateTransitions = STATE_TRANSITIONS;
+    if (dict && dict.states) {
+      const parsed = parseStatesFromJson(dict.states);
+      if (parsed && parsed.length === STATE_COUNT) {
+        stateTransitions = parsed;
+      }
+    }
 
     /* ─── Строим глобальный индекс токенов ─── */
     const allTokens = [];  // { text, type, typeIndex, weight }
@@ -418,14 +581,27 @@
       }
     }
 
-    /* ─── Строим текст→токен lookup для энкодинга ─── */
+    /* ─── Строим текст→токен lookup для энкодинга ───
+       Добавляем case-insensitive вариант (lowercase → токен) */
     const textToToken = new Map();
+
     for (let i = 0; i < allTokens.length; i++) {
       const t = allTokens[i];
       if (t.type === T.RAW_CHAR) continue; // RAW_CHAR не ищется по тексту
-      /* Длинные токены имеют приоритет (для greedy matching) */
+
+      /* Точный матч — длинные токены имеют приоритет */
       if (!textToToken.has(t.text) || t.text.length > (textToToken.get(t.text)?.text?.length || 0)) {
         textToToken.set(t.text, i);
+      }
+
+      /* Case-insensitive матч для WORD_EN и PHRASE_EN */
+      if (t.type === T.WORD_EN || t.type === T.PHRASE_EN) {
+        const lower = t.text.toLowerCase();
+        if (lower !== t.text) {
+          if (!textToToken.has(lower) || t.text.length > (textToToken.get(lower)?.text?.length || 0)) {
+            textToToken.set(lower, i);
+          }
+        }
       }
     }
 
@@ -447,7 +623,7 @@
     const stateDecoders = new Array(STATE_COUNT);
 
     for (let state = 0; state < STATE_COUNT; state++) {
-      const trans = STATE_TRANSITIONS[state];
+      const trans = stateTransitions[state];
       const weights = trans.map(t => t.w);
       stateDecoders[state] = _prefix.buildDecoder(weights);
     }
@@ -460,29 +636,31 @@
       textToToken,
       typeDecoders,
       stateDecoders,
-      STATE_TRANSITIONS,
+      STATE_TRANSITIONS: stateTransitions,
     };
 
     return _table;
   }
 
-  /* ─── Токенизация текста для энкодинга ───
-     Greedy longest-match: сначала пытаемся найти фразы,
-     потом слова, потом пунктуацию, потом RAW_CHAR fallback. */
+  /* ═══════════════════════════════════════════════════════════
+     ТОКЕНИЗАЦИЯ ТЕКСТА ДЛЯ ЭНКОДИНГА
+     ═══════════════════════════════════════════════════════════
+     Position-based greedy longest-match с case-insensitive lookup
+     и явной обработкой пробелов.
+
+     Порядок:
+       1. Фразы (longest match first)
+       2. Слова
+       3. Односимвольные токены (space, newline, dot, punct, emoji)
+       4. RAW_CHAR fallback */
 
   function tokenizeForEncoding(text, table) {
-    const tokens = []; // массив индексов в allTokens
+    const tokens = []; // массив индексов в allTokens (или {isRaw, codePoint})
     let pos = 0;
     const t2t = table.textToToken;
+    const all = table.allTokens;
 
-    /* Приоритет типов для matching:
-       1. Фразы (длинные) — PHRASE_RU, PHRASE_EN
-       2. Слова — WORD_RU, WORD_EN
-       3. Пунктуация
-       4. Одиночные токены (SPACE, NEWLINE, DOT)
-       5. RAW_CHAR fallback */
-
-    const PHRASE_MAX_LEN = 40; // максимальная длина фразы в символах
+    const PHRASE_MAX_LEN = 60; // максимальная длина фразы в символах
 
     while (pos < text.length) {
       let matched = false;
@@ -490,44 +668,75 @@
       /* 1. Пробуем фразы (самые длинные совпадения) */
       for (let len = Math.min(PHRASE_MAX_LEN, text.length - pos); len >= 4 && !matched; len--) {
         const substr = text.slice(pos, pos + len);
-        const idx = t2t.get(substr);
-        if (idx !== undefined && (table.allTokens[idx].type === T.PHRASE_RU || table.allTokens[idx].type === T.PHRASE_EN)) {
-          tokens.push(idx);
-          pos += len;
-          matched = true;
+        const lowerSubstr = substr.toLowerCase();
+
+        /* Сначала точное совпадение, затем case-insensitive */
+        let idx = t2t.get(substr);
+        if (idx === undefined) idx = t2t.get(lowerSubstr);
+
+        if (idx !== undefined) {
+          const tok = all[idx];
+          if (tok.type === T.PHRASE_RU || tok.type === T.PHRASE_EN) {
+            tokens.push(idx);
+            pos += len;
+            matched = true;
+          }
         }
       }
       if (matched) continue;
 
-      /* 2. Пробуем слова */
-      for (let len = Math.min(30, text.length - pos); len >= 1 && !matched; len--) {
+      /* 2. Пробуем слова (от длинных к коротким) */
+      for (let len = Math.min(40, text.length - pos); len >= 1 && !matched; len--) {
         const substr = text.slice(pos, pos + len);
-        const idx = t2t.get(substr);
-        if (idx !== undefined && (table.allTokens[idx].type === T.WORD_RU || table.allTokens[idx].type === T.WORD_EN)) {
-          tokens.push(idx);
-          pos += len;
-          matched = true;
+        const lowerSubstr = substr.toLowerCase();
+
+        let idx = t2t.get(substr);
+        if (idx === undefined) idx = t2t.get(lowerSubstr);
+
+        if (idx !== undefined) {
+          const tok = all[idx];
+          if (tok.type === T.WORD_RU || tok.type === T.WORD_EN) {
+            tokens.push(idx);
+            pos += len;
+            matched = true;
+          }
         }
       }
       if (matched) continue;
 
-      /* 3. Пробуем пунктуацию и эмодзи */
+      /* 3. Односимвольные токены: пробел, перевод строки, точка */
+      const ch = text[pos];
+      if (ch === ' ') {
+        tokens.push(table.typeOffsets[T.SPACE]);
+        pos++;
+        continue;
+      }
+      if (ch === '\n') {
+        tokens.push(table.typeOffsets[T.NEWLINE]);
+        pos++;
+        continue;
+      }
+      if (ch === '.') {
+        tokens.push(table.typeOffsets[T.DOT]);
+        pos++;
+        continue;
+      }
+
+      /* 4. Пунктуация и эмодзи — пробуем multi-char (emoji sequences),
+         затем single-char */
       for (let len = Math.min(4, text.length - pos); len >= 1 && !matched; len--) {
         const substr = text.slice(pos, pos + len);
         const idx = t2t.get(substr);
         if (idx !== undefined) {
-          tokens.push(idx);
-          pos += len;
-          matched = true;
+          const tok = all[idx];
+          if (tok.type === T.PUNCT || tok.type === T.EMOJI) {
+            tokens.push(idx);
+            pos += len;
+            matched = true;
+          }
         }
       }
       if (matched) continue;
-
-      /* 4. Одиночные: пробел, точка, перевод строки */
-      const ch = text[pos];
-      if (ch === ' ') { tokens.push(table.typeOffsets[T.SPACE]); pos++; continue; }
-      if (ch === '\n') { tokens.push(table.typeOffsets[T.NEWLINE]); pos++; continue; }
-      if (ch === '.') { tokens.push(table.typeOffsets[T.DOT]); pos++; continue; }
 
       /* 5. RAW_CHAR fallback */
       tokens.push({
@@ -583,5 +792,10 @@
     getNextState,
     getTransitionIndex,
     zipfWeights,
+    /* NEW */
+    loadDictionary,
+    isDictionaryLoaded,
+    applyTemperature,
+    computeTemperature,
   };
 })();

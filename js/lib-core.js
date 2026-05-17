@@ -239,16 +239,22 @@
 
   const USE_PREFIX_CODEC = true;
 
+  const _tt = app.library._tokenTable;
+
   function decodePageByCoords(x, y, z, forcedTokens) {
     if (USE_PREFIX_CODEC && _addressCodec && !forcedTokens) {
-      /* Новая архитектура: префиксное декодирование */
+      /* Новая архитектура: префиксное декодирование с температурой */
       try {
         const bx = BigInt(x);
         const by = BigInt(y);
         const bz = BigInt(z || 1);
         const internalAddr = _coordPerm.coordToInternalAddress(bx, by, bz);
         const totalBits = Number(TOTAL_BITS);
-        return _addressCodec.decodeAddressToPage(internalAddr, totalBits);
+        /* Температурный слой: z → temperature → коррекция весов декодера
+           Малый z → низкая температура → человекоподобный текст
+           Большой z → высокая температура → шум */
+        const temperature = _tt.computeTemperature(bz);
+        return _addressCodec.decodeAddressToPage(internalAddr, totalBits, temperature);
       } catch (e) {
         /* Fallback на старый декодер при ошибке */
         console.warn('Prefix codec error, falling back to PRNG:', e);

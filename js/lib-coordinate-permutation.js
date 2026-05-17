@@ -3,7 +3,7 @@
   const app = window.BabelApp = window.BabelApp || {};
 
   /* ═══════════════════════════════════════════════════════════
-     КООРДИНАТНАЯ ПЕРЕСТАНОВКА — Feistel-подобное перемешивание
+     КООРДИНАТНАЯ ПЕРЕСТАНОВКА — Feistel-сеть перемешивания
      ═══════════════════════════════════════════════════════════
      Схема:
        user coordinate (x, y, z)
@@ -15,14 +15,16 @@
        prefix decode → page
 
      Свойства:
-       • Обратимость: internal → coord тоже работает
+       • Обратимость: Feistel-сеть обратима по построению
        • Соседние координаты → далёкие внутренние адреса
+         (гораздо лучше аффинной перестановки)
        • Малые z → область адресного пространства,
          где префиксные коды чаще дают частые токены
 
-     Для навигации используем существующую аффинную перестановку
-     (permuteIndex/unpermuteIndex), которая уже обеспечивает
-     перемешивание и обратимость. */
+     Реализация: 4-раундовая Feistel-сеть над Z/2^32768
+       L_new = R
+       R_new = L XOR F(R, round_key)
+     Обратимость: раунды в обратном порядке. */
 
   /* ─── Константы из lib-core ─── */
 
@@ -32,40 +34,49 @@
     const HALF_ROW = HALLS_PER_ROW / 2n;
     const PAGES_PER_HALL = ALG.wallsPerHall * ALG.shelvesPerWall * ALG.volumesPerShelf * ALG.pagesPerVolume;
 
-    /* ─── Affine permutation over Z/(2^32768) ───
-       Используем существующую перестановку из lib-core */
+    /* ─── Feistel network permutation over Z/(2^32768) ─── */
 
     const BITS_PER_CHAR = 8n;
-    const TOTAL_BITS = BITS_PER_CHAR * BigInt(ALG.pageLength);
+    const TOTAL_BITS = BITS_PER_CHAR * BigInt(ALG.pageLength);   // 32768
     const BIT_MASK = (1n << TOTAL_BITS) - 1n;
+    const HALF_BITS = TOTAL_BITS / 2n;                            // 16384
+    const HALF_MASK = (1n << HALF_BITS) - 1n;
 
-    const SEED_C = 0x4CF3B209D871A5E7n;
-    const SEED_C_INV = SEED_C ^ 0xFFFFFFFFFFFFFFFFn;
+    /* ─── Round key generation ───
+       64-битные константы повторяются для заполнения HALF_BITS ширины.
+       K0, K1 — производные от существующих SEED-констант для совместимости.
+       K2 — золотое сечение (0x9E3779B97F4A7C15).
+       K3 — дополнительный ключ для четвёртого раунда. */
 
-    let _c = 0n;
-    for (let bitPos = 0; bitPos < Number(TOTAL_BITS); bitPos += 64) {
-      const pattern = (bitPos / 64) % 2 === 0 ? SEED_C : SEED_C_INV;
-      _c = (_c | (pattern << BigInt(bitPos))) & BIT_MASK;
-    }
-    const PERM_C = _c | 1n;
-
-    let _offset = 0n;
-    const PATTERN = 0x5BD1E9A3F7C20658n;
-    for (let bitPos = 0; bitPos < Number(TOTAL_BITS); bitPos += 64) {
-      _offset = (_offset | (PATTERN << BigInt(bitPos))) & BIT_MASK;
-    }
-    const PERM_OFFSET = _offset;
-
-    function modInvPow2(a, n) {
-      let inv = a;
-      const iterations = Math.ceil(Math.log2(Number(n))) + 1;
-      const mod = 1n << n;
-      for (let i = 0; i < iterations; i++) {
-        inv = (inv * (2n - a * inv % mod) % mod + mod) % mod;
+    function makeExpandedKey(pattern64) {
+      let key = 0n;
+      for (let bitPos = 0; bitPos < Number(HALF_BITS); bitPos += 64) {
+        key = (key | (pattern64 << BigInt(bitPos))) & HALF_MASK;
       }
-      return inv;
+      return key;
     }
-    const PERM_I = modInvPow2(PERM_C, TOTAL_BITS);
+
+    const ROUND_KEYS = [
+      makeExpandedKey(0x4CF3B209D871A5E7n),   // K0 — from SEED_C
+      makeExpandedKey(0x5BD1E9A3F7C20658n),   // K1 — from PATTERN
+      makeExpandedKey(0x9E3779B97F4A7C15n),   // K2 — golden ratio
+      makeExpandedKey(0x8A5B6C7D9E0F1A2Bn),   // K3 — additional
+    ];
+
+    /* ─── Round function F(value, key) ───
+       value — HALF_BITS-битное число
+       key   — HALF_BITS-битный раундовый ключ
+
+       1. multiply-scramble: (value * key) mod 2^HALF_BITS
+       2. shift-xor diffusion: XOR с собственным сдвигом >> 3
+       3. key mixing: XOR с раундовым ключом */
+
+    function roundFunc(value, key) {
+      let mixed = (value * key) & HALF_MASK;     // multiply-scramble
+      mixed = mixed ^ (mixed >> 3n);              // shift-xor diffusion
+      mixed = (mixed ^ key) & HALF_MASK;          // XOR with round key
+      return mixed;
+    }
 
     /* ─── Core mapping functions ─── */
 
@@ -101,14 +112,31 @@
       return { x, y, z };
     }
 
-    /* ─── Permutation ─── */
+    /* ─── Feistel Permutation ─── */
 
     function permute(index) {
-      return ((BigInt(index) * PERM_C + PERM_OFFSET) & BIT_MASK);
+      const value = BigInt(index) & BIT_MASK;
+      let L = value >> HALF_BITS;
+      let R = value & HALF_MASK;
+      for (let round = 0; round < 4; round++) {
+        const newL = R;
+        const newR = L ^ roundFunc(R, ROUND_KEYS[round]);
+        L = newL;
+        R = newR;
+      }
+      return (L << HALF_BITS) | R;
     }
 
-    function unpermute(index) {
-      return (((BigInt(index) - PERM_OFFSET + (1n << (TOTAL_BITS + 8n))) * PERM_I) & BIT_MASK);
+    function unpermute(permuted) {
+      let L = (BigInt(permuted) >> HALF_BITS) & HALF_MASK;
+      let R = BigInt(permuted) & HALF_MASK;
+      for (let round = 3; round >= 0; round--) {
+        const newR = L;
+        const newL = R ^ roundFunc(L, ROUND_KEYS[round]);
+        L = newL;
+        R = newR;
+      }
+      return (L << HALF_BITS) | R;
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -117,9 +145,10 @@
 
        coordToInternalAddress(x, y, z):
          Координаты → rawIndex → permuted → внутренний адрес для декодирования.
-         Аффинная перестановка обеспечивает:
+         Feistel-перестановка обеспечивает:
          • Соседние координаты → далёкие адреса (визуальное разнообразие)
-         • Обратимость (perm + offset — биекция над Z/2^n)
+         • Обратимость (Feistel-сеть — биекция по построению)
+         • Гораздо лучшее перемешивание, чем аффинная перестановка
 
        internalAddressToCoord(address):
          Обратное преобразование: адрес → координаты.
@@ -232,5 +261,8 @@
     permute(i) { return getInstance().permute(i); },
     unpermute(i) { return getInstance().unpermute(i); },
     get TOTAL_BITS() { return getInstance().TOTAL_BITS; },
+    get PAGES_PER_HALL() { return getInstance().PAGES_PER_HALL; },
+    get HALLS_PER_ROW() { return getInstance().HALLS_PER_ROW; },
+    get HALF_ROW() { return getInstance().HALF_ROW; },
   };
 })();
