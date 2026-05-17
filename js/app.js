@@ -176,6 +176,9 @@
     updateNav(route.name);
     updateFooter(route.name);
 
+    /* Update library mode toggle button */
+    updateModeToggle();
+
     try {
       const renderer = themes.getThemeRenderer();
 
@@ -300,6 +303,29 @@
     });
   }
 
+  function updateModeToggle() {
+    const btn = document.getElementById('modeToggle');
+    if (!btn) return;
+    const mode = themes.getLibraryMode();
+    const modeInfo = themes.LIBRARY_MODES[mode];
+    if (modeInfo) {
+      btn.textContent = modeInfo.icon + ' ' + modeInfo.name;
+    }
+  }
+
+  function initModeToggle() {
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('#modeToggle');
+      if (!btn) return;
+      const current = themes.getLibraryMode();
+      const next = current === 'human' ? 'random' : 'human';
+      themes.setLibraryMode(next);
+      updateModeToggle();
+      /* Re-render current view */
+      window.dispatchEvent(new Event('hashchange'));
+    });
+  }
+
   function updateFooter(routeName) {
     const footer = document.querySelector('.site-footer');
     if (!footer) return;
@@ -316,7 +342,7 @@
     const genreLabel = { empty: '📄 На пустом листе', noise: '🌫️ Шум', words: '📖 Среди слов', dialogue: '💬 В переписке', post: '📱 В посте', diary: '📔 В дневнике', log: '⌨️ В логе' };
     return `
     <section class="search-view fade-in">
-      <h1 class="search-title">Каталог Мира</h1>
+      <h1 class="search-title">Поиск в Библиотеке</h1>
       <p class="search-subtitle">Любая фраза — дверь в облако страниц. Не одна страница, а множество.</p>
       <form class="search-form" id="searchForm">
         <div class="search-input-wrap">
@@ -482,7 +508,7 @@
       <p>Вавилон предлагает два режима восприятия бесконечного пространства:</p>
       <p><strong>📖 Человечная библиотека</strong> — язык искажает пространство шума. У начала координат страницы читаемые, грамматически правильные, с узнаваемыми словами. Чем дальше от начала — тем больше текст распадается. Это не случайность, а архитектура: частые токены кодируются короткими битовыми последовательностями, и малые адреса естественно декодируются в человекоподобный текст.</p>
       <p><strong>🎲 Случайная библиотека</strong> — чистый хаос. Каждая страница — равномерно случайная последовательность 256 символов алфавита. Никакой гравитации языка, никаких зон читаемости. Классическая библиотека Борхеса, где осмысленный текст — статистическая неизбежность, но не архитектура.</p>
-      <p>Переключатель режимов находится в меню выбора темы (кнопка в верхней панели). Режим сохраняется между сессиями.</p>
+      <p>Переключатель режимов находится в верхней навигационной панели. Режим сохраняется между сессиями.</p>
     </section>`;
   }
 
@@ -492,29 +518,36 @@
 
   function renderFavorites() {
     const favs = store.readStore('babelFavorites');
+    let favSection = '';
     if (favs.length === 0) {
-      return `
-      <section class="favorites fade-in">
-        <h1>Избранное</h1>
-        <div class="empty-state"><div class="icon">★</div><p>Пока ничего не сохранено. Откройте страницу и нажмите «В избранное».</p></div>
-      </section>`;
+      favSection = `
+        <div class="empty-state"><div class="icon">★</div><p>Пока ничего не сохранено. Откройте страницу и нажмите «В избранное».</p></div>`;
+    } else {
+      const items = favs.map((f, i) => `
+        <div class="fav-item">
+          <div class="fav-info">
+            <div class="fav-title"><a href="${esc(f.url)}">${esc(f.title)}</a></div>
+            <div class="fav-date">${new Date(f.createdAt).toLocaleString('ru-RU')}</div>
+          </div>
+          <div class="fav-actions">
+            <a class="btn-outline" href="${esc(f.url)}">Открыть</a>
+            <button class="fav-remove" data-index="${i}">Удалить</button>
+          </div>
+        </div>
+      `).join('');
+      favSection = `<div class="fav-list">${items}</div>`;
     }
-    const items = favs.map((f, i) => `
-      <div class="fav-item">
-        <div class="fav-info">
-          <div class="fav-title"><a href="${esc(f.url)}">${esc(f.title)}</a></div>
-          <div class="fav-date">${new Date(f.createdAt).toLocaleString('ru-RU')}</div>
-        </div>
-        <div class="fav-actions">
-          <a class="btn-outline" href="${esc(f.url)}">Открыть</a>
-          <button class="fav-remove" data-index="${i}">Удалить</button>
-        </div>
-      </div>
-    `).join('');
     return `
     <section class="favorites fade-in">
       <h1>Избранное</h1>
-      <div class="fav-list">${items}</div>
+      ${favSection}
+      <div class="fav-map-section">
+        <h2 class="fav-map-title">🗺️ Карта путешествий</h2>
+        <p class="fav-map-desc">Ваш путь по бесконечной библиотеке</p>
+        <div class="fav-map-container">
+          <canvas class="fav-journey-canvas" id="favJourneyCanvas" width="600" height="280"></canvas>
+        </div>
+      </div>
     </section>`;
   }
 
@@ -526,6 +559,10 @@
         if (favs[idx]) { store.removeFavorite(favs[idx].url); navigate(); }
       });
     });
+
+    /* Draw journey map canvas */
+    const jmCanvas = document.getElementById('favJourneyCanvas');
+    if (jmCanvas) themes.drawJourneyMap(jmCanvas);
   }
 
   /* ═══════════════════════════════════════════════════════════
@@ -549,6 +586,9 @@
         console.log('[babel] Using inline token data (external dictionary not available)');
       });
     }
+
+    /* Initialize mode toggle handler */
+    initModeToggle();
 
     /* First render */
     navigate();

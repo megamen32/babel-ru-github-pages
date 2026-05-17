@@ -9,6 +9,8 @@
   const _tokens = app.library._tokens;
   const _addressCodec = app.library._addressCodec;
   const _coordPerm = app.library._coordPerm;
+  const _tokenTable = app.library._tokenTable;
+  const _prefix = app.library._prefix;
 
   const {
     BITS_PER_CHAR, CHAR_MASK, TOTAL_BITS, BIT_MASK,
@@ -76,8 +78,7 @@
 
     /* ─── Загрузка словаря ─── */
     async loadTokenDictionary() {
-      const tt = app.library._tokenTable;
-      const result = await tt.loadDictionary();
+      const result = await _tokenTable.loadDictionary();
       if (result) {
         /* Сбрасываем кэш таблицы при загрузке нового словаря */
         console.log('[babel] Token dictionary loaded, rebuilding table...');
@@ -85,12 +86,12 @@
       return result;
     },
     isTokenDictionaryLoaded() {
-      return app.library._tokenTable.isDictionaryLoaded();
+      return _tokenTable.isDictionaryLoaded();
     },
 
     /* ─── Температурная коррекция ─── */
     applyTemperature(weights, temp) {
-      return app.library._tokenTable.applyTemperature(weights, temp);
+      return _tokenTable.applyTemperature(weights, temp);
     },
 
     /* ═══════════════════════════════════════════════════════════
@@ -153,9 +154,9 @@
 
     /* Получить страницу по координатам */
     getPageByXY(x, y, z) {
-      const bz = BigInt(z || 1);
-      const bx = BigInt(x || 0);
-      const by = BigInt(y || 0);
+      const bz = typeof z === 'bigint' ? z : BigInt(z || 1);
+      const bx = typeof x === 'bigint' ? x : BigInt(x || 0);
+      const by = typeof y === 'bigint' ? y : BigInt(y || 0);
       const text = decodePageByCoords(bx, by, bz);
       const indices = tokenizeText(text);
       while (indices.length < ALG.pageLength) indices.push(0);
@@ -167,9 +168,7 @@
     /* ─── Температура и классификация ─── */
 
     computeTemperature(z) {
-      /* Используем новый температурный слой из _tokenTable */
-      const tt = app.library._tokenTable;
-      return tt.computeTemperature(BigInt(z));
+      return _tokenTable.computeTemperature(BigInt(z));
     },
     classifyPageByTemp(z) {
       /* Legacy: классификация по z через температуру */
@@ -200,9 +199,9 @@
 
     coordsToPageUrl(coords, params) {
       const c = {
-        x: BigInt(coords.x || 0),
-        y: BigInt(coords.y || 0),
-        z: BigInt(coords.z || 1),
+        x: typeof coords.x === 'bigint' ? coords.x : BigInt(coords.x || 0),
+        y: typeof coords.y === 'bigint' ? coords.y : BigInt(coords.y || 0),
+        z: typeof coords.z === 'bigint' ? coords.z : BigInt(coords.z || 1),
       };
       const base = `#/x/${c.x}/y/${c.y}/z/${c.z}`;
       if (params) {
@@ -439,9 +438,9 @@
 
     /* Position-aware next inhabited page */
     findNextInhabitedFromCoords(coords, step) {
-      const x = BigInt(coords.x || 0);
-      const y = BigInt(coords.y || 0);
-      const z = BigInt(coords.z || 1);
+      const x = typeof coords.x === 'bigint' ? coords.x : BigInt(coords.x || 0);
+      const y = typeof coords.y === 'bigint' ? coords.y : BigInt(coords.y || 0);
+      let z = typeof coords.z === 'bigint' ? coords.z : BigInt(coords.z || 1);
 
       for (let i = 1; i <= 50; i++) {
         const newZ = z + BigInt(i);
@@ -576,13 +575,20 @@
     },
   };
 
-  /* ---- Clean up temporary namespaces ---- */
-  delete app.library._core;
-  delete app.library._fillers;
-  delete app.library._classifier;
-  delete app.library._tokens;
-  delete app.library._prefix;
-  delete app.library._tokenTable;
-  delete app.library._addressCodec;
-  delete app.library._coordPerm;
+  /* ---- Keep private namespaces alive ----
+     They are referenced at runtime by functions in lib-address-codec.js,
+     lib-token-table.js, and lib-core.js. Deleting them would cause
+     "Cannot read properties of undefined" errors. */
+
+  /* Восстанавливаем приватные пространства имён на новом объекте.
+     Функции в lib-token-table.js и lib-address-codec.js обращаются
+     к app.library._prefix и app.library._tokenTable в рантайме. */
+  app.library._prefix = _prefix;
+  app.library._tokenTable = _tokenTable;
+  app.library._addressCodec = _addressCodec;
+  app.library._coordPerm = _coordPerm;
+  app.library._core = _core;
+  app.library._fillers = _fillers;
+  app.library._classifier = _classifier;
+  app.library._tokens = _tokens;
 })();

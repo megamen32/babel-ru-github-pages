@@ -282,7 +282,10 @@ function xyToCoordinates(x, y, z) {
 }
 
 function coordinatesToXY(coords) {
-  return { x: BigInt(coords.x || 0), y: BigInt(coords.y || 0) };
+  return {
+    x: typeof coords.x === 'bigint' ? coords.x : BigInt(coords.x || 0),
+    y: typeof coords.y === 'bigint' ? coords.y : BigInt(coords.y || 0),
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════

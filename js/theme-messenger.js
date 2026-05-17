@@ -311,6 +311,8 @@
         store.pushJourneyStep(jx, jy, lib.classifyRegion(h.safeNum(jx), h.safeNum(jy)).kind);
       } catch {}
 
+      const xy = lib.coordinatesToXY(coords);
+
       const contentSlot = u.$('#pageContentSlot');
       const navMsg = u.$('#pageNavMsg');
       const densityEl = u.$('#pageDensity');

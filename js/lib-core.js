@@ -219,13 +219,16 @@
 
   function xyToCoordinates(x, y, z) {
     const { sector, hall } = xyToHallXY(x, y);
-    const bz = BigInt(z || 1);
+    const bz = typeof z === 'bigint' ? z : BigInt(z || 1);
     const borges = zToBorges(bz);
     return { x: BigInt(x), y: BigInt(y), z: bz, sector, hall, ...borges };
   }
 
   function coordinatesToXY(coords) {
-    return { x: BigInt(coords.x || 0), y: BigInt(coords.y || 0) };
+    return {
+      x: typeof coords.x === 'bigint' ? coords.x : BigInt(coords.x || 0),
+      y: typeof coords.y === 'bigint' ? coords.y : BigInt(coords.y || 0),
+    };
   }
 
   /* ═══════════════════════════════════════════════════════════
@@ -252,9 +255,9 @@
 
     /* Random mode: always use byte-level decode */
     if (libraryMode === 'random') {
-      const bx = BigInt(x);
-      const by = BigInt(y);
-      const bz = BigInt(z || 1);
+      const bx = typeof x === 'bigint' ? x : BigInt(x);
+      const by = typeof y === 'bigint' ? y : BigInt(y);
+      const bz = typeof z === 'bigint' ? z : BigInt(z || 1);
       /* Use Feistel permutation + byte-level decode */
       const hallIndex = xyToHallIndex(bx, by);
       const rawIdx = hallIndex * PAGES_PER_HALL + (bz - 1n);
@@ -268,9 +271,9 @@
     if (USE_PREFIX_CODEC && _addressCodec && !forcedTokens) {
       /* Новая архитектура: префиксное декодирование с температурой */
       try {
-        const bx = BigInt(x);
-        const by = BigInt(y);
-        const bz = BigInt(z || 1);
+        const bx = typeof x === 'bigint' ? x : BigInt(x);
+        const by = typeof y === 'bigint' ? y : BigInt(y);
+        const bz = typeof z === 'bigint' ? z : BigInt(z || 1);
         const internalAddr = _coordPerm.coordToInternalAddress(bx, by, bz);
         const totalBits = Number(TOTAL_BITS);
         /* Температурный слой: z → temperature → коррекция весов декодера

@@ -307,6 +307,7 @@ ${bookList}
         }
       }).catch(err => {
         /* Fallback to old byte-level decode */
+        console.warn('[babel] Prefix codec failed, falling back to byte-level:', err);
         const indices = lib.numberToIndices(number);
         const text = u.indicesToString(indices);
         const stats = h.charStats(indices);

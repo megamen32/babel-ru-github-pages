@@ -3,7 +3,7 @@
    Caches all assets on first install, serves from cache.
    ═══════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'babel-v12.0-prefix-all-themes-mode';
+const CACHE_NAME = 'babel-v13.0-fix-buildTokenTable';
 
 const ASSETS = [
   './',

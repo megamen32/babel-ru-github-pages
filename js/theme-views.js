@@ -29,7 +29,7 @@
     /* Используем токенный декодер для генерации страницы */
     const coords = lib.numberToCoordinates(number);
     const xy = lib.coordinatesToXY(coords);
-    const z = BigInt(coords.z || 1);
+    const z = typeof coords.z === 'bigint' ? coords.z : BigInt(coords.z || 1);
     const pageData = lib.getPageByXY(xy.x, xy.y, z);
     const text = pageData.text;
     const indices = pageData.indices;
@@ -157,7 +157,7 @@
     if (copyBtn) copyBtn.addEventListener('click', () => {
       const coords2 = lib.numberToCoordinates(number);
       const xy2 = lib.coordinatesToXY(coords2);
-      const z2 = BigInt(coords2.z || 1);
+      const z2 = typeof coords2.z === 'bigint' ? coords2.z : BigInt(coords2.z || 1);
       const pageData = lib.getPageByXY(xy2.x, xy2.y, z2);
       u.copyText(pageData.text, 'Текст скопирован');
     });
@@ -728,6 +728,7 @@
     getThemeRenderer,
     renderThemePicker,
     bindThemePicker,
+    fmtBigNum: h.fmtBigNum,
     fmtXY: h.fmtXY,
     fmtCoord: h.fmtCoord,
     charStats: h.charStats,

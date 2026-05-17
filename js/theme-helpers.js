@@ -87,18 +87,43 @@
 
   /* ---- Shared helpers ---- */
 
+  /* Unicode superscript digits for scientific notation */
+  const SUPERSCRIPTS = { '0': '\u2070', '1': '\u00B9', '2': '\u00B2', '3': '\u00B3', '4': '\u2074', '5': '\u2075', '6': '\u2076', '7': '\u2077', '8': '\u2078', '9': '\u2079' };
+  const SUPER_MINUS = '\u207B';
+
+  function fmtBigNum(v) {
+    /* Format BigInt or Number with scientific notation for large values.
+       <= 6 digits: show as-is.
+       > 6 digits: show as coefficient\u00D710^exponent using Unicode superscripts. */
+    const s = String(v);
+    if (s.length <= 6) return s;
+
+    /* Determine sign */
+    const negative = s[0] === '-';
+    const digits = negative ? s.slice(1) : s;
+    const exponent = digits.length - 1;
+    const coeff = digits[0] + (digits.length > 1 ? '.' + digits.slice(1, 4) : '');
+
+    /* Build superscript exponent */
+    const expStr = String(exponent);
+    let superExp = '';
+    for (const ch of expStr) {
+      superExp += SUPERSCRIPTS[ch] || ch;
+    }
+
+    return (negative ? '-' : '') + coeff + '\u00D710' + superExp;
+  }
+
   function fmtXY(v) {
     if (typeof v === 'bigint') {
-      const s = String(v);
-      return s.length > 20 ? s.slice(0, 8) + '…' + s.slice(-8) : s;
+      return fmtBigNum(v);
     }
     return String(v);
   }
 
   function fmtCoord(v) {
     if (typeof v === 'bigint') {
-      const s = String(v);
-      return s.length > 10 ? s.slice(0, 5) + '…' + s.slice(-4) : s;
+      return fmtBigNum(v);
     }
     return String(v);
   }
@@ -569,7 +594,7 @@
       ctx.font = 'bold 10px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#fff';
-      ctx.fillText('X:' + filtered[0].labelX + ' Y:' + filtered[0].labelY, cx, cy + 18);
+      ctx.fillText('X:' + fmtBigNum(filtered[0].labelX) + ' Y:' + fmtBigNum(filtered[0].labelY), cx, cy + 18);
       return;
     }
 
@@ -663,7 +688,7 @@
       ctx.font = 'bold 10px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#fff';
-      const label = 'X:' + last.labelX + ' Y:' + last.labelY;
+      const label = 'X:' + fmtBigNum(last.labelX) + ' Y:' + fmtBigNum(last.labelY);
       ctx.fillText(label, pos.cx, pos.cy - 14);
     }
 
@@ -696,6 +721,7 @@
     LIBRARY_MODES,
     getLibraryMode,
     setLibraryMode,
+    fmtBigNum,
     fmtXY,
     fmtCoord,
     escWithBR,

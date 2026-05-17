@@ -79,3 +79,30 @@ Stage Summary:
   5. ✅ Temperature layer added (z-dependent weight shifting)
   6. ✅ Feistel permutation replaces affine
 
+---
+Task ID: 2
+Agent: main
+Task: Fix prefix codec rendering in Terminal/Messenger themes + add library mode toggle
+
+Work Log:
+- Investigated page rendering pipeline across all 5 themes
+- Found root cause: Terminal theme used `numberToIndices → indicesToString` (byte-level), Messenger used `worker.pageData` (also byte-level)
+- Neither called the prefix codec decode path (`prefixDecodePage` or `decodePageByCoords`)
+- Bookshelf/Cosmos/Feed themes already worked correctly (they use `sharedPageRender` → `lib.getPageByXY` → `decodePageByCoords` → prefix codec)
+- Fixed Terminal theme: renderPage now shows loading placeholder, bindPage loads text async via `getPrefixPageData` worker command
+- Fixed Messenger theme: replaced `getPageData` (byte-level) with `getPrefixPageData` (prefix codec)
+- Added `worker-bridge.getPrefixPageData(x, y, z, mode)` method
+- Updated worker.js `prefixDecodePage` to accept `mode` parameter: 'human' (prefix codec) or 'random' (byte-level)
+- Added library mode system: LIBRARY_MODES (human/random), getLibraryMode/setLibraryMode in theme-helpers
+- Updated theme picker dropdown: added divider + section label + library mode toggle buttons
+- Updated lib-core.js `decodePageByCoords` to check library mode and use byte-level when mode='random'
+- Updated About page with section explaining library modes
+- Added CSS: terminal loading animation (.term-loading blink), theme picker divider/section-label
+- Bumped Service Worker cache to v12.0
+
+Stage Summary:
+- Terminal and Messenger themes now show prefix-codec-decoded (human-readable) pages
+- Library mode toggle: Человечная 📖 (prefix codec, language distorts noise) vs Случайная 🎲 (pure chaos)
+- Mode persists in localStorage, switchable via theme picker dropdown
+- All 5 themes now consistently use the same decode engine (prefix codec by default)
+- Commit: c6ea0f9

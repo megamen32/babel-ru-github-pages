@@ -95,9 +95,9 @@
 
     /* rawIndex из координат */
     function coordToRawIndex(x, y, z) {
-      const bx = BigInt(x || 0);
-      const by = BigInt(y || 0);
-      const bz = BigInt(z || 1);
+      const bx = typeof x === 'bigint' ? x : BigInt(x || 0);
+      const by = typeof y === 'bigint' ? y : BigInt(y || 0);
+      const bz = typeof z === 'bigint' ? z : BigInt(z || 1);
       const hallIndex = (bx + HALF_ROW) + (by + HALF_ROW) * HALLS_PER_ROW;
       return hallIndex * PAGES_PER_HALL + (bz - 1n);
     }
@@ -201,9 +201,9 @@
     /* ─── Helper: полные координаты ─── */
 
     function xyToFullCoords(x, y, z) {
-      const bx = BigInt(x || 0);
-      const by = BigInt(y || 0);
-      const bz = BigInt(z || 1);
+      const bx = typeof x === 'bigint' ? x : BigInt(x || 0);
+      const by = typeof y === 'bigint' ? y : BigInt(y || 0);
+      const bz = typeof z === 'bigint' ? z : BigInt(z || 1);
       const borges = zToBorges(bz);
       const hallIndex = (bx + HALF_ROW) + (by + HALF_ROW) * HALLS_PER_ROW;
       const sector = hallIndex / ALG.hallsPerSector + 1n;
