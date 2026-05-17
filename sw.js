@@ -3,7 +3,7 @@
    Caches all assets on first install, serves from cache.
    ═══════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'babel-v8.1-offline';
+const CACHE_NAME = 'babel-v9.0-modules';
 
 const ASSETS = [
   './',
@@ -11,10 +11,19 @@ const ASSETS = [
   './css/style.css',
   './js/config.js',
   './js/utils.js',
-  './js/library.js',
+  './js/lib-core.js',
+  './js/lib-fillers.js',
+  './js/lib-classifier.js',
+  './js/lib-api.js',
   './js/storage.js',
   './js/worker-bridge.js',
-  './js/themes.js',
+  './js/theme-helpers.js',
+  './js/theme-bookshelf.js',
+  './js/theme-cosmos.js',
+  './js/theme-messenger.js',
+  './js/theme-feed.js',
+  './js/theme-terminal.js',
+  './js/theme-views.js',
   './js/app.js',
   './js/words.js',
   './js/worker.js',

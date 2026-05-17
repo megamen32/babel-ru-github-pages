@@ -27,7 +27,7 @@ const context = {
 vm.createContext(context);
 
 // Load scripts in order
-const scripts = ['config.js', 'utils.js', 'library.js'];
+const scripts = ['config.js', 'utils.js', 'lib-core.js', 'lib-fillers.js', 'lib-classifier.js', 'lib-api.js'];
 for (const file of scripts) {
   const code = fs.readFileSync(__dirname + '/../js/' + file, 'utf8');
   vm.runInContext(code, context);
@@ -119,7 +119,7 @@ function diagnosePermutation() {
 
   const TOTAL_BITS = 8n * BigInt(ALG.pageLength);
 
-  // Compute PERM_C the same way library.js does
+  // Compute PERM_C the same way lib-core.js does
   const BIT_MASK = (1n << TOTAL_BITS) - 1n;
   const SEED_C = 0x4CF3B209D871A5E7n;
   const SEED_C_INV = SEED_C ^ 0xFFFFFFFFFFFFFFFFn;
