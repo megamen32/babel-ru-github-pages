@@ -187,6 +187,7 @@ a:hover { color: var(--pink); }
 
 .top-nav { display: flex; gap: 0.15rem; align-items: center; }
 .top-nav a {
+  display: inline-flex; align-items: center; gap: 0.3rem;
   padding: 0.4rem 0.7rem;
   font-family: var(--font-display);
   font-size: 0.65rem;
@@ -203,9 +204,18 @@ a:hover { color: var(--pink); }
   border-color: var(--border-hover);
   background: var(--accent-dim);
 }
+.nav-icon {
+  flex-shrink: 0;
+  transition: color var(--transition);
+}
+.nav-label {
+  transition: opacity var(--transition), width var(--transition);
+  overflow: hidden;
+}
 
 /* Mode toggle button in nav */
 .mode-toggle {
+  display: inline-flex; align-items: center; gap: 0.25rem;
   padding: 0.4rem 0.7rem;
   font-family: var(--font-display);
   font-size: 0.65rem;
@@ -219,6 +229,11 @@ a:hover { color: var(--pink); }
   transition: all var(--transition);
   white-space: nowrap;
 }
+.mode-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
 .mode-toggle:hover {
   border-color: var(--accent);
   box-shadow: var(--accent-glow);
@@ -226,10 +241,13 @@ a:hover { color: var(--pink); }
 
 /* Star icon for favorites nav link */
 .nav-star {
-  font-size: 1.1rem !important;
-  color: var(--yellow) !important;
-  padding: 0.3rem 0.5rem !important;
+  padding: 0.35rem 0.5rem !important;
   line-height: 1;
+}
+.nav-star .nav-icon {
+  color: var(--yellow);
+  fill: var(--yellow);
+  stroke: var(--yellow);
 }
 .nav-star:hover, .nav-star.active {
   color: var(--yellow) !important;
@@ -1521,12 +1539,22 @@ main#view { flex: 1; padding: 0; }
    RESPONSIVE
    ═══════════════════════════════════════════════════════════ */
 
+/* Narrow nav: icons only */
+@media (max-width: 780px) and (min-width: 601px) {
+  .nav-label { display: none; }
+  .top-nav a { padding: 0.4rem 0.5rem; }
+  .top-nav .mode-toggle { padding: 0.4rem 0.5rem; }
+  .top-nav a .nav-icon,
+  .top-nav .nav-star .nav-icon { width: 18px; height: 18px; }
+}
+
 @media (max-width: 600px) {
   .hamburger-btn { display: flex; }
   .top-nav { display: none; }
   .top-nav.mobile-open { display: flex; }
   .site-header { padding: 0.4rem 0.6rem; }
   .top-nav a { padding: 0.3rem 0.45rem; font-size: 0.55rem; }
+  .top-nav a .nav-icon { width: 16px; height: 16px; }
   .brand { font-size: 0.85rem; gap: 0.4rem; }
   .brand-icon { width: 28px; height: 28px; font-size: 0.65rem; }
 

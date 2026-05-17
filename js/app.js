@@ -330,7 +330,11 @@
     const mode = themes.getLibraryMode();
     const modeInfo = themes.LIBRARY_MODES[mode];
     if (modeInfo) {
-      btn.textContent = modeInfo.icon + ' ' + modeInfo.name;
+      const iconEl = btn.querySelector('.mode-icon');
+      const labelEl = btn.querySelector('.nav-label');
+      if (iconEl) iconEl.textContent = modeInfo.icon;
+      if (labelEl) labelEl.textContent = ' ' + modeInfo.name;
+      else btn.textContent = modeInfo.icon + ' ' + modeInfo.name;
     }
   }
 
