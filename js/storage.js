@@ -123,5 +123,25 @@
     clearJourney() {
       try { localStorage.removeItem("babelJourney"); } catch {}
     },
+
+    /* ═══════════════════════════════════════════════════════════
+       SEARCH HISTORY — recent search queries
+       ═══════════════════════════════════════════════════════════ */
+
+    pushSearchHistory(query) {
+      const q = String(query || '').trim();
+      if (!q) return;
+      const items = app.storage.readStore("babelSearchHistory").filter(entry => entry.q !== q);
+      items.unshift({ q, ts: Date.now() });
+      app.storage.writeStore("babelSearchHistory", items, 20);
+    },
+
+    getSearchHistory() {
+      return app.storage.readStore("babelSearchHistory");
+    },
+
+    clearSearchHistory() {
+      try { localStorage.removeItem("babelSearchHistory"); } catch {}
+    },
   };
 })();

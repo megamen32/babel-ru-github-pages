@@ -238,6 +238,73 @@ a:hover { color: var(--pink); }
   background: rgba(251, 191, 36, 0.1) !important;
 }
 
+/* Hamburger menu button */
+.hamburger-btn {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 32px;
+  height: 32px;
+  padding: 4px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.hamburger-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.hamburger-line {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: var(--text);
+  border-radius: 1px;
+  transition: all 0.3s ease;
+  transform-origin: center;
+}
+.hamburger-btn.open .hamburger-line:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+.hamburger-btn.open .hamburger-line:nth-child(2) {
+  opacity: 0;
+}
+.hamburger-btn.open .hamburger-line:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+/* Mobile nav dropdown */
+.top-nav.mobile-open {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  flex-direction: column;
+  background: rgba(14, 22, 33, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem;
+  gap: 0.25rem;
+  animation: slideDown 0.25s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.top-nav.mobile-open a,
+.top-nav.mobile-open .mode-toggle {
+  padding: 0.6rem 1rem;
+  font-size: 0.8rem;
+  width: 100%;
+  text-align: left;
+}
+
 .site-footer {
   margin-top: auto;
   padding: 1.5rem 1rem;
@@ -571,6 +638,121 @@ main#view { flex: 1; padding: 0; }
   display: block;
   width: 100%;
   height: 280px;
+  cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TEMPERATURE GAUGE — visual arc indicator
+   ═══════════════════════════════════════════════════════════ */
+
+.temp-gauge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+.temp-gauge-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+.temp-gauge-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease, background 0.5s ease;
+}
+.temp-gauge-label {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 70px;
+  text-align: right;
+}
+
+/* Reading stats row */
+.page-reading-stats {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+.reading-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.reading-stat-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.reading-stat-value {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Search history */
+.search-history {
+  margin-bottom: 1rem;
+}
+.search-history-title {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+}
+.search-history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.search-history-chip {
+  padding: 0.25rem 0.6rem;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all var(--transition);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.search-history-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* Keyboard shortcut hints */
+.kbd-hint {
+  display: inline-block;
+  padding: 0.1rem 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  line-height: 1.3;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1340,6 +1522,9 @@ main#view { flex: 1; padding: 0; }
    ═══════════════════════════════════════════════════════════ */
 
 @media (max-width: 600px) {
+  .hamburger-btn { display: flex; }
+  .top-nav { display: none; }
+  .top-nav.mobile-open { display: flex; }
   .site-header { padding: 0.4rem 0.6rem; }
   .top-nav a { padding: 0.3rem 0.45rem; font-size: 0.55rem; }
   .brand { font-size: 0.85rem; gap: 0.4rem; }

@@ -706,6 +706,60 @@
         ctx.fillText('d' + Math.round(d), midX, midY - 6);
       }
     }
+
+    /* Make map clickable — store hit zones and attach click handler */
+    const hitZones = filtered.map((step, i) => {
+      const pos = toCanvas(step.x, step.y);
+      return { cx: pos.cx, cy: pos.cy, x: step.labelX, y: step.labelY, radius: 12 };
+    });
+
+    /* Remove previous click handler if any */
+    if (canvas._journeyClickHandler) {
+      canvas.removeEventListener('click', canvas._journeyClickHandler);
+    }
+
+    canvas._journeyClickHandler = function(e) {
+      const rect2 = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect2.left;
+      const clickY = e.clientY - rect2.top;
+      for (const zone of hitZones) {
+        const dx = clickX - zone.cx;
+        const dy = clickY - zone.cy;
+        if (dx * dx + dy * dy <= zone.radius * zone.radius) {
+          /* Navigate to this hall */
+          location.hash = `#/x/${zone.x}/y/${zone.y}`;
+          break;
+        }
+      }
+    };
+    canvas.addEventListener('click', canvas._journeyClickHandler);
+
+    /* Cursor style: show pointer when hovering over points */
+    if (canvas._journeyMoveHandler) {
+      canvas.removeEventListener('mousemove', canvas._journeyMoveHandler);
+    }
+    canvas._journeyMoveHandler = function(e) {
+      const rect2 = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect2.left;
+      const my = e.clientY - rect2.top;
+      let hit = false;
+      for (const zone of hitZones) {
+        const dx = mx - zone.cx;
+        const dy = my - zone.cy;
+        if (dx * dx + dy * dy <= zone.radius * zone.radius) {
+          hit = true; break;
+        }
+      }
+      canvas.style.cursor = hit ? 'pointer' : 'default';
+    };
+    canvas.addEventListener('mousemove', canvas._journeyMoveHandler);
+
+    /* Register cleanup for when the view changes */
+    canvas._cleanup = function() {
+      canvas.removeEventListener('click', canvas._journeyClickHandler);
+      canvas.removeEventListener('mousemove', canvas._journeyMoveHandler);
+    };
+    canvas.setAttribute('_cleanup', '');
   }
 
   /* ═══════════════════════════════════════════════════════════

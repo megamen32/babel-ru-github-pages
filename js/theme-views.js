@@ -55,6 +55,30 @@
     const tempLabel = temp < 0.15 ? 'Язык' : temp < 0.35 ? 'Разговор' : temp < 0.55 ? 'Смешанный' : temp < 0.75 ? 'Шум' : 'Хаос';
     const tempPercent = Math.round((1 - temp) * 100);
 
+    /* Temperature gauge color: green → yellow → red */
+    const tempColor = temp < 0.25 ? 'var(--green)' : temp < 0.5 ? 'var(--yellow)' : 'var(--pink)';
+
+    /* Reading stats */
+    const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+    const readingTime = Math.max(1, Math.round(wordCount / 200));
+
+    /* Temperature gauge HTML */
+    const tempGaugeHTML = `
+      <div class="temp-gauge">
+        <div class="temp-gauge-bar">
+          <div class="temp-gauge-fill" style="width:${tempPercent}%;background:${tempColor}"></div>
+        </div>
+        <span class="temp-gauge-label" style="color:${tempColor}">${tempLabel} ${tempPercent}%</span>
+      </div>`;
+
+    /* Reading stats HTML */
+    const readingStatsHTML = `
+      <div class="page-reading-stats">
+        <span class="reading-stat"><span class="reading-stat-icon">📝</span> <span class="reading-stat-value">${wordCount}</span> слов</span>
+        <span class="reading-stat"><span class="reading-stat-icon">⏱</span> <span class="reading-stat-value">${readingTime}</span> мин</span>
+        <span class="reading-stat"><span class="reading-stat-icon">🌡</span> T = ${temp.toFixed(2)}</span>
+      </div>`;
+
     /* Навигация по Z */
     const prevZ = z > 1n ? z - 1n : null;
     const nextZ = z + 1n;
@@ -85,17 +109,19 @@
       <div class="page-header">
         <div>
           <h2>Страница Z:${z}</h2>
-          <span class="page-header-sub">Зал X:${h.fmtXY(xy.x)} Y:${h.fmtXY(xy.y)} · Температура ${temp.toFixed(2)}</span>
+          <span class="page-header-sub">Зал X:${h.fmtXY(xy.x)} Y:${h.fmtXY(xy.y)}</span>
         </div>
         <div class="page-density">
           <span class="density-badge density-${stats.label === 'Читаемая' ? 'readable' : stats.label === 'Разреженная' ? 'sparse' : 'noise'}">${tempLabel}</span>
-          <span class="density-pct">${tempPercent}%</span>
         </div>
       </div>
 
+      ${tempGaugeHTML}
+      ${readingStatsHTML}
+
       <div class="page-nav">
         ${prevUrl ? `<a class="btn-outline" href="${prevUrl}">← Z:${prevZ}</a>` : '<span></span>'}
-        <span class="page-num">Z:${z} · ${tempLabel}</span>
+        <span class="page-num">Z:${z} · ${tempLabel} <span class="kbd-hint">← →</span></span>
         ${nextUrl ? `<a class="btn-outline" href="${nextUrl}">Z:${nextZ} →</a>` : '<span></span>'}
       </div>
 

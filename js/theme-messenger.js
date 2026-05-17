@@ -535,7 +535,10 @@
 
       function doSearch() {
         const val = (input.value || '').trim();
-        if (val) location.hash = `#/search?q=${encodeURIComponent(val)}`;
+        if (val) {
+          store.pushSearchHistory(val);
+          location.hash = `#/search?q=${encodeURIComponent(val)}`;
+        }
       }
       function keepUserMessageInView() {
         if (userMessage) {

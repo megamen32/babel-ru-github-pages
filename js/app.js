@@ -360,17 +360,32 @@
   function renderSearchShared(route) {
     const q = route.params.get('q') || '';
 
+    /* Search history chips */
+    const searchHistory = store.getSearchHistory();
+    let historyHTML = '';
+    if (searchHistory.length > 0 && !q) {
+      const chips = searchHistory.slice(0, 10).map(h =>
+        `<a class="search-history-chip" href="#/search?q=${encodeURIComponent(h.q)}">${esc(h.q)}</a>`
+      ).join('');
+      historyHTML = `
+      <div class="search-history">
+        <div class="search-history-title">Недавние запросы</div>
+        <div class="search-history-list">${chips}</div>
+      </div>`;
+    }
+
     const genreLabel = { empty: '📄 На пустом листе', noise: '🌫️ Шум', words: '📖 Среди слов', dialogue: '💬 В переписке', post: '📱 В посте', diary: '📔 В дневнике', log: '⌨️ В логе' };
     return `
     <section class="search-view fade-in">
       <h1 class="search-title">Поиск в Библиотеке</h1>
-      <p class="search-subtitle">Любая фраза — дверь в облако страниц. Не одна страница, а множество.</p>
+      <p class="search-subtitle">Любая фраза — дверь в облако страниц. Не одна страница, а множество. <span class="kbd-hint">/</span></p>
       <form class="search-form" id="searchForm">
         <div class="search-input-wrap">
           <textarea class="search-input" id="searchInput" placeholder="Введите любой текст, включая emoji и абзацы..." rows="5" autofocus>${esc(q)}</textarea>
         </div>
         <button type="submit" class="search-submit">Искать в бесконечности</button>
       </form>
+      ${historyHTML}
       <div class="search-results" id="searchResults">
         <div id="searchResultsSlot">
           ${q ? `` : `<div class="empty-state"><div class="icon">◈</div><p>Введите фразу, чтобы найти её в бесконечной библиотеке</p></div>`}
@@ -400,6 +415,7 @@
       e.preventDefault();
       const nextQuery = input.value.trim();
       if (nextQuery) {
+        store.pushSearchHistory(nextQuery);
         location.hash = `#/search?q=${encodeURIComponent(nextQuery)}`;
       }
     });
@@ -610,6 +626,68 @@
 
     /* Initialize mode toggle handler */
     initModeToggle();
+
+    /* Initialize hamburger menu */
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+    if (hamburgerBtn) {
+      hamburgerBtn.addEventListener('click', () => {
+        const nav = document.getElementById('topNav');
+        const isOpen = nav.classList.toggle('mobile-open');
+        hamburgerBtn.classList.toggle('open', isOpen);
+        hamburgerBtn.setAttribute('aria-expanded', isOpen);
+      });
+      /* Close menu when a nav link is clicked */
+      document.getElementById('topNav').addEventListener('click', (e) => {
+        if (e.target.matches('a, button')) {
+          const nav = document.getElementById('topNav');
+          nav.classList.remove('mobile-open');
+          hamburgerBtn.classList.remove('open');
+          hamburgerBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+
+    /* Keyboard shortcuts */
+    document.addEventListener('keydown', (e) => {
+      /* Don't intercept when user is typing in an input */
+      const tag = e.target.tagName;
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable;
+
+      if (e.key === '/' && !isInput) {
+        e.preventDefault();
+        if (!location.hash.includes('search')) {
+          location.hash = '#/search';
+        }
+        setTimeout(() => {
+          const searchInput = document.getElementById('searchInput');
+          if (searchInput) searchInput.focus();
+        }, 100);
+      }
+
+      if (e.key === 'Escape') {
+        /* Close theme picker dropdown */
+        const dropdown = document.getElementById('themePickerDropdown');
+        if (dropdown) dropdown.classList.remove('open');
+        /* Close hamburger menu */
+        const nav = document.getElementById('topNav');
+        const hamburger = document.getElementById('hamburgerBtn');
+        if (nav) nav.classList.remove('mobile-open');
+        if (hamburger) { hamburger.classList.remove('open'); hamburger.setAttribute('aria-expanded', 'false'); }
+        /* Blur active input */
+        if (isInput) e.target.blur();
+      }
+
+      if (!isInput) {
+        if (e.key === 'ArrowLeft') {
+          const prevLink = document.querySelector('.page-nav a:first-child[href]');
+          if (prevLink) { e.preventDefault(); prevLink.click(); }
+        }
+        if (e.key === 'ArrowRight') {
+          const nextLink = document.querySelector('.page-nav a:last-child[href]');
+          if (nextLink) { e.preventDefault(); nextLink.click(); }
+        }
+      }
+    });
 
     /* First render */
     navigate();
