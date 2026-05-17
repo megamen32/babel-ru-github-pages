@@ -102,57 +102,60 @@
     return indicesToString(indices);
   }
 
-  /* ---- Coordinate system ----
+  /* ---- Coordinate system: бесконечная полка X,Y,Z ----
 
-     Координаты библиотеки — это смешанно-основанное число:
-       rawIndex = hallIndex × (6×5×32×410) + wall×(5×32×410) + shelf×(32×410) + volume×410 + page
+     Три координаты кодируют всё пространство 256^4096:
+       X, Y — позиция на бесконечной 2D-карте (какой зал)
+       Z    — номер листа в этом зале (1 .. PAGES_PER_HALL)
 
-     hallIndex — просто целое число, индекс зала в бесконечной последовательности.
-     X,Y — это hallIndex, разложенный на 2D-сетку для карты блужданий.
+     rawIndex = hallIndex × PAGES_PER_HALL + (Z - 1)
+     hallIndex = (X + HALF_ROW) + (Y + HALF_ROW) × HALLS_PER_ROW
 
-     Sector/hall — борхесовский display-формат, вычисляется из hallIndex
-     только для pageTitle(). Внутренне они не используются. */
+     Sector/hall/wall/shelf/volume/page — борхесовский display-формат,
+     вычисляется из hallIndex и Z только для pageTitle(). */
 
   const HALLS_PER_ROW = 1_000_000n;  // ширина сетки карты
   const HALF_ROW = HALLS_PER_ROW / 2n; // 500 000 — центр в (0,0)
   const PAGES_PER_HALL = ALG.wallsPerHall * ALG.shelvesPerWall * ALG.volumesPerShelf * ALG.pagesPerVolume;
 
+  /* Разложить Z на борхесовскую иерархию (display only) */
+  function zToBorges(z) {
+    let v = z - 1n;
+    const page = (v % ALG.pagesPerVolume) + 1n;
+    v /= ALG.pagesPerVolume;
+    const volume = (v % ALG.volumesPerShelf) + 1n;
+    v /= ALG.volumesPerShelf;
+    const shelf = (v % ALG.shelvesPerWall) + 1n;
+    v /= ALG.shelvesPerWall;
+    const wall = v + 1n;
+    return { wall, shelf, volume, page };
+  }
+
+  /* Собрать Z из борхесовской иерархии */
+  function borgesToZ(wall, shelf, volume, page) {
+    return ((wall - 1n) * ALG.shelvesPerWall * ALG.volumesPerShelf * ALG.pagesPerVolume
+          + (shelf - 1n) * ALG.volumesPerShelf * ALG.pagesPerVolume
+          + (volume - 1n) * ALG.pagesPerVolume
+          + page);
+  }
+
   function rawIndexToCoordinates(rawIndex) {
     let value = BigInt(rawIndex);
-    const page = (value % ALG.pagesPerVolume) + 1n;
-    value /= ALG.pagesPerVolume;
-    const volume = (value % ALG.volumesPerShelf) + 1n;
-    value /= ALG.volumesPerShelf;
-    const shelf = (value % ALG.shelvesPerWall) + 1n;
-    value /= ALG.shelvesPerWall;
-    const wall = (value % ALG.wallsPerHall) + 1n;
-    value /= ALG.wallsPerHall;
-    /* hallIndex — это линейный индекс зала (0, 1, 2, ...)
-       Из него вычисляем x,y для карты и sector/hall для отображения */
-    const hallIndex = value;
+    const z = (value % PAGES_PER_HALL) + 1n;
+    const hallIndex = value / PAGES_PER_HALL;
     const x = (hallIndex % HALLS_PER_ROW) - HALF_ROW;
     const y = (hallIndex / HALLS_PER_ROW) - HALF_ROW;
+    /* Борхесовский display (для pageTitle) */
     const sector = hallIndex / ALG.hallsPerSector + 1n;
     const hall = (hallIndex % ALG.hallsPerSector) + 1n;
-    return { x, y, sector, hall, wall, shelf, volume, page };
+    const borges = zToBorges(z);
+    return { x, y, z, sector, hall, ...borges };
   }
 
   function coordinatesToRawIndex(coordinates) {
-    /* Принимает как {x, y, wall, shelf, volume, page}, так и
-       старый формат {sector, hall, wall, shelf, volume, page} */
-    const wall = BigInt(coordinates.wall || 1);
-    const shelf = BigInt(coordinates.shelf || 1);
-    const volume = BigInt(coordinates.volume || 1);
-    const page = BigInt(coordinates.page || 1);
-
-    if (wall < 1n || wall > ALG.wallsPerHall ||
-        shelf < 1n || shelf > ALG.shelvesPerWall ||
-        volume < 1n || volume > ALG.volumesPerShelf ||
-        page < 1n || page > ALG.pagesPerVolume) {
-      throw new Error("Координаты вне геометрии библиотеки.");
-    }
-
-    /* Определяем hallIndex из x,y (новый формат) или sector,hall (старый) */
+    /* Основной формат: {x, y, z}
+       Обратная совместимость: {sector, hall, wall, shelf, volume, page}
+       Смешанный: {x, y, wall, shelf, volume, page} */
     let hallIndex;
     if (coordinates.x != null || coordinates.y != null) {
       const bx = BigInt(coordinates.x || 0);
@@ -167,18 +170,35 @@
       hallIndex = (sector - 1n) * ALG.hallsPerSector + (hall - 1n);
     }
 
-    let value = hallIndex;
-    value = value * ALG.wallsPerHall + (wall - 1n);
-    value = value * ALG.shelvesPerWall + (shelf - 1n);
-    value = value * ALG.volumesPerShelf + (volume - 1n);
-    value = value * ALG.pagesPerVolume + (page - 1n);
+    /* Определяем Z: напрямую или из борхесовской иерархии */
+    let z;
+    if (coordinates.z != null) {
+      z = BigInt(coordinates.z);
+      if (z < 1n || z > PAGES_PER_HALL) {
+        throw new Error("Z вне диапазона зала.");
+      }
+    } else {
+      const wall = BigInt(coordinates.wall || 1);
+      const shelf = BigInt(coordinates.shelf || 1);
+      const volume = BigInt(coordinates.volume || 1);
+      const page = BigInt(coordinates.page || 1);
+      if (wall < 1n || wall > ALG.wallsPerHall ||
+          shelf < 1n || shelf > ALG.shelvesPerWall ||
+          volume < 1n || volume > ALG.volumesPerShelf ||
+          page < 1n || page > ALG.pagesPerVolume) {
+        throw new Error("Координаты вне геометрии библиотеки.");
+      }
+      z = borgesToZ(wall, shelf, volume, page);
+    }
+
+    const value = hallIndex * PAGES_PER_HALL + (z - 1n);
     if (value >= maxPageNumber()) {
       throw new Error("Координаты выводят страницу за пределы пространства.");
     }
     return value;
   }
 
-  /* ---- XY <-> Sector/Hall (display only) ---- */
+  /* ---- XY helpers (для карты и URL) ---- */
 
   function xyToHallXY(x, y) {
     const bx = BigInt(x);
@@ -195,17 +215,15 @@
     };
   }
 
-  function xyToCoordinates(x, y, wall, shelf, volume, page) {
+  function xyToCoordinates(x, y, z) {
     const { sector, hall } = xyToHallXY(x, y);
-    return { x: BigInt(x), y: BigInt(y), sector, hall, wall: BigInt(wall || 1), shelf: BigInt(shelf || 1), volume: BigInt(volume || 1), page: BigInt(page || 1) };
+    const bz = BigInt(z || 1);
+    const borges = zToBorges(bz);
+    return { x: BigInt(x), y: BigInt(y), z: bz, sector, hall, ...borges };
   }
 
   function coordinatesToXY(coords) {
-    /* Если x,y уже есть — используем напрямую, иначе из sector/hall */
-    if (coords.x != null && coords.y != null) {
-      return { x: BigInt(coords.x), y: BigInt(coords.y) };
-    }
-    return hallToXY(coords.sector, coords.hall);
+    return { x: BigInt(coords.x || 0), y: BigInt(coords.y || 0) };
   }
 
   /* ---- Filler Generation (index-based) ---- */
@@ -237,6 +255,7 @@
     indicesToNumber, numberToIndices,
     textToNumber, numberToText, fixedPageText,
     rawIndexToCoordinates, coordinatesToRawIndex,
+    PAGES_PER_HALL, zToBorges, borgesToZ,
     xyToHallXY, hallToXY, xyToCoordinates, coordinatesToXY,
     createWordFillerIndices, createNoiseFillerIndices,
   };

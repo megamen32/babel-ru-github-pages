@@ -23,46 +23,54 @@
     const params = new URLSearchParams(query || '');
     let name = 'home';
     let pageCoords = null;
-    let pageXY = null; // { x, y, wall?, shelf?, volume?, page? } for x,y-based URLs
+    let pageXY = null; // { x, y, z? } — x,y,z координаты бесконечной полки
     let pageB64 = null;
     let isOldCoordFormat = false; // for redirect to new format (h/ or s/ based)
     let needsRedirect = null; // URL to redirect to for old-format URLs
 
-    /* UNIFIED format: #/x/{x}/y/{y}[/w/{w}][/sh/{sh}][/v/{v}][/p/{p}]
+    /* UNIFIED format: #/x/{x}/y/{y}[/z/{z}]
        Depth determines view:
-         - If /p/{page} present → page view
-         - If only x,y (maybe with /w/) → wander view */
+         - If /z/{z} present → page view
+         - If only x,y → wander view
+       Старый формат #/x/{x}/y/{y}/w/.../p/... тоже поддерживается */
 
     if (parts[0] === 'x') {
       pageXY = {};
       for (let i = 0; i < parts.length - 1; i += 2) {
         switch (parts[i]) {
-          case 'x': pageXY.x = parseInt(parts[i + 1]); break;
-          case 'y': pageXY.y = parseInt(parts[i + 1]); break;
+          case 'x': pageXY.x = parts[i + 1]; break;
+          case 'y': pageXY.y = parts[i + 1]; break;
+          case 'z': pageXY.z = parts[i + 1]; break;
+          /* Старые поля — для редиректа */
           case 'w': pageXY.wall = parseInt(parts[i + 1]) || 1; break;
           case 'sh': pageXY.shelf = parseInt(parts[i + 1]) || 1; break;
           case 'v': pageXY.volume = parseInt(parts[i + 1]) || 1; break;
           case 'p': pageXY.page = parseInt(parts[i + 1]) || 1; break;
         }
       }
+      /* Если есть старые w/sh/v/p но нет z — вычислим z и сделаем редирект */
+      if (pageXY.wall && !pageXY.z) {
+        pageXY.z = String(lib.borgesToZ(
+          BigInt(pageXY.wall || 1), BigInt(pageXY.shelf || 1),
+          BigInt(pageXY.volume || 1), BigInt(pageXY.page || 1)
+        ));
+        needsRedirect = `#/x/${pageXY.x}/y/${pageXY.y}/z/${pageXY.z}`;
+      }
       /* Determine view based on depth */
-      name = (pageXY.page != null) ? 'page' : 'wander';
+      name = (pageXY.z != null) ? 'page' : 'wander';
     }
     /* OLD: #/wander → redirect to #/x/0/y/0 */
     else if (parts[0] === 'wander') {
       if (parts[1] === 'x') {
-        /* OLD: #/wander/x/{x}/y/{y}[/wall/{w}] → redirect to new format */
-        let rx = 0, ry = 0, rw = null;
+        /* OLD: #/wander/x/{x}/y/{y}[/wall/{w}] → redirect */
+        let rx = 0, ry = 0;
         for (let i = 1; i < parts.length - 1; i += 2) {
           if (parts[i] === 'x') rx = parseInt(parts[i + 1]) || 0;
           if (parts[i] === 'y') ry = parseInt(parts[i + 1]) || 0;
-          if (parts[i] === 'wall') rw = parseInt(parts[i + 1]) || null;
         }
-        let newUrl = `#/x/${rx}/y/${ry}`;
-        if (rw != null) newUrl += `/w/${rw}`;
-        needsRedirect = newUrl;
+        needsRedirect = `#/x/${rx}/y/${ry}`;
         name = 'wander';
-        pageXY = { x: rx, y: ry, wall: rw || 1 };
+        pageXY = { x: rx, y: ry };
       } else {
         /* #/wander (no coords) → redirect to #/x/0/y/0 */
         needsRedirect = '#/x/0/y/0';
@@ -77,25 +85,28 @@
         needsRedirect = '#/random';
         name = 'page';
       }
-      /* OLD format: #/page/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} → redirect */
+      /* OLD format: #/page/x/{x}/y/{y}/... → redirect to #/x/.../z/... */
       else if (parts[1] === 'x') {
         const parsed = {};
         for (let i = 1; i < parts.length - 1; i += 2) {
           switch (parts[i]) {
-            case 'x': parsed.x = parseInt(parts[i + 1]); break;
-            case 'y': parsed.y = parseInt(parts[i + 1]); break;
+            case 'x': parsed.x = parseInt(parts[i + 1]) || 0; break;
+            case 'y': parsed.y = parseInt(parts[i + 1]) || 0; break;
+            case 'z': parsed.z = parseInt(parts[i + 1]); break;
             case 'w': parsed.wall = parseInt(parts[i + 1]) || 1; break;
             case 'sh': parsed.shelf = parseInt(parts[i + 1]) || 1; break;
             case 'v': parsed.volume = parseInt(parts[i + 1]) || 1; break;
             case 'p': parsed.page = parseInt(parts[i + 1]) || 1; break;
           }
         }
-        /* Build new URL from parsed coords */
-        let newUrl = `#/x/${parsed.x || 0}/y/${parsed.y || 0}`;
-        if (parsed.wall) newUrl += `/w/${parsed.wall}`;
-        if (parsed.shelf) newUrl += `/sh/${parsed.shelf}`;
-        if (parsed.volume) newUrl += `/v/${parsed.volume}`;
-        if (parsed.page) newUrl += `/p/${parsed.page}`;
+        /* Вычисляем z если есть только старые w/sh/v/p */
+        if (!parsed.z && parsed.wall) {
+          parsed.z = Number(lib.borgesToZ(
+            BigInt(parsed.wall), BigInt(parsed.shelf || 1),
+            BigInt(parsed.volume || 1), BigInt(parsed.page || 1)
+          ));
+        }
+        const newUrl = `#/x/${parsed.x}/y/${parsed.y}/z/${parsed.z || 1}`;
         needsRedirect = newUrl;
         name = 'page';
         pageXY = parsed;
@@ -193,9 +204,9 @@
           /* Resolve page number from URL */
           try {
             if (route.pageXY) {
-              /* Unified format: x,y based — compute coords from x,y + wall/shelf/volume/page */
+              /* Unified format: x,y,z */
               const xy = route.pageXY;
-              const coords = lib.xyToCoordinates(xy.x, xy.y, xy.wall, xy.shelf, xy.volume, xy.page);
+              const coords = lib.xyToCoordinates(xy.x, xy.y, xy.z || 1);
               route.pageNumber = lib.coordinatesToNumber(coords);
             } else if (route.pageCoords) {
               /* ANCIENT format: h/ or s/ based — decode sector, compute, then redirect */

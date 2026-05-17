@@ -189,30 +189,36 @@ function unpermuteIndex(index) {
 
 function rawIndexToCoordinates(rawIndex) {
   let value = BigInt(rawIndex);
-  const page = (value % ALG.pagesPerVolume) + 1n;
-  value /= ALG.pagesPerVolume;
-  const volume = (value % ALG.volumesPerShelf) + 1n;
-  value /= ALG.volumesPerShelf;
-  const shelf = (value % ALG.shelvesPerWall) + 1n;
-  value /= ALG.shelvesPerWall;
-  const wall = (value % ALG.wallsPerHall) + 1n;
-  value /= ALG.wallsPerHall;
-  /* hallIndex — линейный индекс зала */
-  const hallIndex = value;
+  const z = (value % PAGES_PER_HALL) + 1n;
+  const hallIndex = value / PAGES_PER_HALL;
   const x = (hallIndex % HALLS_PER_ROW) - HALF_ROW;
   const y = (hallIndex / HALLS_PER_ROW) - HALF_ROW;
   const sector = hallIndex / ALG.hallsPerSector + 1n;
   const hall = (hallIndex % ALG.hallsPerSector) + 1n;
-  return { x, y, sector, hall, wall, shelf, volume, page };
+  const borges = zToBorges(z);
+  return { x, y, z, sector, hall, ...borges };
+}
+
+function zToBorges(z) {
+  let v = z - 1n;
+  const page = (v % ALG.pagesPerVolume) + 1n;
+  v /= ALG.pagesPerVolume;
+  const volume = (v % ALG.volumesPerShelf) + 1n;
+  v /= ALG.volumesPerShelf;
+  const shelf = (v % ALG.shelvesPerWall) + 1n;
+  v /= ALG.shelvesPerWall;
+  const wall = v + 1n;
+  return { wall, shelf, volume, page };
+}
+
+function borgesToZ(wall, shelf, volume, page) {
+  return ((wall - 1n) * ALG.shelvesPerWall * ALG.volumesPerShelf * ALG.pagesPerVolume
+        + (shelf - 1n) * ALG.volumesPerShelf * ALG.pagesPerVolume
+        + (volume - 1n) * ALG.pagesPerVolume
+        + page);
 }
 
 function coordinatesToRawIndex(coordinates) {
-  const wall = BigInt(coordinates.wall || 1);
-  const shelf = BigInt(coordinates.shelf || 1);
-  const volume = BigInt(coordinates.volume || 1);
-  const page = BigInt(coordinates.page || 1);
-
-  /* hallIndex из x,y (новый) или sector,hall (старый) */
   let hallIndex;
   if (coordinates.x != null || coordinates.y != null) {
     const bx = BigInt(coordinates.x || 0);
@@ -224,12 +230,18 @@ function coordinatesToRawIndex(coordinates) {
     hallIndex = (sector - 1n) * ALG.hallsPerSector + (hall - 1n);
   }
 
-  let value = hallIndex;
-  value = value * ALG.wallsPerHall + (wall - 1n);
-  value = value * ALG.shelvesPerWall + (shelf - 1n);
-  value = value * ALG.volumesPerShelf + (volume - 1n);
-  value = value * ALG.pagesPerVolume + (page - 1n);
-  return value;
+  let z;
+  if (coordinates.z != null) {
+    z = BigInt(coordinates.z);
+  } else {
+    const wall = BigInt(coordinates.wall || 1);
+    const shelf = BigInt(coordinates.shelf || 1);
+    const volume = BigInt(coordinates.volume || 1);
+    const page = BigInt(coordinates.page || 1);
+    z = borgesToZ(wall, shelf, volume, page);
+  }
+
+  return hallIndex * PAGES_PER_HALL + (z - 1n);
 }
 
 function coordinatesToNumber(coordinates) {
@@ -240,9 +252,10 @@ function numberToCoordinates(number) {
   return rawIndexToCoordinates(unpermuteIndex(number));
 }
 
-/* ---- XY <-> Sector/Hall (display only) ---- */
+/* ---- XY helpers ---- */
 const HALLS_PER_ROW = 1_000_000n;
 const HALF_ROW = HALLS_PER_ROW / 2n;
+const PAGES_PER_HALL = ALG.wallsPerHall * ALG.shelvesPerWall * ALG.volumesPerShelf * ALG.pagesPerVolume;
 
 function xyToHallXY(x, y) {
   const bx = BigInt(x);
@@ -259,16 +272,15 @@ function hallToXY(sector, hall) {
   };
 }
 
-function xyToCoordinates(x, y, wall, shelf, volume, page) {
+function xyToCoordinates(x, y, z) {
   const { sector, hall } = xyToHallXY(x, y);
-  return { x: BigInt(x), y: BigInt(y), sector, hall, wall: BigInt(wall || 1), shelf: BigInt(shelf || 1), volume: BigInt(volume || 1), page: BigInt(page || 1) };
+  const bz = BigInt(z || 1);
+  const borges = zToBorges(bz);
+  return { x: BigInt(x), y: BigInt(y), z: bz, sector, hall, ...borges };
 }
 
 function coordinatesToXY(coords) {
-  if (coords.x != null && coords.y != null) {
-    return { x: BigInt(coords.x), y: BigInt(coords.y) };
-  }
-  return hallToXY(coords.sector, coords.hall);
+  return { x: BigInt(coords.x || 0), y: BigInt(coords.y || 0) };
 }
 
 /* ---- Filler generation ---- */
@@ -679,7 +691,7 @@ function randomPageNumber() {
 }
 
 function pageTitle(coordinates) {
-  return `Сектор ${coordinates.sector} · Зал ${coordinates.hall} · Стена ${coordinates.wall} · Полка ${coordinates.shelf} · Том ${coordinates.volume} · Лист ${coordinates.page}`;
+  return `X:${coordinates.x} Y:${coordinates.y} Z:${coordinates.z}`;
 }
 
 /* ---- Page data ---- */

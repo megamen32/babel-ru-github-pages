@@ -15,6 +15,7 @@
     textToNumber, numberToText, fixedPageText,
     rawIndexToCoordinates, coordinatesToRawIndex,
     xyToHallXY, hallToXY, xyToCoordinates, coordinatesToXY,
+    PAGES_PER_HALL, zToBorges, borgesToZ,
     createWordFillerIndices, createNoiseFillerIndices,
   } = _core;
 
@@ -61,6 +62,10 @@
       return rawIndexToCoordinates(app.library.unpermuteIndex(number));
     },
     pageTitle(coordinates) {
+      /* Основной формат: X, Y, Z. Борхесовский — опционально. */
+      return `X:${coordinates.x} Y:${coordinates.y} Z:${coordinates.z}`;
+    },
+    pageTitleBorges(coordinates) {
       return `Сектор ${coordinates.sector} · Зал ${coordinates.hall} · Стена ${coordinates.wall} · Полка ${coordinates.shelf} · Том ${coordinates.volume} · Лист ${coordinates.page}`;
     },
 
@@ -78,28 +83,17 @@
     createLogFillerIndices,
     createHumanFillerIndices,
 
-    /* Coordinate-based page URL — unified progressive scheme:
-       #/x/{x}/y/{y}[/w/{wall}][/sh/{shelf}][/v/{volume}][/p/{page}]
-       Depth determines view: x+y → wander, +/p/ → page.
-       No /wander or /page prefix — URL depth is the view.
-       x,y are derived from sector+hall via hallToXY() — bijective mapping.
-       Sector is no longer needed in the URL since x,y fully determine it.
-       When called from coordsToPageUrl, always includes /v/ and /p/
-       so the view is always a page (not wander). */
+    /* Coordinate-based page URL
+       Формат: #/x/{x}/y/{y}/z/{z}
+       Старый формат: #/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
+       Древний: #/page/s/{sector}/h/{hall}/... */
     coordsToPageUrl(coords, params) {
       const c = {
-        sector: BigInt(coords.sector || 1),
-        hall: BigInt(coords.hall || 1),
-        wall: BigInt(coords.wall || 1),
-        shelf: BigInt(coords.shelf || 1),
-        volume: BigInt(coords.volume || 1),
-        page: BigInt(coords.page || 1),
+        x: BigInt(coords.x || 0),
+        y: BigInt(coords.y || 0),
+        z: BigInt(coords.z || 1),
       };
-      // Derive x,y from sector+hall
-      const xy = hallToXY(c.sector, c.hall);
-      /* Always include full depth so the view is a page, not wander.
-         Progressive omission only applies to navigation within a room. */
-      let base = `#/x/${xy.x}/y/${xy.y}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}`;
+      const base = `#/x/${c.x}/y/${c.y}/z/${c.z}`;
       if (params) {
         const qs = new URLSearchParams(params).toString();
         return `${base}?${qs}`;
@@ -112,10 +106,11 @@
     },
 
     xyToCoordinates, coordinatesToXY, xyToHallXY, hallToXY,
+    PAGES_PER_HALL, zToBorges, borgesToZ,
 
-    getBookSpine(x, y, wall, shelf, volume) {
+    getBookSpine(x, y, z) {
       try {
-        const coords = xyToCoordinates(x, y, wall, shelf, volume, 1);
+        const coords = xyToCoordinates(x, y, z);
         const number = app.library.coordinatesToNumber(coords);
         const indices = numberToIndices(number);
         let start = 0;
@@ -124,8 +119,8 @@
       } catch { return ""; }
     },
 
-    getPageByXY(x, y, wall, shelf, volume, page) {
-      const coords = xyToCoordinates(x, y, wall, shelf, volume, page);
+    getPageByXY(x, y, z) {
+      const coords = xyToCoordinates(x, y, z);
       const number = app.library.coordinatesToNumber(coords);
       const indices = numberToIndices(number);
       return { number, text: indicesToString(indices), indices, coordinates: coords };
@@ -394,13 +389,15 @@
         const pagePart = value.split("#/page/").pop().split("?")[0];
         const parts = pagePart.split("/").filter(Boolean);
 
-        /* NEW format: x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
+        /* CURRENT format: x/{x}/y/{y}/z/{z} */
         if (parts[0] === 'x' && parts.length >= 4) {
           const parsed = {};
           for (let i = 0; i < parts.length - 1; i += 2) {
             switch (parts[i]) {
               case 'x': parsed.x = parts[i + 1]; break;
               case 'y': parsed.y = parts[i + 1]; break;
+              case 'z': parsed.z = parts[i + 1]; break;
+              /* Старые поля для обратной совместимости */
               case 'w': parsed.wall = parts[i + 1]; break;
               case 'sh': parsed.shelf = parts[i + 1]; break;
               case 'v': parsed.volume = parts[i + 1]; break;
@@ -409,7 +406,7 @@
           }
           if (parsed.x != null && parsed.y != null) {
             try {
-              const coords = xyToCoordinates(parsed.x, parsed.y, parsed.wall, parsed.shelf, parsed.volume, parsed.page);
+              const coords = xyToCoordinates(parsed.x, parsed.y, parsed.z || parsed.wall && borgesToZ(BigInt(parsed.wall||1), BigInt(parsed.shelf||1), BigInt(parsed.volume||1), BigInt(parsed.page||1)) || 1);
               return app.library.coordinatesToNumber(coords);
             } catch { /* fall through */ }
           }
