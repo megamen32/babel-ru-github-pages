@@ -240,9 +240,34 @@
         foundPos = bestPos;
         foundLen = phraseWords[0].length;
       } else {
-        /* Фраза действительно не найдена — помечаем начало */
-        foundPos = 0;
-        foundLen = 0;
+        /* Последняя попытка: ищем фразу без учёта пробелов.
+           Это нужно когда неизвестное слово (например "hello")
+           при кодировании разбивается на RAW_CHAR символы,
+           а FSM вставляет пробелы между ними: "hel l o".
+           Убираем пробелы из декодированного текста и ищем там. */
+        const strippedDecoded = lowerDecoded.replace(/\s+/g, '');
+        const strippedPhrase = normalized.replace(/\s+/g, '');
+        const strippedPos = strippedDecoded.indexOf(strippedPhrase);
+        if (strippedPos >= 0) {
+          /* Маппим позицию обратно в исходный текст с пробелами.
+             Ищем ближайшую позицию в оригинальном тексте. */
+          let charCount = 0;
+          for (let i = 0; i < decodedText.length; i++) {
+            if (decodedText[i] !== ' ' && decodedText[i] !== '\n') {
+              if (charCount === strippedPos) {
+                foundPos = i;
+                break;
+              }
+              charCount++;
+            }
+          }
+          /* Длина подсветки — оригинальная длина фразы */
+          foundLen = normalized.length;
+        } else {
+          /* Фраза действительно не найдена — помечаем начало */
+          foundPos = 0;
+          foundLen = 0;
+        }
       }
     }
 

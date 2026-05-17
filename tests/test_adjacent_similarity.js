@@ -26,8 +26,14 @@ const context = {
 };
 vm.createContext(context);
 
-// Load scripts in order
-const scripts = ['config.js', 'utils.js', 'lib-core.js', 'lib-fillers.js', 'lib-classifier.js', 'lib-api.js'];
+// Load scripts in order (matching index.html)
+const scripts = [
+  'words.js', 'config.js', 'utils.js',
+  'lib-prefix-codec.js', 'lib-token-table.js', 'lib-address-codec.js',
+  'lib-coordinate-permutation.js',
+  'lib-tokens.js', 'lib-core.js', 'lib-fillers.js', 'lib-classifier.js',
+  'lib-api.js',
+];
 for (const file of scripts) {
   const code = fs.readFileSync(__dirname + '/../js/' + file, 'utf8');
   vm.runInContext(code, context);

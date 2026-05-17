@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "test:adjacent": "node tests/test_adjacent_similarity.js",
-    "test:e2e": "playwright test"
+    "test:core": "node tests/test_core.js",
+    "test:e2e": "playwright test",
+    "test": "node tests/test_core.js && node tests/test_adjacent_similarity.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0"
