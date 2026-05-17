@@ -59,7 +59,7 @@
   ];
 
   app.config = {
-    VERSION: "ru6",
+    VERSION: "8.0",
     ALG: {
       label: "ru6",
       alphabet: ALPHABET,
