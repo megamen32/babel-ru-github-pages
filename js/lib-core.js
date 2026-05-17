@@ -102,7 +102,20 @@
     return indicesToString(indices);
   }
 
-  /* ---- Coordinate system ---- */
+  /* ---- Coordinate system ----
+
+     Координаты библиотеки — это смешанно-основанное число:
+       rawIndex = hallIndex × (6×5×32×410) + wall×(5×32×410) + shelf×(32×410) + volume×410 + page
+
+     hallIndex — просто целое число, индекс зала в бесконечной последовательности.
+     X,Y — это hallIndex, разложенный на 2D-сетку для карты блужданий.
+
+     Sector/hall — борхесовский display-формат, вычисляется из hallIndex
+     только для pageTitle(). Внутренне они не используются. */
+
+  const HALLS_PER_ROW = 1_000_000n;  // ширина сетки карты
+  const HALF_ROW = HALLS_PER_ROW / 2n; // 500 000 — центр в (0,0)
+  const PAGES_PER_HALL = ALG.wallsPerHall * ALG.shelvesPerWall * ALG.volumesPerShelf * ALG.pagesPerVolume;
 
   function rawIndexToCoordinates(rawIndex) {
     let value = BigInt(rawIndex);
@@ -114,77 +127,86 @@
     value /= ALG.shelvesPerWall;
     const wall = (value % ALG.wallsPerHall) + 1n;
     value /= ALG.wallsPerHall;
-    const hall = (value % ALG.hallsPerSector) + 1n;
-    value /= ALG.hallsPerSector;
-    const sector = value + 1n;
-    return { sector, hall, wall, shelf, volume, page };
+    /* hallIndex — это линейный индекс зала (0, 1, 2, ...)
+       Из него вычисляем x,y для карты и sector/hall для отображения */
+    const hallIndex = value;
+    const x = (hallIndex % HALLS_PER_ROW) - HALF_ROW;
+    const y = (hallIndex / HALLS_PER_ROW) - HALF_ROW;
+    const sector = hallIndex / ALG.hallsPerSector + 1n;
+    const hall = (hallIndex % ALG.hallsPerSector) + 1n;
+    return { x, y, sector, hall, wall, shelf, volume, page };
   }
 
   function coordinatesToRawIndex(coordinates) {
-    const c = {
-      sector: BigInt(coordinates.sector || 1),
-      hall: BigInt(coordinates.hall || 1),
-      wall: BigInt(coordinates.wall || 1),
-      shelf: BigInt(coordinates.shelf || 1),
-      volume: BigInt(coordinates.volume || 1),
-      page: BigInt(coordinates.page || 1),
-    };
-    if (
-      c.sector < 1n ||
-      c.hall < 1n || c.hall > ALG.hallsPerSector ||
-      c.wall < 1n || c.wall > ALG.wallsPerHall ||
-      c.shelf < 1n || c.shelf > ALG.shelvesPerWall ||
-      c.volume < 1n || c.volume > ALG.volumesPerShelf ||
-      c.page < 1n || c.page > ALG.pagesPerVolume
-    ) {
+    /* Принимает как {x, y, wall, shelf, volume, page}, так и
+       старый формат {sector, hall, wall, shelf, volume, page} */
+    const wall = BigInt(coordinates.wall || 1);
+    const shelf = BigInt(coordinates.shelf || 1);
+    const volume = BigInt(coordinates.volume || 1);
+    const page = BigInt(coordinates.page || 1);
+
+    if (wall < 1n || wall > ALG.wallsPerHall ||
+        shelf < 1n || shelf > ALG.shelvesPerWall ||
+        volume < 1n || volume > ALG.volumesPerShelf ||
+        page < 1n || page > ALG.pagesPerVolume) {
       throw new Error("Координаты вне геометрии библиотеки.");
     }
-    let value = c.sector - 1n;
-    value = value * ALG.hallsPerSector + (c.hall - 1n);
-    value = value * ALG.wallsPerHall + (c.wall - 1n);
-    value = value * ALG.shelvesPerWall + (c.shelf - 1n);
-    value = value * ALG.volumesPerShelf + (c.volume - 1n);
-    value = value * ALG.pagesPerVolume + (c.page - 1n);
+
+    /* Определяем hallIndex из x,y (новый формат) или sector,hall (старый) */
+    let hallIndex;
+    if (coordinates.x != null || coordinates.y != null) {
+      const bx = BigInt(coordinates.x || 0);
+      const by = BigInt(coordinates.y || 0);
+      hallIndex = (bx + HALF_ROW) + (by + HALF_ROW) * HALLS_PER_ROW;
+    } else {
+      const sector = BigInt(coordinates.sector || 1);
+      const hall = BigInt(coordinates.hall || 1);
+      if (sector < 1n || hall < 1n || hall > ALG.hallsPerSector) {
+        throw new Error("Координаты вне геометрии библиотеки.");
+      }
+      hallIndex = (sector - 1n) * ALG.hallsPerSector + (hall - 1n);
+    }
+
+    let value = hallIndex;
+    value = value * ALG.wallsPerHall + (wall - 1n);
+    value = value * ALG.shelvesPerWall + (shelf - 1n);
+    value = value * ALG.volumesPerShelf + (volume - 1n);
+    value = value * ALG.pagesPerVolume + (page - 1n);
     if (value >= maxPageNumber()) {
       throw new Error("Координаты выводят страницу за пределы пространства.");
     }
     return value;
   }
 
-  /* ---- XY Coordinate System (modular grid) ----
-
-     hallIndex = (sector-1)*20 + (hall-1) — линейный индекс зала.
-     Разбиваем на сетку шириной GRID_W:
-       x = hallIndex % GRID_W - HALF_W
-       y = hallIndex / GRID_W - HALF_W
-     Обратное:
-       hallIndex = (x + HALF_W) + (y + HALF_W) * GRID_W
-     Всё в BigInt — никакого переполнения, никаких Infinity. */
-
-  const GRID_W = 1_000_000n;  // ширина сетки = 1 млн залов
-  const HALF_W = GRID_W / 2n; // 500 000 — центр сетки в (0,0)
+  /* ---- XY <-> Sector/Hall (display only) ---- */
 
   function xyToHallXY(x, y) {
     const bx = BigInt(x);
     const by = BigInt(y);
-    const hallIndex = (bx + HALF_W) + (by + HALF_W) * GRID_W;
-    return { sector: hallIndex / 20n + 1n, hall: hallIndex % 20n + 1n };
+    const hallIndex = (bx + HALF_ROW) + (by + HALF_ROW) * HALLS_PER_ROW;
+    return { sector: hallIndex / ALG.hallsPerSector + 1n, hall: hallIndex % ALG.hallsPerSector + 1n };
   }
 
   function hallToXY(sector, hall) {
-    const hallIndex = (BigInt(sector) - 1n) * 20n + (BigInt(hall) - 1n);
+    const hallIndex = (BigInt(sector) - 1n) * ALG.hallsPerSector + (BigInt(hall) - 1n);
     return {
-      x: (hallIndex % GRID_W) - HALF_W,
-      y: (hallIndex / GRID_W) - HALF_W,
+      x: (hallIndex % HALLS_PER_ROW) - HALF_ROW,
+      y: (hallIndex / HALLS_PER_ROW) - HALF_ROW,
     };
   }
 
   function xyToCoordinates(x, y, wall, shelf, volume, page) {
     const { sector, hall } = xyToHallXY(x, y);
-    return { sector, hall, wall: BigInt(wall || 1), shelf: BigInt(shelf || 1), volume: BigInt(volume || 1), page: BigInt(page || 1) };
+    return { x: BigInt(x), y: BigInt(y), sector, hall, wall: BigInt(wall || 1), shelf: BigInt(shelf || 1), volume: BigInt(volume || 1), page: BigInt(page || 1) };
   }
 
-  function coordinatesToXY(coords) { return hallToXY(coords.sector, coords.hall); }
+  function coordinatesToXY(coords) {
+    /* Если x,y уже есть — используем напрямую, иначе из sector/hall */
+    if (coords.x != null && coords.y != null) {
+      return { x: BigInt(coords.x), y: BigInt(coords.y) };
+    }
+    return hallToXY(coords.sector, coords.hall);
+  }
 
   /* ---- Filler Generation (index-based) ---- */
 

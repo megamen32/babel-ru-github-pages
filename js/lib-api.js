@@ -83,20 +83,18 @@
        New format: #/page/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
        Old format: #/page/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url}
        Ancient format: #/page/s/{sector_decimal}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
-       x,y are derived from sector+hall via hallToXY() — bijective mapping.
-       Sector is no longer needed in the URL since x,y fully determine it. */
+       x,y are now first-class coordinate fields. Sector is no longer needed
+       in the URL since x,y fully determine it. */
     coordsToPageUrl(coords, params) {
       const c = {
-        sector: BigInt(coords.sector || 1),
-        hall: BigInt(coords.hall || 1),
+        x: BigInt(coords.x || 0),
+        y: BigInt(coords.y || 0),
         wall: BigInt(coords.wall || 1),
         shelf: BigInt(coords.shelf || 1),
         volume: BigInt(coords.volume || 1),
         page: BigInt(coords.page || 1),
       };
-      // Derive x,y from sector+hall
-      const xy = hallToXY(c.sector, c.hall);
-      const base = `#/page/x/${xy.x}/y/${xy.y}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}`;
+      const base = `#/page/x/${c.x}/y/${c.y}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}`;
       if (params) {
         const qs = new URLSearchParams(params).toString();
         return `${base}?${qs}`;

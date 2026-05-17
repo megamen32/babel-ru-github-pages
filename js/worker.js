@@ -197,27 +197,38 @@ function rawIndexToCoordinates(rawIndex) {
   value /= ALG.shelvesPerWall;
   const wall = (value % ALG.wallsPerHall) + 1n;
   value /= ALG.wallsPerHall;
-  const hall = (value % ALG.hallsPerSector) + 1n;
-  value /= ALG.hallsPerSector;
-  const sector = value + 1n;
-  return { sector, hall, wall, shelf, volume, page };
+  /* hallIndex — линейный индекс зала */
+  const hallIndex = value;
+  const x = (hallIndex % HALLS_PER_ROW) - HALF_ROW;
+  const y = (hallIndex / HALLS_PER_ROW) - HALF_ROW;
+  const sector = hallIndex / ALG.hallsPerSector + 1n;
+  const hall = (hallIndex % ALG.hallsPerSector) + 1n;
+  return { x, y, sector, hall, wall, shelf, volume, page };
 }
 
 function coordinatesToRawIndex(coordinates) {
-  const c = {
-    sector: BigInt(coordinates.sector || 1),
-    hall: BigInt(coordinates.hall || 1),
-    wall: BigInt(coordinates.wall || 1),
-    shelf: BigInt(coordinates.shelf || 1),
-    volume: BigInt(coordinates.volume || 1),
-    page: BigInt(coordinates.page || 1),
-  };
-  let value = c.sector - 1n;
-  value = value * ALG.hallsPerSector + (c.hall - 1n);
-  value = value * ALG.wallsPerHall + (c.wall - 1n);
-  value = value * ALG.shelvesPerWall + (c.shelf - 1n);
-  value = value * ALG.volumesPerShelf + (c.volume - 1n);
-  value = value * ALG.pagesPerVolume + (c.page - 1n);
+  const wall = BigInt(coordinates.wall || 1);
+  const shelf = BigInt(coordinates.shelf || 1);
+  const volume = BigInt(coordinates.volume || 1);
+  const page = BigInt(coordinates.page || 1);
+
+  /* hallIndex из x,y (новый) или sector,hall (старый) */
+  let hallIndex;
+  if (coordinates.x != null || coordinates.y != null) {
+    const bx = BigInt(coordinates.x || 0);
+    const by = BigInt(coordinates.y || 0);
+    hallIndex = (bx + HALF_ROW) + (by + HALF_ROW) * HALLS_PER_ROW;
+  } else {
+    const sector = BigInt(coordinates.sector || 1);
+    const hall = BigInt(coordinates.hall || 1);
+    hallIndex = (sector - 1n) * ALG.hallsPerSector + (hall - 1n);
+  }
+
+  let value = hallIndex;
+  value = value * ALG.wallsPerHall + (wall - 1n);
+  value = value * ALG.shelvesPerWall + (shelf - 1n);
+  value = value * ALG.volumesPerShelf + (volume - 1n);
+  value = value * ALG.pagesPerVolume + (page - 1n);
   return value;
 }
 
@@ -229,35 +240,36 @@ function numberToCoordinates(number) {
   return rawIndexToCoordinates(unpermuteIndex(number));
 }
 
-/* ---- XY Coordinate System (modular grid) ----
-   hallIndex = (sector-1)*20 + (hall-1)
-   x = hallIndex % GRID_W - HALF_W
-   y = hallIndex / GRID_W - HALF_W
-   Всё в BigInt — никакого переполнения. */
-const GRID_W = 1_000_000n;
-const HALF_W = GRID_W / 2n;
+/* ---- XY <-> Sector/Hall (display only) ---- */
+const HALLS_PER_ROW = 1_000_000n;
+const HALF_ROW = HALLS_PER_ROW / 2n;
 
 function xyToHallXY(x, y) {
   const bx = BigInt(x);
   const by = BigInt(y);
-  const hallIndex = (bx + HALF_W) + (by + HALF_W) * GRID_W;
-  return { sector: hallIndex / 20n + 1n, hall: hallIndex % 20n + 1n };
+  const hallIndex = (bx + HALF_ROW) + (by + HALF_ROW) * HALLS_PER_ROW;
+  return { sector: hallIndex / ALG.hallsPerSector + 1n, hall: hallIndex % ALG.hallsPerSector + 1n };
 }
 
 function hallToXY(sector, hall) {
-  const hallIndex = (BigInt(sector) - 1n) * 20n + (BigInt(hall) - 1n);
+  const hallIndex = (BigInt(sector) - 1n) * ALG.hallsPerSector + (BigInt(hall) - 1n);
   return {
-    x: (hallIndex % GRID_W) - HALF_W,
-    y: (hallIndex / GRID_W) - HALF_W,
+    x: (hallIndex % HALLS_PER_ROW) - HALF_ROW,
+    y: (hallIndex / HALLS_PER_ROW) - HALF_ROW,
   };
 }
 
 function xyToCoordinates(x, y, wall, shelf, volume, page) {
   const { sector, hall } = xyToHallXY(x, y);
-  return { sector, hall, wall: BigInt(wall || 1), shelf: BigInt(shelf || 1), volume: BigInt(volume || 1), page: BigInt(page || 1) };
+  return { x: BigInt(x), y: BigInt(y), sector, hall, wall: BigInt(wall || 1), shelf: BigInt(shelf || 1), volume: BigInt(volume || 1), page: BigInt(page || 1) };
 }
 
-function coordinatesToXY(coords) { return hallToXY(coords.sector, coords.hall); }
+function coordinatesToXY(coords) {
+  if (coords.x != null && coords.y != null) {
+    return { x: BigInt(coords.x), y: BigInt(coords.y) };
+  }
+  return hallToXY(coords.sector, coords.hall);
+}
 
 /* ---- Filler generation ---- */
 function fnv1a(input) {
