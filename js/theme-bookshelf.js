@@ -21,7 +21,7 @@
           <p class="bk-subtitle">Гексагональная Бесконечность</p>
         </div>
         <div class="bk-cards">
-          <a class="bk-card" href="#/wander">
+          <a class="bk-card" href="#/x/0/y/0">
             <span class="bk-card-icon">🏛</span>
             <h2>Залы</h2>
             <p>Блуждай по бесконечным шестигранным залам</p>
@@ -128,18 +128,18 @@
       u.$$('.bk-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${x + dq}/y/${y + dr}`;
         });
       });
       u.$$('.bk-wall-tab[data-wall]').forEach(btn => {
         btn.addEventListener('click', () => {
-          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
         });
       });
       const rb = u.$('#randomHallBtn');
       if (rb) rb.addEventListener('click', () => {
         const { x: rx, y: ry } = lib.randomHallXY();
-        location.hash = `#/wander/x/${rx}/y/${ry}`;
+        location.hash = `#/x/${rx}/y/${ry}`;
       });
     },
 

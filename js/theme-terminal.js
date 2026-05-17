@@ -76,7 +76,7 @@
           response = 'go [сз/св/з/в/юз/юв] · search [текст] · random · read [1-32] · wall [1-6]';
         } else if (cmd[0] === 'random') {
           const { x, y } = lib.randomHallXY();
-          location.hash = `#/wander/x/${x}/y/${y}`;
+          location.hash = `#/x/${x}/y/${y}`;
           return;
         } else if (cmd[0] === 'search' && cmd[1]) {
           location.hash = `#/search?q=${encodeURIComponent(val.slice(val.indexOf(' ') + 1))}`;
@@ -84,7 +84,7 @@
         } else if (cmd[0] === 'go') {
           const dirMap = { 'сз': [0,-1], 'св': [1,-1], 'з': [-1,0], 'в': [1,0], 'юз': [-1,1], 'юв': [0,1] };
           const d = dirMap[cmd[1]];
-          if (d) { location.hash = `#/wander/x/${d[0]}/y/${d[1]}`; return; }
+          if (d) { location.hash = `#/x/${d[0]}/y/${d[1]}`; return; }
           response = 'Неизвестное направление. Используй: сз св з в юз юв';
         } else {
           response = `Команда не найдена: ${u.esc(cmd[0])}. Набери help для справки.`;
@@ -177,7 +177,7 @@ ${bookList}
         el.style.cursor = 'pointer';
         el.addEventListener('click', () => {
           const dq = parseInt(el.dataset.dq), dr = parseInt(el.dataset.dr);
-          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${x + dq}/y/${y + dr}`;
         });
       });
 
@@ -197,17 +197,17 @@ ${bookList}
         const cmd = val.toLowerCase().split(/\s+/);
         if (cmd[0] === 'random') {
           const { x: rx, y: ry } = lib.randomHallXY();
-          location.hash = `#/wander/x/${rx}/y/${ry}`;
+          location.hash = `#/x/${rx}/y/${ry}`;
           return;
         }
         if (cmd[0] === 'go') {
           const dirMap = { 'сз': [0,-1], 'св': [1,-1], 'з': [-1,0], 'в': [1,0], 'юз': [-1,1], 'юв': [0,1] };
           const d = dirMap[cmd[1]];
-          if (d) { location.hash = `#/wander/x/${x + d[0]}/y/${y + d[1]}`; return; }
+          if (d) { location.hash = `#/x/${x + d[0]}/y/${y + d[1]}`; return; }
         }
         if (cmd[0] === 'wall' && cmd[1]) {
           const w = parseInt(cmd[1]);
-          if (w >= 1 && w <= 6) { location.hash = `#/wander/x/${x}/y/${y}/wall/${w}`; return; }
+          if (w >= 1 && w <= 6) { location.hash = `#/x/${x}/y/${y}/w/${w}`; return; }
         }
         if (cmd[0] === 'search') {
           location.hash = `#/search?q=${encodeURIComponent(val.slice(val.indexOf(' ') + 1))}`;
@@ -261,7 +261,7 @@ ${bookList}
               <span class="term-cmd" id="termFav">★</span> избранное ·
               <span class="term-cmd" id="termCopy">📋</span> копировать ·
               <span class="term-cmd" id="termLink">🔗</span> ссылка ·
-              <a class="term-link" href="#/wander/x/${h.fmtXY(xy.x)}/y/${h.fmtXY(xy.y)}/wall/${coords.wall}">зал</a>
+              <a class="term-link" href="#/x/${h.fmtXY(xy.x)}/y/${h.fmtXY(xy.y)}/w/${coords.wall}">зал</a>
             </div>
             <div class="term-line term-separator">────────────────────────────────────────</div>
             <div class="term-line term-output-text">

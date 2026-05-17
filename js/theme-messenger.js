@@ -32,7 +32,7 @@
               <div class="msg-name">Библиотекарь</div>
               <p>Выбери, что хочешь:</p>
               <div class="msg-quick-actions">
-                <a class="msg-qa" href="#/wander">🏛 Блуждать по залам</a>
+                <a class="msg-qa" href="#/x/0/y/0">🏛 Блуждать по залам</a>
                 <a class="msg-qa" href="#/search">🔍 Искать текст</a>
                 <a class="msg-qa" href="#/atlas">🗺️ Атлас жанров</a>
                 <a class="msg-qa" href="#/page/random">🎲 Случайная страница</a>
@@ -173,20 +173,20 @@
       u.$$('.msg-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${x + dq}/y/${y + dr}`;
         });
       });
       /* Wall tabs */
       u.$$('.msg-wall-btn[data-wall]').forEach(btn => {
         btn.addEventListener('click', () => {
-          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
         });
       });
       /* Random */
       const rb = u.$('#randomHallBtn');
       if (rb) rb.addEventListener('click', () => {
         const { x: rx, y: ry } = lib.randomHallXY();
-        location.hash = `#/wander/x/${rx}/y/${ry}`;
+        location.hash = `#/x/${rx}/y/${ry}`;
       });
       /* Chat input */
       const input = u.$('#msgInput');
@@ -196,13 +196,13 @@
         if (!val) return;
         if (val === '/random' || val === '/r') {
           const { x: rx, y: ry } = lib.randomHallXY();
-          location.hash = `#/wander/x/${rx}/y/${ry}`;
+          location.hash = `#/x/${rx}/y/${ry}`;
           return;
         }
         /* Try to parse "x N y M" */
         const match = val.match(/x\s*(-?\d+)\s*y\s*(-?\d+)/i);
         if (match) {
-          location.hash = `#/wander/x/${match[1]}/y/${match[2]}`;
+          location.hash = `#/x/${match[1]}/y/${match[2]}`;
           return;
         }
         /* Otherwise search */
@@ -244,7 +244,7 @@
       return `
       <section class="t-messenger page-view fade-in">
         <div class="msg-room-header">
-          <a class="msg-back" href="#/wander/x/${h.fmtXY(xy.x)}/y/${h.fmtXY(xy.y)}/wall/${coords.wall}">← Зал</a>
+          <a class="msg-back" href="#/x/${h.fmtXY(xy.x)}/y/${h.fmtXY(xy.y)}/w/${coords.wall}">← Зал</a>
           <div>
             <span class="msg-room-title">📖 Том ${coords.volume} · Лист ${pageNum}</span>
             <span class="msg-room-sub">Стена ${coords.wall} · Полка ${coords.shelf}</span>
@@ -621,7 +621,7 @@
                 </div>
                 <div class="msg-search-actions">
                   <a class="msg-qa" href="${pageUrl}">📖 Открыть</a>
-                  <a class="msg-qa" href="#/wander/x/${h.fmtXY(vXY.x)}/y/${h.fmtXY(vXY.y)}">🏛 Зал</a>
+                  <a class="msg-qa" href="#/x/${h.fmtXY(vXY.x)}/y/${h.fmtXY(vXY.y)}">🏛 Зал</a>
                 </div>
                 <span class="msg-time">${h.timeStr()}</span>
               </div>

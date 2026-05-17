@@ -35,7 +35,7 @@
           <div class="feed-post-body">${u.esc(snippet)}</div>
           <div class="feed-post-footer">
             <a class="feed-action" href="${pageUrl}">📖 Читать</a>
-            <a class="feed-action" href="#/wander/x/${rx}/y/${ry}">🏛 Зал</a>
+            <a class="feed-action" href="#/x/${rx}/y/${ry}">🏛 Зал</a>
           </div>
         </article>`;
       }
@@ -46,11 +46,11 @@
           <h1 class="feed-logo">Вавилон</h1>
           <div class="feed-header-actions">
             <a class="feed-header-btn" href="#/search">🔍</a>
-            <a class="feed-header-btn" href="#/wander">🗺</a>
+            <a class="feed-header-btn" href="#/x/0/y/0">🗺</a>
           </div>
         </div>
         <div class="feed-stories">
-          <a class="feed-story" href="#/wander/x/0/y/0">
+          <a class="feed-story" href="#/x/0/y/0">
             <div class="feed-story-avatar">🏛</div>
             <span>Зал 0:0</span>
           </a>
@@ -101,7 +101,7 @@
           <div class="feed-post-body">${u.esc(snippet)}</div>
           <div class="feed-post-footer">
             <a class="feed-action" href="${pageUrl}">📖 Читать</a>
-            <a class="feed-action" href="#/wander/x/${x}/y/${y}/wall/${wall === 6 ? 1 : wall + 1}">➡️ Стена</a>
+            <a class="feed-action" href="#/x/${x}/y/${y}/w/${wall === 6 ? 1 : wall + 1}">➡️ Стена</a>
           </div>
         </article>`;
       }
@@ -143,18 +143,18 @@
       u.$$('.feed-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${x + dq}/y/${y + dr}`;
         });
       });
       u.$$('.feed-wall-btn[data-wall]').forEach(btn => {
         btn.addEventListener('click', () => {
-          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
         });
       });
       const rb = u.$('#randomHallBtn');
       if (rb) rb.addEventListener('click', () => {
         const { x: rx, y: ry } = lib.randomHallXY();
-        location.hash = `#/wander/x/${rx}/y/${ry}`;
+        location.hash = `#/x/${rx}/y/${ry}`;
       });
     },
 

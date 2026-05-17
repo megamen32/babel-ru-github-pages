@@ -375,7 +375,7 @@
           </div>
           <div class="msg-search-actions">
             <a class="msg-qa" href="${pageUrl}">📖 Открыть</a>
-            <a class="msg-qa" href="#/wander/x/${fmtXY(BigInt(variant.xy.x))}/y/${fmtXY(BigInt(variant.xy.y))}">🏛 Зал</a>
+            <a class="msg-qa" href="#/x/${fmtXY(BigInt(variant.xy.x))}/y/${fmtXY(BigInt(variant.xy.y))}">🏛 Зал</a>
           </div>
           <span class="msg-time">${timeStr()}</span>
         </div>

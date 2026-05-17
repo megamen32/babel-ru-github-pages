@@ -60,7 +60,7 @@
     <section class="${themeClass} page-view fade-in">
       <div class="page-breadcrumbs">
         <a href="#/">Вавилон</a><span class="sep">›</span>
-        <a href="#/wander/x/${h.fmtXY(xy.x)}/y/${h.fmtXY(xy.y)}/wall/${coords.wall}">Зал X:${h.fmtXY(xy.x)} Y:${h.fmtXY(xy.y)}</a><span class="sep">›</span>
+        <a href="#/x/${h.fmtXY(xy.x)}/y/${h.fmtXY(xy.y)}/w/${coords.wall}">Зал X:${h.fmtXY(xy.x)} Y:${h.fmtXY(xy.y)}</a><span class="sep">›</span>
         <span>Том ${coords.volume} · Лист ${pageNum}</span>
       </div>
 
@@ -284,7 +284,7 @@
         const kind = btn.dataset.kind;
         const { x, y } = lib.findRandomHallOfGenre(kind);
         store.pushWanderVisit(x, y);
-        location.hash = `#/wander/x/${x}/y/${y}`;
+        location.hash = `#/x/${x}/y/${y}`;
       });
     });
 
@@ -488,7 +488,7 @@
       };
       const vXY = { x: BigInt(pageData.xy.x), y: BigInt(pageData.xy.y) };
       const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${pageData.range.start}:${pageData.range.length}` });
-      const wanderUrl = `#/wander/x/${h.fmtXY(vXY.x)}/y/${h.fmtXY(vXY.y)}`;
+      const wanderUrl = `#/x/${h.fmtXY(vXY.x)}/y/${h.fmtXY(vXY.y)}`;
 
       contentHTML = `
       <div class="msg msg-them">
@@ -658,6 +658,17 @@
       });
     });
   }
+
+  /* ═══════════════════════════════════════════════════════════
+     INJECT sharedPageRender/bindSharedPage into _helpers
+     so that themes that captured h = app.themes._helpers
+     (bookshelf, cosmos, feed) can call h.sharedPageRender()
+     at runtime. The `h` variable holds a reference to the
+     same object, so adding properties here is visible.
+     ═══════════════════════════════════════════════════════════ */
+
+  app.themes._helpers.sharedPageRender = sharedPageRender;
+  app.themes._helpers.bindSharedPage = bindSharedPage;
 
   /* ═══════════════════════════════════════════════════════════
      ASSEMBLE FINAL app.themes OBJECT

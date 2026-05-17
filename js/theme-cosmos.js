@@ -22,7 +22,7 @@
           <p class="cosmos-subtitle">Звёздный Атлас · Бесконечность</p>
         </div>
         <div class="cosmos-cards">
-          <a class="cosmos-card" href="#/wander">
+          <a class="cosmos-card" href="#/x/0/y/0">
             <span class="cosmos-card-icon">🪐</span>
             <h2>Карта секторов</h2>
             <p>Навигация по звёздным залам библиотеки</p>
@@ -170,18 +170,18 @@
       u.$$('.cosmos-hex-cell[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${x + dq}/y/${y + dr}`;
         });
       });
       u.$$('.cosmos-wall-tab[data-wall]').forEach(btn => {
         btn.addEventListener('click', () => {
-          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
         });
       });
       const rb = u.$('#randomHallBtn');
       if (rb) rb.addEventListener('click', () => {
         const { x: rx, y: ry } = lib.randomHallXY();
-        location.hash = `#/wander/x/${rx}/y/${ry}`;
+        location.hash = `#/x/${rx}/y/${ry}`;
       });
     },
 

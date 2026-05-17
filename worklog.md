@@ -75,3 +75,23 @@ Stage Summary:
 - #/random replaces #/page/random
 - renderAtlas function confirmed to be properly exported and working
 - GENRE_COLORS confirmed available in library.js
+---
+Task ID: 1
+Agent: main
+Task: Fix h.sharedPageRender is not a function + base64url + URL scheme + next inhabited
+
+Work Log:
+- Git pulled latest changes from repo (major restructuring: themes.js split into theme-helpers/bookshelf/cosmos/messenger/feed/terminal/views)
+- Identified root cause: `sharedPageRender` and `bindSharedPage` defined in `theme-views.js` but never added to `app.themes._helpers` object, so `h.sharedPageRender()` fails in bookshelf/cosmos/feed themes
+- Fixed by adding `app.themes._helpers.sharedPageRender = sharedPageRender` before cleanup/deletion
+- Replaced base62 encoding with base64url (RFC 4648 §5) in lib-api.js: alphabet `0-9A-Za-z-_` (64 URL-safe chars)
+- Updated `coordsToPageUrl` to use unified `#/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}` format directly (no /page/ prefix)
+- Updated ALL navigation links across all theme files: `#/wander/x/...` → `#/x/...`, `/wall/` → `/w/`
+- Wrote E2E test for "next inhabited page" button: tests/e2e/next-inhabited.spec.js
+
+Stage Summary:
+- Fixed critical `h.sharedPageRender is not a function` error
+- Switched from base62 to base64url encoding (more compact, equally URL-safe)
+- Unified URL scheme now consistently uses `#/x/...` everywhere
+- "Next inhabited page" should now work because page rendering is fixed
+- Old URLs (#/wander/..., #/page/...) still redirect via router for backward compat

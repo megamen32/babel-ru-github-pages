@@ -78,23 +78,28 @@
     createLogFillerIndices,
     createHumanFillerIndices,
 
-    /* Coordinate-based page URL: x,y coordinates first (small integers),
-       then wall/shelf/volume/page.
-       New format: #/page/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
-       Old format: #/page/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url}
-       Ancient format: #/page/s/{sector_decimal}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
-       x,y are now first-class coordinate fields. Sector is no longer needed
-       in the URL since x,y fully determine it. */
+    /* Coordinate-based page URL — unified progressive scheme:
+       #/x/{x}/y/{y}[/w/{wall}][/sh/{shelf}][/v/{volume}][/p/{page}]
+       Depth determines view: x+y → wander, +/p/ → page.
+       No /wander or /page prefix — URL depth is the view.
+       x,y are derived from sector+hall via hallToXY() — bijective mapping.
+       Sector is no longer needed in the URL since x,y fully determine it.
+       When called from coordsToPageUrl, always includes /v/ and /p/
+       so the view is always a page (not wander). */
     coordsToPageUrl(coords, params) {
       const c = {
-        x: BigInt(coords.x || 0),
-        y: BigInt(coords.y || 0),
+        sector: BigInt(coords.sector || 1),
+        hall: BigInt(coords.hall || 1),
         wall: BigInt(coords.wall || 1),
         shelf: BigInt(coords.shelf || 1),
         volume: BigInt(coords.volume || 1),
         page: BigInt(coords.page || 1),
       };
-      const base = `#/page/x/${c.x}/y/${c.y}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}`;
+      // Derive x,y from sector+hall
+      const xy = hallToXY(c.sector, c.hall);
+      /* Always include full depth so the view is a page, not wander.
+         Progressive omission only applies to navigation within a room. */
+      let base = `#/x/${xy.x}/y/${xy.y}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}`;
       if (params) {
         const qs = new URLSearchParams(params).toString();
         return `${base}?${qs}`;
@@ -136,33 +141,32 @@
       return "noise";
     },
 
-    /* Custom base62 encoding — URL-safe, no atob/btoa limitations */
+    /* Custom base64url encoding (RFC 4648 §5) — URL-safe, no atob/btoa.
+       Alphabet: 0-9 A-Z a-z - _ (64 chars, all URL-safe).
+       More compact than base62 — same information density as standard
+       base64 but without +/= which break URLs. */
     bytesToBase64Url(bytes) {
+      const B64URL = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_';
       let num = 0n;
       for (const byte of bytes) num = (num << 8n) | BigInt(byte);
       if (num === 0n) return '0';
       let result = '';
-      const BASE62_CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-      const base = 62n;
+      const base = 64n;
       while (num > 0n) {
-        result = BASE62_CHARS[Number(num % base)] + result;
+        result = B64URL[Number(num % base)] + result;
         num /= base;
       }
       return result;
     },
     base64UrlToBytes(value) {
-      const base = 62n;
+      const B64URL = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_';
+      const base = 64n;
       let num = 0n;
       for (const char of String(value || '')) {
-        const code = char.charCodeAt(0);
-        let digit;
-        if (code >= 48 && code <= 57) digit = code - 48;        // 0-9
-        else if (code >= 97 && code <= 122) digit = code - 87;   // a-z
-        else if (code >= 65 && code <= 90) digit = code - 29;    // A-Z
-        else continue; // skip invalid chars
-        num = num * base + BigInt(digit);
+        const idx = B64URL.indexOf(char);
+        if (idx < 0) continue; // skip invalid chars
+        num = num * base + BigInt(idx);
       }
-      // Convert BigInt to bytes
       if (num === 0n) return new Uint8Array([0]);
       const bytes = [];
       while (num > 0n) { bytes.push(Number(num & 255n)); num >>= 8n; }
