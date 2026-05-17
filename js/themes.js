@@ -108,7 +108,7 @@
      exactly like a real counter incrementing in base-256:
      last char cycles through alphabet, wraps → second-to-last
      advances, and so on.  No fixed duration — runs as long as
-     the scan takes.  Low priority via requestIdleCallback. */
+     the scan takes.  Uses setTimeout for reliable scheduling. */
 
   function startOdometerAnimation(textNodes, alphabet) {
     let cancelled = false;
@@ -116,10 +116,9 @@
     const done = new Promise(r => { resolveDone = r; });
 
     /* Build a flat char array over all text nodes.
-       Each entry: { node, charIdx } — which text node and which
-       character position inside that node's textContent.
-       We use Array.from() to correctly handle multi-code-unit
-       characters (emoji) in the alphabet. */
+       Each entry: { node, charIdx, codePoints } — which text node,
+       which character position, and the full code-point array of that
+       node (for efficient re-join). */
     const chars = [];
     for (const node of textNodes) {
       const codePoints = Array.from(node.textContent);
@@ -128,9 +127,6 @@
       }
     }
     if (chars.length === 0) { resolveDone(); return { cancel() {}, done }; }
-
-    /* Cursor starts at the last character and moves left */
-    let cursor = chars.length - 1;
 
     /* Each character has a current alphabet index.
        If the current char isn't in the alphabet, default to 0 (space). */
@@ -141,43 +137,66 @@
       charIndices[i] = idx >= 0 ? idx : 0;
     }
 
-    /* Advance the character at `pos` by 1 in the alphabet.
-       Returns true if it wrapped (need to carry to next position). */
-    function advance(pos) {
-      charIndices[pos] = (charIndices[pos] + 1) % alphabet.length;
-      const ch = alphabet[charIndices[pos]];
-      const entry = chars[pos];
-      entry.codePoints[entry.charIdx] = ch;
-      entry.node.textContent = entry.codePoints.join('');
-      return charIndices[pos] === 0; /* wrapped */
+    /* The odometer counter state: an array of "digits" in base-ALPHABET.
+       counter[0] = least significant (rightmost visible char),
+       counter[1] = next, etc.
+       We only track the last N characters for the visible odometer
+       effect — advancing the counter flips characters right-to-left. */
+    const DIGITS = Math.min(chars.length, 60); /* visible odometer depth */
+    const counter = new Int16Array(DIGITS);
+    /* Initialise counter from the last DIGITS characters */
+    for (let d = 0; d < DIGITS; d++) {
+      const ci = chars.length - 1 - d;
+      counter[d] = charIndices[ci];
     }
 
-    /* How many positions to advance per animation tick.
-       Advances a burst of steps for visual speed, then yields. */
-    const STEPS_PER_TICK = 3;
-    const TICK_MS = 30; /* ms between ticks */
+    /* Advance the odometer counter by 1.
+       Returns the highest digit position that changed. */
+    function advanceCounter() {
+      let d = 0;
+      while (d < DIGITS) {
+        counter[d] = (counter[d] + 1) % alphabet.length;
+        if (counter[d] !== 0) break; /* no carry */
+        d++; /* carry to next digit */
+      }
+      return d;
+    }
+
+    /* Apply current counter state to the DOM — only update the
+       characters that changed since last apply.  We track
+       `appliedCounter` to diff efficiently. */
+    const appliedCounter = new Int16Array(DIGITS);
+    appliedCounter.set(counter);
+
+    function applyCounter() {
+      for (let d = 0; d < DIGITS; d++) {
+        if (counter[d] === appliedCounter[d]) continue;
+        appliedCounter[d] = counter[d];
+        const ci = chars.length - 1 - d;
+        if (ci < 0) continue;
+        const entry = chars[ci];
+        entry.codePoints[entry.charIdx] = alphabet[counter[d]];
+        entry.node.textContent = entry.codePoints.join('');
+      }
+    }
+
+    /* Steps per tick — advance the counter several positions
+       per animation frame so the visual flip is dramatic. */
+    const STEPS_PER_TICK = 15;
+    const TICK_MS = 16; /* ~60fps */
 
     function tick() {
       if (cancelled) { resolveDone(); return; }
 
       for (let s = 0; s < STEPS_PER_TICK; s++) {
-        if (cursor < 0) { cursor = chars.length - 1; } /* restart from right */
-        const wrapped = advance(cursor);
-        if (wrapped) {
-          /* Carry: move cursor left to next significant position */
-          cursor--;
-        }
-        /* If cursor went past the beginning, just reset —
-           the scan will stop us soon anyway */
-        if (cursor < 0) break;
+        advanceCounter();
       }
+      applyCounter();
 
-      /* Schedule next tick at low priority */
-      if ('requestIdleCallback' in window) {
-        requestIdleCallback(tick, { timeout: TICK_MS + 15 });
-      } else {
-        setTimeout(tick, TICK_MS);
-      }
+      /* Use setTimeout (not requestIdleCallback) so the animation
+         reliably ticks between scan chunks.  requestIdleCallback
+         may starve when the scan blocks the main thread. */
+      setTimeout(tick, TICK_MS);
     }
 
     /* Start immediately */
@@ -218,7 +237,7 @@
 
               try {
                 const indices = lib.numberToIndices(candidateNumber);
-                const text = lib.indicesToString(indices);
+                const text = u.indicesToString(indices);
                 const detection = lib.detectRussianText(text);
 
                 if (detection.score > bestScore) {
@@ -269,7 +288,9 @@
           setTimeout(scanChunk, 0);
         }
 
-        scanChunk();
+        /* Delay first chunk so the odometer animation can start
+           before the scan begins blocking the main thread */
+        setTimeout(scanChunk, 10);
       } catch (err) { reject(err); }
     });
   }
