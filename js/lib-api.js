@@ -109,8 +109,8 @@
     },
 
     /* Поиск фразы: фраза → адрес → координаты (честный) */
-    encodePhraseToCoords(phrase) {
-      const result = _addressCodec.searchPhraseToAddress(phrase);
+    encodePhraseToCoords(phrase, variant) {
+      const result = _addressCodec.searchPhraseToAddress(phrase, variant);
       if (!result) return null;
 
       /* Конвертируем адрес в координаты */
@@ -126,9 +126,10 @@
         phrase,
         position: result.phrasePos,
         text: result.text,
-        variant: 1,
+        variant: variant || 1,
         range: { start: result.phrasePos, length: result.phraseLen },
         mode: 'prefix',
+        phraseFound: result.phraseFound,
       };
     },
 
@@ -320,9 +321,9 @@
       /* Если включён префиксный кодек — используем честный поиск */
       if (USE_PREFIX_CODEC && _addressCodec) {
         for (let variant = 1; variant <= count; variant++) {
-          const result = app.library.encodePhraseToCoords(phrase);
+          const result = app.library.encodePhraseToCoords(phrase, variant);
           if (!result) continue;
-          result.variant = variant;
+          /* Фраза гарантированно есть в результате — variant уже учтён */
           variants.push(result);
         }
         if (variants.length > 0) return variants;
@@ -380,7 +381,7 @@
 
       /* Пробуем честный поиск через префиксный кодек */
       if (USE_PREFIX_CODEC && _addressCodec) {
-        const result = app.library.encodePhraseToCoords(phrase);
+        const result = app.library.encodePhraseToCoords(phrase, step);
         if (result) return { ...result, mode: genre };
       }
 
@@ -458,8 +459,11 @@
           detection = _tokens.classifyPageByTemp(newZ);
         }
 
-        /* Пропускаем шум и хаос — ищем обитаемую страницу */
+        /* Пропускаем шум и хаос — ищем обитаемую страницу.
+           Также пропускаем 'sparse' с очень низким score —
+           визуально они выглядят как шум. */
         if (detection.kind === 'raw' || detection.kind === 'noise') continue;
+        if (detection.kind === 'sparse' && (detection.score || 0) < 0.3) continue;
 
         const newCoords = xyToCoordinates(x, y, newZ);
         const xy = { x, y };

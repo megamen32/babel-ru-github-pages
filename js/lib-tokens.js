@@ -596,7 +596,8 @@
   function findPhraseInTokenSpace(phrase, maxScan) {
     /* Для поиска используем forced-токены:
        берём случайные (x, y) и вставляем фразу в начало страницы,
-       заполненную токенным декодером */
+       заполненную токенным декодером.
+       Проверяем что фраза реально найдена в результате. */
     const ALG = app.config.ALG;
     const PAGE_LEN = ALG.pageLength;
 
@@ -606,28 +607,55 @@
     /* Разбиваем фразу на токены для вставки */
     const forcedTokens = normalized.split(/(\s+)/).filter(t => t.length > 0);
 
-    /* Выбираем случайные координаты зала */
+    /* Пробуем до 5 раз с разными координатами,
+       чтобы гарантировать что фраза найдена в тексте */
+    const maxRetries = maxScan || 5;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      /* Выбираем случайные координаты зала */
+      const x = Math.floor(Math.random() * 200000) - 100000;
+      const y = Math.floor(Math.random() * 200000) - 100000;
+
+      /* Малый z → низкая температура → читаемый контекст */
+      const z = 1n + BigInt(Math.floor(Math.random() * 100000));
+
+      /* Генерируем страницу с принудительными токенами */
+      const text = decodePage(x, y, z, forcedTokens);
+
+      /* Ищем позицию фразы в тексте */
+      const lowerText = text.toLowerCase();
+      const phrasePos = lowerText.indexOf(normalized);
+
+      if (phrasePos >= 0) {
+        /* Фраза найдена — возвращаем результат */
+        return {
+          x: BigInt(x),
+          y: BigInt(y),
+          z,
+          text,
+          phrasePos,
+          phraseLen: normalized.length,
+          temperature: computeTemperature(z),
+          phraseFound: true,
+        };
+      }
+
+      /* Фраза не найдена на этой попытке — пробуем ещё */
+    }
+
+    /* Все попытки исчерпаны — возвращаем последний результат с пометкой */
     const x = Math.floor(Math.random() * 200000) - 100000;
     const y = Math.floor(Math.random() * 200000) - 100000;
-
-    /* Малый z → низкая температура → читаемый контекст */
     const z = 1n + BigInt(Math.floor(Math.random() * 100000));
-
-    /* Генерируем страницу с принудительными токенами */
     const text = decodePage(x, y, z, forcedTokens);
-
-    /* Ищем позицию фразы в тексте */
-    const lowerText = text.toLowerCase();
-    const phrasePos = lowerText.indexOf(normalized);
-
     return {
       x: BigInt(x),
       y: BigInt(y),
       z,
       text,
-      phrasePos: phrasePos >= 0 ? phrasePos : 0,
+      phrasePos: 0,
       phraseLen: normalized.length,
       temperature: computeTemperature(z),
+      phraseFound: false,
     };
   }
 

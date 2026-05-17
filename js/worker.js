@@ -886,9 +886,10 @@ function applyTemperature(weights, temp) {
 
 function computeTemperature(z) {
   const absZ = z < 0n ? -z : z;
-  if (absZ <= 1n) return 0.1;
-  const logZ = Math.log10(Number(absZ));
-  return Math.min(1.0, 0.1 + logZ * 0.09);
+  if (absZ <= 1n) return 0.03;
+  const s = absZ.toString();
+  const log10 = s.length - 1 + (s.length > 1 ? (Number(s[0] + '.' + s.slice(1, 4)) - Number(s[0])) : 0);
+  return log10 * 0.1;
 }
 
 /* ─── Build token table ─── */
@@ -1160,9 +1161,9 @@ function decodeAddressToPage(address, totalBits, temperature) {
     } else if (tokenType === T.DOT) {
       result += '.';
     } else if (tokenType === T.RAW_CHAR) {
-      /* RAW_CHAR: read 17-bit Unicode code point */
+      /* RAW_CHAR: read 21-bit Unicode code point (0..0x10FFFF) */
       let cp = 0;
-      for (let i = 0; i < 17; i++) {
+      for (let i = 0; i < 21; i++) {
         cp = (cp << 1) | readBit();
       }
       if (cp >= 0 && cp <= 0x10FFFF && !(cp >= 0xD800 && cp <= 0xDFFF)) {
@@ -1349,9 +1350,9 @@ function encodePageToAddress(text) {
     if (tokenType === T.SPACE || tokenType === T.NEWLINE || tokenType === T.DOT) {
       /* Single tokens — no Level 2 */
     } else if (tokenType === T.RAW_CHAR) {
-      /* RAW_CHAR: 17-bit Unicode code point (BMP: 0..0x1FFFF) — matches decoder */
+      /* RAW_CHAR: 21-bit Unicode code point (0..0x10FFFF) — matches decoder */
       const cp = token.codePoint;
-      for (let i = 16; i >= 0; i--) {
+      for (let i = 20; i >= 0; i--) {
         writer.writeBit((cp >> i) & 1);
       }
     } else {
@@ -1367,20 +1368,37 @@ function encodePageToAddress(text) {
 
 /* ─── Search: phrase → address + coordinates ─── */
 
-function searchPhraseToAddress(phrase) {
+function searchPhraseToAddress(phrase, variant) {
   const normalized = phrase.toLowerCase().trim();
   if (!normalized) return null;
 
-  /* Strategy: encode phrase + natural context into a full page */
+  /* Strategy: encode phrase + natural context into a full page.
+     variant parameter changes the seed for context generation —
+     different variants produce different addresses for the same phrase. */
+  const v = variant || 1;
   let hash = 0;
   for (let i = 0; i < normalized.length; i++) {
     hash = ((hash << 5) - hash + normalized.charCodeAt(i)) | 0;
   }
+  /* Variant influences the seed: different variants → different context → different addresses */
+  hash = ((hash << 5) - hash + v * 13337) | 0;
   function seededChoice(arr, idx) {
     return arr[Math.abs(hash + idx * 7919) % arr.length];
   }
 
-  let pageText = normalized + '. ';
+  /* Insert phrase at different positions based on variant */
+  let pageText = '';
+  if (v === 1) {
+    pageText = normalized + '. ';
+  } else {
+    /* Pre-context sentence before the phrase */
+    const preLen = 2 + (v % 5);
+    const preWords = [];
+    for (let w = 0; w < preLen; w++) {
+      preWords.push(seededChoice(WORD_BANK, v * 100 + w));
+    }
+    pageText = preWords.join(' ') + '. ' + normalized + '. ';
+  }
 
   for (let sent = 0; sent < 20; sent++) {
     const words = [];
@@ -1474,7 +1492,10 @@ function classifyDecodedPage(text) {
   if (humanRatio > 0.3) {
     return { kind: 'noise', label: 'Шум', score: humanRatio * 0.3, icon: '🔇' };
   }
-  return { kind: 'raw', label: 'Хаос', score: 0.1, icon: '💀' };
+  if (humanRatio > 0.1) {
+    return { kind: 'raw', label: 'Хаос', score: humanRatio * 0.1, icon: '💀' };
+  }
+  return { kind: 'raw', label: 'Глубокий хаос', score: 0, icon: '🕳️' };
 }
 
 /* ═══════════════════════════════════════════════════════════

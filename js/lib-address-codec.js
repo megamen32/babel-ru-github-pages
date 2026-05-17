@@ -226,23 +226,42 @@
      Честный поиск: фраза кодируется в адрес через префиксный кодек.
      Адрес — это реальное место, где фраза существует. */
 
-  function searchPhraseToAddress(phrase) {
+  function searchPhraseToAddress(phrase, variant) {
     const normalized = phrase.toLowerCase().trim();
     if (!normalized) return null;
 
     /* Стратегия: кодируем фразу + естественный контекст в полную страницу.
-       Чем длиннее и естественнее контекст, тем лучше выглядит страница. */
+       Чем длиннее и естественнее контекст, тем лучше выглядит страница.
+       Параметр variant меняет сид контекста — разные варианты
+       дают разные адреса для одной и той же фразы. */
+    const v = variant || 1;
     const WORD_BANK = (window.BABEL_WORD_BANK || []);
-    /* Берём случайные слова для контекста (но детерминировано из фразы) */
+    /* Берём случайные слова для контекста (но детерминировано из фразы + варианта) */
     let hash = 0;
     for (let i = 0; i < normalized.length; i++) {
       hash = ((hash << 5) - hash + normalized.charCodeAt(i)) | 0;
     }
+    /* Variant влияет на сид: разные варианты → разный контекст → разные адреса */
+    hash = ((hash << 5) - hash + v * 13337) | 0;
     function seededChoice(arr, idx) {
       return arr[Math.abs(hash + idx * 7919) % arr.length];
     }
 
-    let pageText = normalized + '. ';
+    /* Фразу вставляем в разные позиции в зависимости от варианта:
+       variant 1 → фраза в начале,
+       variant 2+ → фраза после контекстного предложения */
+    let pageText = '';
+    if (v === 1) {
+      pageText = normalized + '. ';
+    } else {
+      /* Предварительное контекстное предложение перед фразой */
+      const preLen = 2 + (v % 5);
+      const preWords = [];
+      for (let w = 0; w < preLen; w++) {
+        preWords.push(seededChoice(WORD_BANK, v * 100 + w));
+      }
+      pageText = preWords.join(' ') + '. ' + normalized + '. ';
+    }
 
     /* Генерируем несколько предложений для контекста */
     for (let sent = 0; sent < 20; sent++) {
@@ -275,8 +294,9 @@
        пробуем посимвольный поиск по словам фразы */
     let foundPos = phrasePos;
     let foundLen = normalized.length;
+    let phraseFound = phrasePos >= 0;
 
-    if (foundPos < 0) {
+    if (!phraseFound) {
       /* Попробуем найти каждое слово фразы отдельно */
       const phraseWords = normalized.split(/\s+/).filter(Boolean);
       let bestPos = -1;
@@ -289,6 +309,7 @@
       if (bestPos >= 0) {
         foundPos = bestPos;
         foundLen = phraseWords[0].length;
+        phraseFound = true;
       } else {
         /* Последняя попытка: ищем фразу без учёта пробелов.
            Это нужно когда неизвестное слово (например "hello")
@@ -313,10 +334,12 @@
           }
           /* Длина подсветки — оригинальная длина фразы */
           foundLen = normalized.length;
+          phraseFound = true;
         } else {
-          /* Фраза действительно не найдена — помечаем начало */
+          /* Фраза не найдена — помечаем начало, но сигнализируем об ошибке */
           foundPos = 0;
           foundLen = 0;
+          phraseFound = false;
         }
       }
     }
@@ -326,6 +349,7 @@
       text: decodedText,
       phrasePos: foundPos >= 0 ? foundPos : 0,
       phraseLen: foundLen,
+      phraseFound,
     };
   }
 
@@ -396,7 +420,10 @@
     if (humanRatio > 0.3) {
       return { kind: 'noise', label: 'Шум', score: humanRatio * 0.3, icon: '🔇' };
     }
-    return { kind: 'raw', label: 'Хаос', score: 0.1, icon: '💀' };
+    if (humanRatio > 0.1) {
+      return { kind: 'raw', label: 'Хаос', score: humanRatio * 0.1, icon: '💀' };
+    }
+    return { kind: 'raw', label: 'Глубокий хаос', score: 0, icon: '🕳️' };
   }
 
   /* ═══════════════════════════════════════════════════════════

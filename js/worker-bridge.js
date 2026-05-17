@@ -288,12 +288,14 @@
 
     /* Add prefix-verified mode: uses encodePhraseToCoords() which
        goes through the prefix codec. The phrase IS guaranteed to
-       exist (or at least individual words) in the decoded page. */
+       exist (or at least individual words) in the decoded page.
+       Now supports variant parameter for multiple different results. */
+    const prefixVariant = Math.floor(Math.random() * 100) + 1;
     promises.push(
       Promise.resolve().then(() => {
         try {
           const lib = app.library;
-          const result = lib.encodePhraseToCoords(phrase);
+          const result = lib.encodePhraseToCoords(phrase, prefixVariant);
           if (!result) return { mode: 'prefix', variant: null };
 
           /* Convert BigInt coordinates to strings for serialization */
@@ -319,9 +321,10 @@
               phrase: result.phrase,
               position: result.position || 0,
               text: result.text,
-              variant: 1,
+              variant: result.variant || prefixVariant,
               range: result.range || { start: 0, length: 0 },
               prefixVerified: true,
+              phraseFound: result.phraseFound !== false,
             },
           };
         } catch (err) {
