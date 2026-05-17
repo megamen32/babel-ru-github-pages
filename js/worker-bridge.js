@@ -352,6 +352,11 @@
       return dispatch('pageData', { number: String(number) });
     },
 
+    /* Prefix codec page decode: (x, y, z) → human-readable page text */
+    getPrefixPageData(x, y, z, mode) {
+      return dispatch('prefixDecodePage', { x, y, z, mode: mode || 'human' });
+    },
+
     getBookSpines(x, y, wall) {
       return dispatch('bookSpines', { x, y, wall });
     },

@@ -316,21 +316,21 @@
       const densityEl = u.$('#pageDensity');
       const chat = u.$('#msgChat');
 
-      /* Async page load via Worker */
-      app.workerBridge.getPageData(String(number)).then(data => {
-        const indices = data.indices;
-        const pageCoords = { sector: BigInt(data.coords.sector), hall: BigInt(data.coords.hall), wall: BigInt(data.coords.wall), shelf: BigInt(data.coords.shelf), volume: BigInt(data.coords.volume), page: BigInt(data.coords.page) };
-        const stats = h.charStats(indices);
-        const fullText = u.indicesToString(indices);
+      /* Async page load via Prefix Codec Worker */
+      const libraryMode = h.getLibraryMode();
+      app.workerBridge.getPrefixPageData(
+        String(xy.x), String(xy.y), String(coords.z), libraryMode
+      ).then(data => {
+        const fullText = data.text;
+        const classification = data.classification || lib.classifyPageText(fullText);
         const highlightPhrase = highlight
           ? fullText.slice(highlight.start, highlight.start + highlight.length).trim()
           : '';
-        const classification = lib.classifyPageText(fullText);
 
         /* Update density badge — show genre classification */
         if (densityEl) {
-          densityEl.className = `msg-density ${stats.label === 'Читаемая' ? 'msg-d-read' : stats.label === 'Разреженная' ? 'msg-d-sparse' : 'msg-d-noise'}`;
-          densityEl.textContent = `${classification.label} ${Math.round(classification.score * 100)}%`;
+          densityEl.className = `msg-density ${classification.kind === 'text' || classification.kind === 'dialogue' ? 'msg-d-read' : classification.kind === 'sparse' ? 'msg-d-sparse' : 'msg-d-noise'}`;
+          densityEl.textContent = `${classification.label} ${Math.round((classification.score || 0) * 100)}%`;
         }
 
         if (classification.kind === 'dialogue') {
@@ -395,7 +395,12 @@
 
       const copyBtn = u.$('#copyTextBtn');
       if (copyBtn) copyBtn.addEventListener('click', () => {
-        u.copyText(lib.numberToText(number), 'Скопировано');
+        /* Copy prefix-decoded text if available */
+        const bubbleTexts = u.$$('.msg-bubble-page .msg-text');
+        const allText = bubbleTexts.length > 0
+          ? Array.from(bubbleTexts).map(el => el.textContent).join('')
+          : lib.numberToText(number);
+        u.copyText(allText, 'Скопировано');
       });
 
       const linkBtn = u.$('#copyLinkBtn');

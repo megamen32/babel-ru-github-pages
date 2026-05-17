@@ -58,6 +58,33 @@
     document.documentElement.setAttribute('data-theme', id);
   }
 
+  /* ─── Library mode: "human" (prefix codec) vs "random" (byte-level) ─── */
+  const LIBRARY_MODES = {
+    human: {
+      id: 'human',
+      name: 'Человечная',
+      icon: '📖',
+      desc: 'Язык искажает пространство шума — страницы у начала координат читаемые',
+    },
+    random: {
+      id: 'random',
+      name: 'Случайная',
+      icon: '🎲',
+      desc: 'Чистый хаос — каждая страница равномерно случайна',
+    },
+  };
+  const DEFAULT_LIBRARY_MODE = 'human';
+
+  function getLibraryMode() {
+    try { return localStorage.getItem('babelLibraryMode') || DEFAULT_LIBRARY_MODE; }
+    catch { return DEFAULT_LIBRARY_MODE; }
+  }
+
+  function setLibraryMode(mode) {
+    if (!LIBRARY_MODES[mode]) return;
+    try { localStorage.setItem('babelLibraryMode', mode); } catch {}
+  }
+
   /* ---- Shared helpers ---- */
 
   function fmtXY(v) {
@@ -666,6 +693,9 @@
     DEFAULT_THEME,
     getTheme,
     setTheme,
+    LIBRARY_MODES,
+    getLibraryMode,
+    setLibraryMode,
     fmtXY,
     fmtCoord,
     escWithBR,

@@ -3,7 +3,7 @@
    Caches all assets on first install, serves from cache.
    ═══════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'babel-v11.0-feistel-prefix-temp';
+const CACHE_NAME = 'babel-v12.0-prefix-all-themes-mode';
 
 const ASSETS = [
   './',

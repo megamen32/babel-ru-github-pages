@@ -219,10 +219,7 @@ ${bookList}
       try { number = route.pageNumber; } catch {
         return `<div class="term-screen"><div class="term-output"><div class="term-line term-output-text">Неверный адрес</div></div></div>`;
       }
-      const indices = lib.numberToIndices(number);
-      const text = u.indicesToString(indices);
       const coords = lib.numberToCoordinates(number);
-      const stats = h.charStats(indices);
       const xy = lib.coordinatesToXY(coords);
 
       try { store.pushHistory({ url: location.hash, title: lib.pageTitle(coords) }); } catch {}
@@ -232,20 +229,17 @@ ${bookList}
       const prevUrl = pageNum > 1 ? lib.coordsToPageUrl({...coords, page: BigInt(pageNum - 1)}) : null;
       const nextUrl = pageNum < totalPages ? lib.coordsToPageUrl({...coords, page: BigInt(pageNum + 1)}) : null;
 
-      /* Show text in terminal style */
-      const lines = text.split('\n');
-      const lineHTML = lines.map(l => u.esc(l) || '&nbsp;').join('<br>');
-
+      /* Show loading placeholder — text will be loaded async via prefix codec */
       return `
       <section class="t-terminal page-view fade-in">
         <div class="term-screen">
           <div class="term-titlebar">babel:// том:${coords.volume}/лист:${pageNum}</div>
           <div class="term-output" id="termOutput">
             <div class="term-line term-output-text">
-Зал X:${h.fmtXY(xy.x)} Y:${h.fmtXY(xy.y)} · Стена ${coords.wall} · Полка ${coords.shelf} · Том ${coords.volume} · Лист ${pageNum}/${totalPages} · ${stats.label} ${stats.readability}%
+Зал X:${h.fmtXY(xy.x)} Y:${h.fmtXY(xy.y)} · Стена ${coords.wall} · Полка ${coords.shelf} · Том ${coords.volume} · Лист ${pageNum}/${totalPages} · <span id="termStats">…</span>
             </div>
             <div class="term-line term-separator">────────────────────────────────────────</div>
-            <div class="term-line term-page-text">${lineHTML}</div>
+            <div class="term-line term-page-text" id="termPageText"><span class="term-loading">декодирую…</span></div>
             <div class="term-line term-separator">────────────────────────────────────────</div>
             <div class="term-line term-output-text">
               ${prevUrl ? `<a class="term-link" href="${prevUrl}">← Лист ${pageNum - 1}</a> · ` : ''}
@@ -276,6 +270,7 @@ ${bookList}
       let number;
       try { number = route.pageNumber; } catch { return; }
       const coords = lib.numberToCoordinates(number);
+      const xy = lib.coordinatesToXY(coords);
 
       /* Track journey step for this page view — use x,y from URL if available */
       try {
@@ -284,12 +279,43 @@ ${bookList}
           jx = route.pageXY.x;
           jy = route.pageXY.y;
         } else {
-          const pageXY = lib.coordinatesToXY(coords);
-          jx = pageXY.x;
-          jy = pageXY.y;
+          jx = xy.x;
+          jy = xy.y;
         }
         store.pushJourneyStep(jx, jy, lib.classifyRegion(h.safeNum(jx), h.safeNum(jy)).kind);
       } catch {}
+
+      /* Async load page text via prefix codec */
+      const pageTextEl = u.$('#termPageText');
+      const statsEl = u.$('#termStats');
+      const libraryMode = h.getLibraryMode();
+      app.workerBridge.getPrefixPageData(
+        String(xy.x), String(xy.y), String(coords.z), libraryMode
+      ).then(data => {
+        const text = data.text;
+        const classification = data.classification || lib.classifyPageText(text);
+
+        /* Update stats */
+        if (statsEl) {
+          statsEl.textContent = `${classification.label} ${Math.round((classification.score || 0) * 100)}%`;
+        }
+
+        /* Show text in terminal style */
+        if (pageTextEl) {
+          const lines = text.split('\n');
+          pageTextEl.innerHTML = lines.map(l => u.esc(l) || '&nbsp;').join('<br>');
+        }
+      }).catch(err => {
+        /* Fallback to old byte-level decode */
+        const indices = lib.numberToIndices(number);
+        const text = u.indicesToString(indices);
+        const stats = h.charStats(indices);
+        if (statsEl) statsEl.textContent = `${stats.label} ${stats.readability}%`;
+        if (pageTextEl) {
+          const lines = text.split('\n');
+          pageTextEl.innerHTML = lines.map(l => u.esc(l) || '&nbsp;').join('<br>');
+        }
+      });
 
       const favBtn = u.$('#termFav');
       if (favBtn) favBtn.addEventListener('click', () => {
@@ -298,7 +324,9 @@ ${bookList}
       });
       const copyBtn = u.$('#termCopy');
       if (copyBtn) copyBtn.addEventListener('click', () => {
-        u.copyText(lib.numberToText(number), 'Скопировано');
+        /* Copy prefix-decoded text if available, fallback to byte-level */
+        const textContent = pageTextEl ? pageTextEl.textContent : lib.numberToText(number);
+        u.copyText(textContent, 'Скопировано');
       });
       const linkBtn = u.$('#termLink');
       if (linkBtn) linkBtn.addEventListener('click', () => {

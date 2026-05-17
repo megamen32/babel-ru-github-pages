@@ -641,6 +641,8 @@
   /* Theme picker HTML */
   function renderThemePicker() {
     const current = h.getTheme();
+    const currentMode = h.getLibraryMode();
+    const modeInfo = h.LIBRARY_MODES[currentMode];
     return `<div class="theme-picker" id="themePicker">
       <button class="theme-picker-toggle" id="themePickerToggle" title="Сменить тему">${h.THEMES[current].icon} ${h.THEMES[current].name}</button>
       <div class="theme-picker-dropdown" id="themePickerDropdown">
@@ -649,6 +651,15 @@
             <span class="tp-icon">${t.icon}</span>
             <span class="tp-name">${t.name}</span>
             <span class="tp-desc">${t.desc}</span>
+          </button>
+        `).join('')}
+        <div class="theme-picker-divider"></div>
+        <div class="theme-picker-section-label">Режим библиотеки</div>
+        ${Object.values(h.LIBRARY_MODES).map(m => `
+          <button class="theme-picker-option ${m.id === currentMode ? 'active' : ''}" data-library-mode="${m.id}">
+            <span class="tp-icon">${m.icon}</span>
+            <span class="tp-name">${m.name}</span>
+            <span class="tp-desc">${m.desc}</span>
           </button>
         `).join('')}
       </div>
@@ -679,6 +690,16 @@
         window.dispatchEvent(new Event('hashchange'));
       });
     });
+
+    /* Library mode buttons */
+    u.$$('.theme-picker-option[data-library-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        h.setLibraryMode(btn.dataset.libraryMode);
+        dropdown.classList.remove('open');
+        /* Re-render current view to apply new mode */
+        window.dispatchEvent(new Event('hashchange'));
+      });
+    });
   }
 
   /* ═══════════════════════════════════════════════════════════
@@ -699,8 +720,11 @@
   app.themes = {
     THEMES: h.THEMES,
     DEFAULT_THEME: h.DEFAULT_THEME,
+    LIBRARY_MODES: h.LIBRARY_MODES,
     getTheme: h.getTheme,
     setTheme: h.setTheme,
+    getLibraryMode: h.getLibraryMode,
+    setLibraryMode: h.setLibraryMode,
     getThemeRenderer,
     renderThemePicker,
     bindThemePicker,

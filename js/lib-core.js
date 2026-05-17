@@ -241,7 +241,30 @@
 
   const _tt = app.library._tokenTable;
 
+  /* Library mode: check if user wants "random" (byte-level) or "human" (prefix codec) */
+  function getLibraryMode() {
+    try { return localStorage.getItem('babelLibraryMode') || 'human'; }
+    catch { return 'human'; }
+  }
+
   function decodePageByCoords(x, y, z, forcedTokens) {
+    const libraryMode = getLibraryMode();
+
+    /* Random mode: always use byte-level decode */
+    if (libraryMode === 'random') {
+      const bx = BigInt(x);
+      const by = BigInt(y);
+      const bz = BigInt(z || 1);
+      /* Use Feistel permutation + byte-level decode */
+      const hallIndex = xyToHallIndex(bx, by);
+      const rawIdx = hallIndex * PAGES_PER_HALL + (bz - 1n);
+      const number = _coordPerm.feistelPermute
+        ? _coordPerm.feistelPermute(rawIdx)
+        : ((rawIdx * PERM_C + PERM_OFFSET) & BIT_MASK);
+      const indices = numberToIndices(number);
+      return indicesToString(indices);
+    }
+
     if (USE_PREFIX_CODEC && _addressCodec && !forcedTokens) {
       /* Новая архитектура: префиксное декодирование с температурой */
       try {

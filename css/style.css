@@ -271,6 +271,8 @@ main#view { flex: 1; padding: 0; }
 .tp-icon { font-size: 1.3rem; flex-shrink: 0; }
 .tp-name { font-weight: 600; }
 .tp-desc { font-size: 0.65rem; color: var(--text-dim); margin-left: auto; display: none; }
+.theme-picker-divider { border-top: 1px solid var(--border); margin: 0.4rem 0; }
+.theme-picker-section-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0.3rem 0.6rem; }
 
 @media (min-width: 600px) {
   .tp-desc { display: inline; }
@@ -1219,6 +1221,13 @@ main#view { flex: 1; padding: 0; }
 .term-page-text {
   color: var(--text); white-space: pre-wrap; word-wrap: break-word;
   max-height: 50vh; overflow-y: auto;
+}
+.term-loading {
+  color: var(--accent); animation: term-blink 1s infinite;
+}
+@keyframes term-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.3; }
 }
 
 .term-input-row {

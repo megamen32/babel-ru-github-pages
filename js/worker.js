@@ -1912,11 +1912,40 @@ function getPageData(numberStr) {
    PREFIX CODEC PAGE DATA — new decode path
    ═══════════════════════════════════════════════════════════ */
 
-function prefixDecodePage(x, y, z) {
+function prefixDecodePage(x, y, z, mode) {
   const bx = BigInt(x);
   const by = BigInt(y);
   const bz = BigInt(z || 1);
 
+  /* Build full coordinates */
+  const coords = xyToCoordinates(bx, by, bz);
+  const xy = coordinatesToXY(coords);
+
+  /* Random mode: use old byte-level decode */
+  if (mode === 'random') {
+    const hallIndex = (bx + HALF_ROW) + (by + HALF_ROW) * HALLS_PER_ROW;
+    const rawIdx = hallIndex * PAGES_PER_HALL + (bz - 1n);
+    const number = feistelPermute(rawIdx);
+    const indices = numberToIndices(number);
+    const text = indicesToString(indices);
+    const classification = classifyDecodedPage(text);
+    return {
+      text,
+      coords: {
+        sector: coords.sector.toString(), hall: coords.hall.toString(),
+        wall: coords.wall.toString(), shelf: coords.shelf.toString(),
+        volume: coords.volume.toString(), page: coords.page.toString(),
+      },
+      xy: { x: xy.x.toString(), y: xy.y.toString() },
+      number: number.toString(),
+      title: pageTitle(coords),
+      temperature: 1.0,
+      classification,
+      engine: 'byte-level',
+    };
+  }
+
+  /* Human mode (default): prefix codec with temperature */
   /* Compute internal address via Feistel permutation */
   const internalAddr = coordToInternalAddress(bx, by, bz);
   const totalBits = Number(TOTAL_BITS);
@@ -1927,9 +1956,6 @@ function prefixDecodePage(x, y, z) {
   /* Decode page */
   const text = decodeAddressToPage(internalAddr, totalBits, temperature);
 
-  /* Build full coordinates */
-  const coords = xyToCoordinates(bx, by, bz);
-  const xy = coordinatesToXY(coords);
   const classification = classifyDecodedPage(text);
 
   return {
@@ -1959,8 +1985,8 @@ async function handleMessageAsync(type, payload) {
       /* Lazy-load external dictionary on first prefix decode call */
       await loadExternalDictionary();
 
-      const { x, y, z } = payload;
-      return prefixDecodePage(x, y, z);
+      const { x, y, z, mode } = payload;
+      return prefixDecodePage(x, y, z, mode);
     }
 
     case 'prefixSearch': {
