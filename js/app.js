@@ -23,30 +23,84 @@
     const params = new URLSearchParams(query || '');
     let name = 'home';
     let pageCoords = null;
-    let pageXY = null; // { x, y } for new x,y-based URLs
+    let pageXY = null; // { x, y, wall?, shelf?, volume?, page? } for x,y-based URLs
     let pageB64 = null;
     let isOldCoordFormat = false; // for redirect to new format (h/ or s/ based)
-    if (parts[0] === 'wander') name = 'wander';
-    else if (parts[0] === 'atlas') name = 'atlas';
-    else if (parts[0] === 'genre') name = 'genre';
-    else if (parts[0] === 'search') name = 'search';
-    else if (parts[0] === 'page') {
-      name = 'page';
-      /* NEW format: #/page/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
-      if (parts[1] === 'x') {
-        pageXY = {};
-        for (let i = 1; i < parts.length - 1; i += 2) {
-          switch (parts[i]) {
-            case 'x': pageXY.x = parseInt(parts[i + 1]); break;
-            case 'y': pageXY.y = parseInt(parts[i + 1]); break;
-            case 'w': pageXY.wall = parseInt(parts[i + 1]) || 1; break;
-            case 'sh': pageXY.shelf = parseInt(parts[i + 1]) || 1; break;
-            case 'v': pageXY.volume = parseInt(parts[i + 1]) || 1; break;
-            case 'p': pageXY.page = parseInt(parts[i + 1]) || 1; break;
-          }
+    let needsRedirect = null; // URL to redirect to for old-format URLs
+
+    /* UNIFIED format: #/x/{x}/y/{y}[/w/{w}][/sh/{sh}][/v/{v}][/p/{p}]
+       Depth determines view:
+         - If /p/{page} present → page view
+         - If only x,y (maybe with /w/) → wander view */
+
+    if (parts[0] === 'x') {
+      pageXY = {};
+      for (let i = 0; i < parts.length - 1; i += 2) {
+        switch (parts[i]) {
+          case 'x': pageXY.x = parseInt(parts[i + 1]); break;
+          case 'y': pageXY.y = parseInt(parts[i + 1]); break;
+          case 'w': pageXY.wall = parseInt(parts[i + 1]) || 1; break;
+          case 'sh': pageXY.shelf = parseInt(parts[i + 1]) || 1; break;
+          case 'v': pageXY.volume = parseInt(parts[i + 1]) || 1; break;
+          case 'p': pageXY.page = parseInt(parts[i + 1]) || 1; break;
         }
       }
-      /* OLD format: #/page/h/{hall}/w/.../s/{seed_b64url}
+      /* Determine view based on depth */
+      name = (pageXY.page != null) ? 'page' : 'wander';
+    }
+    /* OLD: #/wander → redirect to #/x/0/y/0 */
+    else if (parts[0] === 'wander') {
+      if (parts[1] === 'x') {
+        /* OLD: #/wander/x/{x}/y/{y}[/wall/{w}] → redirect to new format */
+        let rx = 0, ry = 0, rw = null;
+        for (let i = 1; i < parts.length - 1; i += 2) {
+          if (parts[i] === 'x') rx = parseInt(parts[i + 1]) || 0;
+          if (parts[i] === 'y') ry = parseInt(parts[i + 1]) || 0;
+          if (parts[i] === 'wall') rw = parseInt(parts[i + 1]) || null;
+        }
+        let newUrl = `#/x/${rx}/y/${ry}`;
+        if (rw != null) newUrl += `/w/${rw}`;
+        needsRedirect = newUrl;
+        name = 'wander';
+        pageXY = { x: rx, y: ry, wall: rw || 1 };
+      } else {
+        /* #/wander (no coords) → redirect to #/x/0/y/0 */
+        needsRedirect = '#/x/0/y/0';
+        name = 'wander';
+        pageXY = { x: 0, y: 0 };
+      }
+    }
+    /* OLD: #/page/... → redirect or parse */
+    else if (parts[0] === 'page') {
+      if (parts[1] === 'random') {
+        /* OLD: #/page/random → redirect to #/random */
+        needsRedirect = '#/random';
+        name = 'page';
+      }
+      /* OLD format: #/page/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} → redirect */
+      else if (parts[1] === 'x') {
+        const parsed = {};
+        for (let i = 1; i < parts.length - 1; i += 2) {
+          switch (parts[i]) {
+            case 'x': parsed.x = parseInt(parts[i + 1]); break;
+            case 'y': parsed.y = parseInt(parts[i + 1]); break;
+            case 'w': parsed.wall = parseInt(parts[i + 1]) || 1; break;
+            case 'sh': parsed.shelf = parseInt(parts[i + 1]) || 1; break;
+            case 'v': parsed.volume = parseInt(parts[i + 1]) || 1; break;
+            case 'p': parsed.page = parseInt(parts[i + 1]) || 1; break;
+          }
+        }
+        /* Build new URL from parsed coords */
+        let newUrl = `#/x/${parsed.x || 0}/y/${parsed.y || 0}`;
+        if (parsed.wall) newUrl += `/w/${parsed.wall}`;
+        if (parsed.shelf) newUrl += `/sh/${parsed.shelf}`;
+        if (parsed.volume) newUrl += `/v/${parsed.volume}`;
+        if (parsed.page) newUrl += `/p/${parsed.page}`;
+        needsRedirect = newUrl;
+        name = 'page';
+        pageXY = parsed;
+      }
+      /* ANCIENT format: #/page/h/{hall}/w/.../s/{seed_b64url}
          ANCIENT format: #/page/s/{sector_decimal}/h/{hall}/... */
       else {
         const coordKeys = new Set(['s', 'h', 'w', 'sh', 'v', 'p']);
@@ -68,17 +122,28 @@
         } else if (parts[1] && parts[1] !== 'random') {
           pageB64 = parts[1];
         }
+        name = 'page';
       }
     }
+    else if (parts[0] === 'random') name = 'random';
+    else if (parts[0] === 'atlas') name = 'atlas';
+    else if (parts[0] === 'genre') name = 'genre';
+    else if (parts[0] === 'search') name = 'search';
     else if (parts[0] === 'about') name = 'about';
     else if (parts[0] === 'favorites') name = 'favorites';
-    return { name, parts, params, pageCoords, pageXY, pageB64, isOldCoordFormat };
+    return { name, parts, params, pageCoords, pageXY, pageB64, isOldCoordFormat, needsRedirect };
   }
 
   function navigate() {
     const route = parseRoute();
     const view = document.getElementById('view');
     if (!view) return;
+
+    /* Handle redirects for old URL formats */
+    if (route.needsRedirect) {
+      location.replace(route.needsRedirect);
+      return;
+    }
 
     /* Run cleanup from previous view */
     if (currentCleanup) { currentCleanup(); currentCleanup = null; }
@@ -125,22 +190,15 @@
           break;
         }
         case 'page': {
-          /* Handle /page/random → redirect to random page */
-          if (route.parts[1] === 'random') {
-            const randCoords = lib.randomPageCoords();
-            location.hash = lib.coordsToPageUrl(randCoords);
-            return;
-          }
-
           /* Resolve page number from URL */
           try {
             if (route.pageXY) {
-              /* NEW format: x,y based — compute coords from x,y + wall/shelf/volume/page */
+              /* Unified format: x,y based — compute coords from x,y + wall/shelf/volume/page */
               const xy = route.pageXY;
               const coords = lib.xyToCoordinates(xy.x, xy.y, xy.wall, xy.shelf, xy.volume, xy.page);
               route.pageNumber = lib.coordinatesToNumber(coords);
             } else if (route.pageCoords) {
-              /* OLD/ANCIENT format: h/ or s/ based — decode sector, compute, then redirect */
+              /* ANCIENT format: h/ or s/ based — decode sector, compute, then redirect */
               if (route.pageCoords.sector) {
                 const sectorStr = String(route.pageCoords.sector);
                 if (/^\d+$/.test(sectorStr)) {
@@ -153,7 +211,7 @@
               }
               route.pageNumber = lib.coordinatesToNumber(route.pageCoords);
 
-              /* Old/ancient coordinate format → redirect to new x,y format */
+              /* Ancient coordinate format → redirect to new x,y format */
               if (route.isOldCoordFormat) {
                 const coords = lib.numberToCoordinates(route.pageNumber);
                 const hl = route.params.get('hl');
@@ -179,6 +237,12 @@
           if (renderer.bindPage) keepCleanup(renderer.bindPage(route));
           else keepCleanup(themes.bindSharedPage(route));
           break;
+        }
+        case 'random': {
+          /* #/random → redirect to a random page */
+          const randCoords = lib.randomPageCoords();
+          location.hash = lib.coordsToPageUrl(randCoords);
+          return;
         }
         case 'atlas': {
           view.innerHTML = themes.renderAtlas();
@@ -216,7 +280,7 @@
       const href = a.getAttribute('href') || '';
       a.classList.toggle('active',
         (name === 'home' && href === '#/') ||
-        (name === 'wander' && href.includes('wander')) ||
+        (name === 'wander' && (href.includes('/x/') || href === '#/x/0/y/0')) ||
         (name === 'search' && href.includes('search')) ||
         ((name === 'atlas' || name === 'genre') && href.includes('atlas')) ||
         (name === 'about' && href.includes('about')) ||
@@ -317,7 +381,7 @@
           const snippetEscaped = esc(snippet);
           const highlightedSnippet = snippetEscaped.replace(phraseEscaped, `<mark>${phraseEscaped}</mark>`);
           const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${v.range.start}:${v.range.length}` });
-          const wanderUrl = `#/wander/x/${themes.fmtXY(vXY.x)}/y/${themes.fmtXY(vXY.y)}`;
+          const wanderUrl = `#/x/${themes.fmtXY(vXY.x)}/y/${themes.fmtXY(vXY.y)}`;
           html += `
           <div class="catalog-card">
             <div class="catalog-variant">${gi.icon} ${gi.label}</div>

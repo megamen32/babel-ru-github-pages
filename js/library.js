@@ -847,11 +847,12 @@
 
     /* Coordinate-based page URL: x,y coordinates first (small integers),
        then wall/shelf/volume/page.
-       New format: #/page/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
-       Old format: #/page/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url}
-       Ancient format: #/page/s/{sector_decimal}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
+       Unified format: #/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
+       Old format: #/page/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
+       Ancient format: #/page/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url}
        x,y are derived from sector+hall via hallToXY() — bijective mapping.
-       Sector is no longer needed in the URL since x,y fully determine it. */
+       Sector is no longer needed in the URL since x,y fully determine it.
+       Depth determines view: if /p/ is present → page view; otherwise → wander view. */
     coordsToPageUrl(coords, params) {
       const c = {
         sector: BigInt(coords.sector || 1),
@@ -863,7 +864,7 @@
       };
       // Derive x,y from sector+hall
       const xy = hallToXY(c.sector, c.hall);
-      const base = `#/page/x/${xy.x}/y/${xy.y}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}`;
+      const base = `#/x/${xy.x}/y/${xy.y}/w/${c.wall}/sh/${c.shelf}/v/${c.volume}/p/${c.page}`;
       if (params) {
         const qs = new URLSearchParams(params).toString();
         return `${base}?${qs}`;
@@ -1155,6 +1156,33 @@
     parseAnyAddress(raw, kind) {
       const value = String(raw || "").trim();
       if (!value) throw new Error("Нечего распознавать.");
+      /* Unified format: #/x/{x}/y/{y}[/w/...][/sh/...][/v/...][/p/...] */
+      if (value.includes("#/x/") && value.includes("/y/")) {
+        const hashPart = value.split("#").pop().split("?")[0];
+        const parts = hashPart.split("/").filter(Boolean);
+
+        /* NEW format: x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
+        if (parts[0] === 'x' && parts.length >= 4) {
+          const parsed = {};
+          for (let i = 0; i < parts.length - 1; i += 2) {
+            switch (parts[i]) {
+              case 'x': parsed.x = parts[i + 1]; break;
+              case 'y': parsed.y = parts[i + 1]; break;
+              case 'w': parsed.wall = parts[i + 1]; break;
+              case 'sh': parsed.shelf = parts[i + 1]; break;
+              case 'v': parsed.volume = parts[i + 1]; break;
+              case 'p': parsed.page = parts[i + 1]; break;
+            }
+          }
+          if (parsed.x != null && parsed.y != null) {
+            try {
+              const coords = xyToCoordinates(parsed.x, parsed.y, parsed.wall, parsed.shelf, parsed.volume, parsed.page);
+              return app.library.coordinatesToNumber(coords);
+            } catch { /* fall through */ }
+          }
+        }
+      }
+      /* OLD format: #/page/x/... or #/page/h/... */
       if (value.includes("#/page/")) {
         const pagePart = value.split("#/page/").pop().split("?")[0];
         const parts = pagePart.split("/").filter(Boolean);

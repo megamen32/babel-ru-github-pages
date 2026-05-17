@@ -30,12 +30,12 @@ test.describe('search', () => {
 
     await expect(page).toHaveURL(/#\/search\?q=/);
 
-    const results = page.locator('#searchResultsSlot .msg-search-actions .msg-qa[href*="#/page/"]');
+    const results = page.locator('#searchResultsSlot .msg-search-actions .msg-qa[href*="#/x/"], #searchResultsSlot .msg-search-actions .msg-qa[href*="#/page/"]');
     await expect(results.first()).toBeVisible();
 
     await results.first().click();
 
-    await expect(page).toHaveURL(/#\/page\//);
+    await expect(page).toHaveURL(/#\/(x|page)\//);
 
     const expectedParts = expectedPhrase.split(/\n+/).filter(Boolean);
     const pageContent = page.locator('#pageContentSlot');

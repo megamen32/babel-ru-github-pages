@@ -375,7 +375,7 @@
           </div>
           <div class="msg-search-actions">
             <a class="msg-qa" href="${pageUrl}">📖 Открыть</a>
-            <a class="msg-qa" href="#/wander/x/${fmtXY(BigInt(variant.xy.x))}/y/${fmtXY(BigInt(variant.xy.y))}">🏛 Зал</a>
+            <a class="msg-qa" href="#/x/${fmtXY(BigInt(variant.xy.x))}/y/${fmtXY(BigInt(variant.xy.y))}">🏛 Зал</a>
           </div>
           <span class="msg-time">${timeStr()}</span>
         </div>
@@ -676,7 +676,7 @@
           <p class="bk-subtitle">Гексагональная Бесконечность</p>
         </div>
         <div class="bk-cards">
-          <a class="bk-card" href="#/wander">
+          <a class="bk-card" href="#/x/0/y/0">
             <span class="bk-card-icon">🏛</span>
             <h2>Залы</h2>
             <p>Блуждай по бесконечным шестигранным залам</p>
@@ -691,7 +691,7 @@
             <h2>Атлас</h2>
             <p>Путешествуй по жанрам библиотеки</p>
           </a>
-          <a class="bk-card" href="#/page/random">
+          <a class="bk-card" href="#/random">
             <span class="bk-card-icon">🎲</span>
             <h2>Случайная</h2>
             <p>Открой случайную страницу</p>
@@ -708,10 +708,10 @@
     renderWander(route) {
       const parts = route.parts;
       let x = 0, y = 0, wall = 1;
-      for (let i = 1; i < parts.length; i += 2) {
+      for (let i = 0; i < parts.length - 1; i += 2) {
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'w') wall = parseInt(parts[i + 1]) || 1;
       }
       const hallInfo = lib.xyToHallXY(x, y);
 
@@ -773,7 +773,7 @@
     bindWander(route) {
       const parts = route.parts;
       let x = 0, y = 0;
-      for (let i = 1; i < parts.length; i += 2) {
+      for (let i = 0; i < parts.length - 1; i += 2) {
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
       }
@@ -783,18 +783,18 @@
       u.$$('.bk-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${x + dq}/y/${y + dr}`;
         });
       });
       u.$$('.bk-wall-tab[data-wall]').forEach(btn => {
         btn.addEventListener('click', () => {
-          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
         });
       });
       const rb = u.$('#randomHallBtn');
       if (rb) rb.addEventListener('click', () => {
         const { x: rx, y: ry } = lib.randomHallXY();
-        location.hash = `#/wander/x/${rx}/y/${ry}`;
+        location.hash = `#/x/${rx}/y/${ry}`;
       });
     },
 
@@ -816,7 +816,7 @@
           <p class="cosmos-subtitle">Звёздный Атлас · Бесконечность</p>
         </div>
         <div class="cosmos-cards">
-          <a class="cosmos-card" href="#/wander">
+          <a class="cosmos-card" href="#/x/0/y/0">
             <span class="cosmos-card-icon">🪐</span>
             <h2>Карта секторов</h2>
             <p>Навигация по звёздным залам библиотеки</p>
@@ -831,7 +831,7 @@
             <h2>Атлас</h2>
             <p>Путешествуй по жанрам</p>
           </a>
-          <a class="cosmos-card" href="#/page/random">
+          <a class="cosmos-card" href="#/random">
             <span class="cosmos-card-icon">🎲</span>
             <h2>Случайная</h2>
             <p>Случайная страница</p>
@@ -886,10 +886,10 @@
     renderWander(route) {
       const parts = route.parts;
       let x = 0, y = 0, wall = 1;
-      for (let i = 1; i < parts.length; i += 2) {
+      for (let i = 0; i < parts.length - 1; i += 2) {
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'w') wall = parseInt(parts[i + 1]) || 1;
       }
       const hallInfo = lib.xyToHallXY(x, y);
 
@@ -954,7 +954,7 @@
     bindWander(route) {
       const parts = route.parts;
       let x = 0, y = 0;
-      for (let i = 1; i < parts.length; i += 2) {
+      for (let i = 0; i < parts.length - 1; i += 2) {
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
       }
@@ -964,18 +964,18 @@
       u.$$('.cosmos-hex-cell[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${x + dq}/y/${y + dr}`;
         });
       });
       u.$$('.cosmos-wall-tab[data-wall]').forEach(btn => {
         btn.addEventListener('click', () => {
-          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
         });
       });
       const rb = u.$('#randomHallBtn');
       if (rb) rb.addEventListener('click', () => {
         const { x: rx, y: ry } = lib.randomHallXY();
-        location.hash = `#/wander/x/${rx}/y/${ry}`;
+        location.hash = `#/x/${rx}/y/${ry}`;
       });
     },
 
@@ -1007,10 +1007,10 @@
               <div class="msg-name">Библиотекарь</div>
               <p>Выбери, что хочешь:</p>
               <div class="msg-quick-actions">
-                <a class="msg-qa" href="#/wander">🏛 Блуждать по залам</a>
+                <a class="msg-qa" href="#/x/0/y/0">🏛 Блуждать по залам</a>
                 <a class="msg-qa" href="#/search">🔍 Искать текст</a>
                 <a class="msg-qa" href="#/atlas">🗺️ Атлас жанров</a>
-                <a class="msg-qa" href="#/page/random">🎲 Случайная страница</a>
+                <a class="msg-qa" href="#/random">🎲 Случайная страница</a>
               </div>
               <span class="msg-time">${timeStr()}</span>
             </div>
@@ -1022,10 +1022,10 @@
     renderWander(route) {
       const parts = route.parts;
       let x = 0, y = 0, wall = 1;
-      for (let i = 1; i < parts.length; i += 2) {
+      for (let i = 0; i < parts.length - 1; i += 2) {
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'w') wall = parseInt(parts[i + 1]) || 1;
       }
       const hallInfo = lib.xyToHallXY(x, y);
 
@@ -1137,7 +1137,7 @@
     bindWander(route) {
       const parts = route.parts;
       let x = 0, y = 0;
-      for (let i = 1; i < parts.length; i += 2) {
+      for (let i = 0; i < parts.length - 1; i += 2) {
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
       }
@@ -1148,20 +1148,20 @@
       u.$$('.msg-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${x + dq}/y/${y + dr}`;
         });
       });
       /* Wall tabs */
       u.$$('.msg-wall-btn[data-wall]').forEach(btn => {
         btn.addEventListener('click', () => {
-          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
         });
       });
       /* Random */
       const rb = u.$('#randomHallBtn');
       if (rb) rb.addEventListener('click', () => {
         const { x: rx, y: ry } = lib.randomHallXY();
-        location.hash = `#/wander/x/${rx}/y/${ry}`;
+        location.hash = `#/x/${rx}/y/${ry}`;
       });
       /* Chat input */
       const input = u.$('#msgInput');
@@ -1171,13 +1171,13 @@
         if (!val) return;
         if (val === '/random' || val === '/r') {
           const { x: rx, y: ry } = lib.randomHallXY();
-          location.hash = `#/wander/x/${rx}/y/${ry}`;
+          location.hash = `#/x/${rx}/y/${ry}`;
           return;
         }
         /* Try to parse "x N y M" */
         const match = val.match(/x\s*(-?\d+)\s*y\s*(-?\d+)/i);
         if (match) {
-          location.hash = `#/wander/x/${match[1]}/y/${match[2]}`;
+          location.hash = `#/x/${match[1]}/y/${match[2]}`;
           return;
         }
         /* Otherwise search */
@@ -1219,7 +1219,7 @@
       return `
       <section class="t-messenger page-view fade-in">
         <div class="msg-room-header">
-          <a class="msg-back" href="#/wander/x/${fmtXY(xy.x)}/y/${fmtXY(xy.y)}/wall/${coords.wall}">← Зал</a>
+          <a class="msg-back" href="#/x/${fmtXY(xy.x)}/y/${fmtXY(xy.y)}/w/${coords.wall}">← Зал</a>
           <div>
             <span class="msg-room-title">📖 Том ${coords.volume} · Лист ${pageNum}</span>
             <span class="msg-room-sub">Стена ${coords.wall} · Полка ${coords.shelf}</span>
@@ -1596,7 +1596,7 @@
                 </div>
                 <div class="msg-search-actions">
                   <a class="msg-qa" href="${pageUrl}">📖 Открыть</a>
-                  <a class="msg-qa" href="#/wander/x/${fmtXY(vXY.x)}/y/${fmtXY(vXY.y)}">🏛 Зал</a>
+                  <a class="msg-qa" href="#/x/${fmtXY(vXY.x)}/y/${fmtXY(vXY.y)}">🏛 Зал</a>
                 </div>
                 <span class="msg-time">${timeStr()}</span>
               </div>
@@ -1679,7 +1679,7 @@
           <div class="feed-post-body">${u.esc(snippet)}</div>
           <div class="feed-post-footer">
             <a class="feed-action" href="${pageUrl}">📖 Читать</a>
-            <a class="feed-action" href="#/wander/x/${rx}/y/${ry}">🏛 Зал</a>
+            <a class="feed-action" href="#/x/${rx}/y/${ry}">🏛 Зал</a>
           </div>
         </article>`;
       }
@@ -1690,11 +1690,11 @@
           <h1 class="feed-logo">Вавилон</h1>
           <div class="feed-header-actions">
             <a class="feed-header-btn" href="#/search">🔍</a>
-            <a class="feed-header-btn" href="#/wander">🗺</a>
+            <a class="feed-header-btn" href="#/x/0/y/0">🗺</a>
           </div>
         </div>
         <div class="feed-stories">
-          <a class="feed-story" href="#/wander/x/0/y/0">
+          <a class="feed-story" href="#/x/0/y/0">
             <div class="feed-story-avatar">🏛</div>
             <span>Зал 0:0</span>
           </a>
@@ -1702,7 +1702,7 @@
             <div class="feed-story-avatar">🔍</div>
             <span>Поиск</span>
           </a>
-          <a class="feed-story" href="#/page/random">
+          <a class="feed-story" href="#/random">
             <div class="feed-story-avatar">🎲</div>
             <span>Случайная</span>
           </a>
@@ -1718,10 +1718,10 @@
     renderWander(route) {
       const parts = route.parts;
       let x = 0, y = 0, wall = 1;
-      for (let i = 1; i < parts.length; i += 2) {
+      for (let i = 0; i < parts.length - 1; i += 2) {
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'w') wall = parseInt(parts[i + 1]) || 1;
       }
       const hallInfo = lib.xyToHallXY(x, y);
 
@@ -1745,7 +1745,7 @@
           <div class="feed-post-body">${u.esc(snippet)}</div>
           <div class="feed-post-footer">
             <a class="feed-action" href="${pageUrl}">📖 Читать</a>
-            <a class="feed-action" href="#/wander/x/${x}/y/${y}/wall/${wall === 6 ? 1 : wall + 1}">➡️ Стена</a>
+            <a class="feed-action" href="#/x/${x}/y/${y}/w/${wall === 6 ? 1 : wall + 1}">➡️ Стена</a>
           </div>
         </article>`;
       }
@@ -1779,7 +1779,7 @@
     bindWander(route) {
       const parts = route.parts;
       let x = 0, y = 0;
-      for (let i = 1; i < parts.length; i += 2) {
+      for (let i = 0; i < parts.length - 1; i += 2) {
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
       }
@@ -1787,18 +1787,18 @@
       u.$$('.feed-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${x + dq}/y/${y + dr}`;
         });
       });
       u.$$('.feed-wall-btn[data-wall]').forEach(btn => {
         btn.addEventListener('click', () => {
-          location.hash = `#/wander/x/${x}/y/${y}/wall/${btn.dataset.wall}`;
+          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
         });
       });
       const rb = u.$('#randomHallBtn');
       if (rb) rb.addEventListener('click', () => {
         const { x: rx, y: ry } = lib.randomHallXY();
-        location.hash = `#/wander/x/${rx}/y/${ry}`;
+        location.hash = `#/x/${rx}/y/${ry}`;
       });
     },
 
@@ -1830,7 +1830,7 @@
             </div>
             <div class="term-line term-prompt">babel:// ~$ ls /залы/</div>
             <div class="term-line term-output-text">
-              <a class="term-link" href="#/wander">drwxr-x---  залы/</a>&nbsp;&nbsp;&nbsp;
+              <a class="term-link" href="#/x/0/y/0">drwxr-x---  залы/</a>&nbsp;&nbsp;&nbsp;
               <a class="term-link" href="#/search">-rwxr-x---  каталог</a>&nbsp;&nbsp;&nbsp;
               <a class="term-link" href="#/about">-r--r-----  алгоритм</a>
             </div>
@@ -1874,7 +1874,7 @@
           response = 'go [сз/св/з/в/юз/юв] · search [текст] · random · read [1-32] · wall [1-6]';
         } else if (cmd[0] === 'random') {
           const { x, y } = lib.randomHallXY();
-          location.hash = `#/wander/x/${x}/y/${y}`;
+          location.hash = `#/x/${x}/y/${y}`;
           return;
         } else if (cmd[0] === 'search' && cmd[1]) {
           location.hash = `#/search?q=${encodeURIComponent(val.slice(val.indexOf(' ') + 1))}`;
@@ -1882,7 +1882,7 @@
         } else if (cmd[0] === 'go') {
           const dirMap = { 'сз': [0,-1], 'св': [1,-1], 'з': [-1,0], 'в': [1,0], 'юз': [-1,1], 'юв': [0,1] };
           const d = dirMap[cmd[1]];
-          if (d) { location.hash = `#/wander/x/${d[0]}/y/${d[1]}`; return; }
+          if (d) { location.hash = `#/x/${d[0]}/y/${d[1]}`; return; }
           response = 'Неизвестное направление. Используй: сз св з в юз юв';
         } else {
           response = `Команда не найдена: ${u.esc(cmd[0])}. Набери help для справки.`;
@@ -1896,10 +1896,10 @@
     renderWander(route) {
       const parts = route.parts;
       let x = 0, y = 0, wall = 1;
-      for (let i = 1; i < parts.length; i += 2) {
+      for (let i = 0; i < parts.length - 1; i += 2) {
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'w') wall = parseInt(parts[i + 1]) || 1;
       }
       const hallInfo = lib.xyToHallXY(x, y);
 
@@ -1963,10 +1963,10 @@ ${bookList}
     bindWander(route) {
       const parts = route.parts;
       let x = 0, y = 0, wall = 1;
-      for (let i = 1; i < parts.length; i += 2) {
+      for (let i = 0; i < parts.length - 1; i += 2) {
         if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
         if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'w') wall = parseInt(parts[i + 1]) || 1;
       }
       store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
 
@@ -1975,7 +1975,7 @@ ${bookList}
         el.style.cursor = 'pointer';
         el.addEventListener('click', () => {
           const dq = parseInt(el.dataset.dq), dr = parseInt(el.dataset.dr);
-          location.hash = `#/wander/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${x + dq}/y/${y + dr}`;
         });
       });
 
@@ -1995,17 +1995,17 @@ ${bookList}
         const cmd = val.toLowerCase().split(/\s+/);
         if (cmd[0] === 'random') {
           const { x: rx, y: ry } = lib.randomHallXY();
-          location.hash = `#/wander/x/${rx}/y/${ry}`;
+          location.hash = `#/x/${rx}/y/${ry}`;
           return;
         }
         if (cmd[0] === 'go') {
           const dirMap = { 'сз': [0,-1], 'св': [1,-1], 'з': [-1,0], 'в': [1,0], 'юз': [-1,1], 'юв': [0,1] };
           const d = dirMap[cmd[1]];
-          if (d) { location.hash = `#/wander/x/${x + d[0]}/y/${y + d[1]}`; return; }
+          if (d) { location.hash = `#/x/${x + d[0]}/y/${y + d[1]}`; return; }
         }
         if (cmd[0] === 'wall' && cmd[1]) {
           const w = parseInt(cmd[1]);
-          if (w >= 1 && w <= 6) { location.hash = `#/wander/x/${x}/y/${y}/wall/${w}`; return; }
+          if (w >= 1 && w <= 6) { location.hash = `#/x/${x}/y/${y}/w/${w}`; return; }
         }
         if (cmd[0] === 'search') {
           location.hash = `#/search?q=${encodeURIComponent(val.slice(val.indexOf(' ') + 1))}`;
@@ -2059,7 +2059,7 @@ ${bookList}
               <span class="term-cmd" id="termFav">★</span> избранное ·
               <span class="term-cmd" id="termCopy">📋</span> копировать ·
               <span class="term-cmd" id="termLink">🔗</span> ссылка ·
-              <a class="term-link" href="#/wander/x/${fmtXY(xy.x)}/y/${fmtXY(xy.y)}/wall/${coords.wall}">зал</a>
+              <a class="term-link" href="#/x/${fmtXY(xy.x)}/y/${fmtXY(xy.y)}/w/${coords.wall}">зал</a>
             </div>
             <div class="term-line term-separator">────────────────────────────────────────</div>
             <div class="term-line term-output-text">
@@ -2261,7 +2261,7 @@ ${highlighted}
     <section class="${themeClass} page-view fade-in">
       <div class="page-breadcrumbs">
         <a href="#/">Вавилон</a><span class="sep">›</span>
-        <a href="#/wander/x/${fmtXY(xy.x)}/y/${fmtXY(xy.y)}/wall/${coords.wall}">Зал X:${fmtXY(xy.x)} Y:${fmtXY(xy.y)}</a><span class="sep">›</span>
+        <a href="#/x/${fmtXY(xy.x)}/y/${fmtXY(xy.y)}/w/${coords.wall}">Зал X:${fmtXY(xy.x)} Y:${fmtXY(xy.y)}</a><span class="sep">›</span>
         <span>Том ${coords.volume} · Лист ${pageNum}</span>
       </div>
 
@@ -2485,7 +2485,7 @@ ${highlighted}
         const kind = btn.dataset.kind;
         const { x, y } = lib.findRandomHallOfGenre(kind);
         store.pushWanderVisit(x, y);
-        location.hash = `#/wander/x/${x}/y/${y}`;
+        location.hash = `#/x/${x}/y/${y}`;
       });
     });
 
@@ -2689,7 +2689,7 @@ ${highlighted}
       };
       const vXY = { x: BigInt(pageData.xy.x), y: BigInt(pageData.xy.y) };
       const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${pageData.range.start}:${pageData.range.length}` });
-      const wanderUrl = `#/wander/x/${fmtXY(vXY.x)}/y/${fmtXY(vXY.y)}`;
+      const wanderUrl = `#/x/${fmtXY(vXY.x)}/y/${fmtXY(vXY.y)}`;
 
       contentHTML = `
       <div class="msg msg-them">

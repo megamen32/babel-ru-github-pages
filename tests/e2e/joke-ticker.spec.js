@@ -50,7 +50,7 @@ test.describe('joke ticker', () => {
     await expect(jokeText).toContainText('Мишель де Монтень', { timeout: 4000 });
 
     await expect(
-      page.locator('#searchResultsSlot .msg-search-actions .msg-qa[href*="#/page/"]').first()
+      page.locator('#searchResultsSlot .msg-search-actions .msg-qa[href*="#/x/"], [href*="#/page/"]').first()
     ).toBeVisible({ timeout: 15000 });
     await expect(jokeMessage).toHaveCount(0);
   });
@@ -84,7 +84,7 @@ test.describe('joke ticker', () => {
     await expect(page.locator('.msg-search-count')).toContainText('256^(4096 - 3)');
 
     await expect(
-      page.locator('#searchResultsSlot .msg-search-actions .msg-qa[href*="#/page/"]').first()
+      page.locator('#searchResultsSlot .msg-search-actions .msg-qa[href*="#/x/"], [href*="#/page/"]').first()
     ).toBeVisible({ timeout: 15000 });
 
     const metrics = await page.evaluate(() => {
@@ -115,7 +115,7 @@ test.describe('joke ticker', () => {
   test('opens dialogue pages as telegram-like chat threads instead of plain text blocks', async ({ page }) => {
     await page.goto('/#/search?q=%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B0');
 
-    const openLink = page.locator('.msg-dialogue-card .msg-search-actions .msg-qa[href*="#/page/"]').first();
+    const openLink = page.locator('.msg-dialogue-card .msg-search-actions .msg-qa[href*="#/x/"], [href*="#/page/"]').first();
     await expect(openLink).toBeVisible({ timeout: 15000 });
     await openLink.click();
 
