@@ -189,7 +189,9 @@
   }
 
   function xyToCoordinates(x, y, wall, shelf, volume, page) {
-    const { sector, hall } = xyToHallXY(x, y);
+    const nx = Number(x);
+    const ny = Number(y);
+    const { sector, hall } = xyToHallXY(nx, ny);
     return { sector, hall, wall: BigInt(wall || 1), shelf: BigInt(shelf || 1), volume: BigInt(volume || 1), page: BigInt(page || 1) };
   }
 

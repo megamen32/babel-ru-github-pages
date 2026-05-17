@@ -37,12 +37,12 @@
         pageXY = {};
         for (let i = 1; i < parts.length - 1; i += 2) {
           switch (parts[i]) {
-            case 'x': pageXY.x = parts[i + 1]; break;
-            case 'y': pageXY.y = parts[i + 1]; break;
-            case 'w': pageXY.wall = parts[i + 1]; break;
-            case 'sh': pageXY.shelf = parts[i + 1]; break;
-            case 'v': pageXY.volume = parts[i + 1]; break;
-            case 'p': pageXY.page = parts[i + 1]; break;
+            case 'x': pageXY.x = parseInt(parts[i + 1]); break;
+            case 'y': pageXY.y = parseInt(parts[i + 1]); break;
+            case 'w': pageXY.wall = parseInt(parts[i + 1]) || 1; break;
+            case 'sh': pageXY.shelf = parseInt(parts[i + 1]) || 1; break;
+            case 'v': pageXY.volume = parseInt(parts[i + 1]) || 1; break;
+            case 'p': pageXY.page = parseInt(parts[i + 1]) || 1; break;
           }
         }
       }

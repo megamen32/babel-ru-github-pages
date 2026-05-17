@@ -1263,10 +1263,18 @@
       const coords = lib.numberToCoordinates(number);
       const highlight = lib.parseHighlight(route.params);
 
-      /* Track journey step for this page view */
+      /* Track journey step for this page view — use x,y from URL if available */
       try {
-        const pageXY = lib.coordinatesToXY(coords);
-        store.pushJourneyStep(pageXY.x, pageXY.y, lib.classifyRegion(safeNum(pageXY.x), safeNum(pageXY.y)).kind);
+        let jx, jy;
+        if (route.pageXY && route.pageXY.x != null) {
+          jx = route.pageXY.x;
+          jy = route.pageXY.y;
+        } else {
+          const pageXY = lib.coordinatesToXY(coords);
+          jx = pageXY.x;
+          jy = pageXY.y;
+        }
+        store.pushJourneyStep(jx, jy, lib.classifyRegion(safeNum(jx), safeNum(jy)).kind);
       } catch {}
 
       const contentSlot = u.$('#pageContentSlot');
@@ -2051,10 +2059,18 @@ ${bookList}
       try { number = route.pageNumber; } catch { return; }
       const coords = lib.numberToCoordinates(number);
 
-      /* Track journey step for this page view */
+      /* Track journey step for this page view — use x,y from URL if available */
       try {
-        const pageXY = lib.coordinatesToXY(coords);
-        store.pushJourneyStep(pageXY.x, pageXY.y, lib.classifyRegion(safeNum(pageXY.x), safeNum(pageXY.y)).kind);
+        let jx, jy;
+        if (route.pageXY && route.pageXY.x != null) {
+          jx = route.pageXY.x;
+          jy = route.pageXY.y;
+        } else {
+          const pageXY = lib.coordinatesToXY(coords);
+          jx = pageXY.x;
+          jy = pageXY.y;
+        }
+        store.pushJourneyStep(jx, jy, lib.classifyRegion(safeNum(jx), safeNum(jy)).kind);
       } catch {}
 
       const favBtn = u.$('#termFav');
@@ -2279,10 +2295,18 @@ ${highlighted}
     try { number = route.pageNumber; } catch { return; }
     const coords = lib.numberToCoordinates(number);
 
-    /* Track journey step for this page view */
+    /* Track journey step for this page view — use x,y from URL if available */
     try {
-      const pageXY = lib.coordinatesToXY(coords);
-      store.pushJourneyStep(pageXY.x, pageXY.y, lib.classifyRegion(safeNum(pageXY.x), safeNum(pageXY.y)).kind);
+      let jx, jy;
+      if (route.pageXY && route.pageXY.x != null) {
+        jx = route.pageXY.x;
+        jy = route.pageXY.y;
+      } else {
+        const pageXY = lib.coordinatesToXY(coords);
+        jx = pageXY.x;
+        jy = pageXY.y;
+      }
+      store.pushJourneyStep(jx, jy, lib.classifyRegion(safeNum(jx), safeNum(jy)).kind);
     } catch {}
 
     const favBtn = u.$('#favBtn');
