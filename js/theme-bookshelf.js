@@ -36,7 +36,7 @@
             <h2>Атлас</h2>
             <p>Путешествуй по жанрам библиотеки</p>
           </a>
-          <a class="bk-card" href="#/page/random">
+          <a class="bk-card" href="#/random">
             <span class="bk-card-icon">🎲</span>
             <h2>Случайная</h2>
             <p>Открой случайную страницу</p>
@@ -52,31 +52,22 @@
 
     renderWander(route) {
       const parts = route.parts;
-      let x = 0, y = 0, wall = 1;
+      let x = 0, y = 0;
       for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'x') x = parts[i + 1];
+        if (parts[i] === 'y') y = parts[i + 1];
       }
+      const nx = Number(x) || 0, ny = Number(y) || 0;
       const hallInfo = lib.xyToHallXY(x, y);
 
-      /* Shelves with book spines */
-      let shelvesHTML = '';
-      for (let s = 1; s <= Number(ALG.shelvesPerWall); s++) {
-        let spines = '';
-        for (let v = 1; v <= Number(ALG.volumesPerShelf); v++) {
-          const spineText = lib.getBookSpine(x, y, wall, s, v);
-          const cls = lib.classifySpine(spineText);
-          const display = u.esc(spineText || 'пусто');
-          const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(x, y, wall, s, v, 1));
-          spines += `<a class="bk-spine ${cls === 'text' ? 'bk-has-text' : cls === 'noise' ? 'bk-noise' : ''}" href="${pageUrl}" title="Том ${v}">${display}</a>`;
-        }
-        shelvesHTML += `
-        <div class="bk-shelf">
-          <div class="bk-shelf-label">Полка ${s}</div>
-          <div class="bk-shelf-books">${spines}</div>
-          <div class="bk-shelf-wood"></div>
-        </div>`;
+      /* Book spines — show 10 volumes on the shelf (z=1..10) */
+      let spinesHTML = '';
+      for (let z = 1; z <= 10; z++) {
+        const spineText = lib.getBookSpine(x, y, z);
+        const cls = lib.classifySpine(spineText);
+        const display = u.esc(spineText || 'пусто');
+        const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(x, y, z));
+        spinesHTML += `<a class="bk-spine ${cls === 'text' ? 'bk-has-text' : cls === 'noise' ? 'bk-noise' : ''}" href="${pageUrl}" title="Z:${z}">${display}</a>`;
       }
 
       /* Direction buttons */
@@ -96,16 +87,18 @@
       <section class="t-bookshelf wander fade-in">
         <div class="bk-room-header">
           <h1>Шестигранный зал</h1>
-          <span class="bk-coords">X: ${x} · Y: ${y} · ${lib.classifyRegion(x, y).icon} ${lib.classifyRegion(x, y).label}</span>
+          <span class="bk-coords">X: ${nx} · Y: ${ny} · ${lib.classifyRegion(nx, ny).icon} ${lib.classifyRegion(nx, ny).label}</span>
         </div>
 
         <div class="bk-nav">${navHTML}</div>
 
-        <div class="bk-wall-tabs">
-          ${[1,2,3,4,5,6].map(w => `<button class="bk-wall-tab ${wall === w ? 'active' : ''}" data-wall="${w}">С${w}</button>`).join('')}
+        <div class="bk-shelves">
+          <div class="bk-shelf">
+            <div class="bk-shelf-label">Книги</div>
+            <div class="bk-shelf-books">${spinesHTML}</div>
+            <div class="bk-shelf-wood"></div>
+          </div>
         </div>
-
-        <div class="bk-shelves">${shelvesHTML}</div>
 
         <div class="bk-actions">
           <button class="bk-btn" id="randomHallBtn">🎲 Случайный зал</button>
@@ -119,21 +112,17 @@
       const parts = route.parts;
       let x = 0, y = 0;
       for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'x') x = parts[i + 1];
+        if (parts[i] === 'y') y = parts[i + 1];
       }
+      const nx = Number(x) || 0, ny = Number(y) || 0;
       /* Track visit on wander map */
-      store.pushWanderVisit(x, y);
-      store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
+      store.pushWanderVisit(nx, ny);
+      store.pushJourneyStep(nx, ny, lib.classifyRegion(nx, ny).kind);
       u.$$('.bk-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/x/${x + dq}/y/${y + dr}`;
-        });
-      });
-      u.$$('.bk-wall-tab[data-wall]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
+          location.hash = `#/x/${nx + dq}/y/${ny + dr}`;
         });
       });
       const rb = u.$('#randomHallBtn');

@@ -35,7 +35,7 @@
                 <a class="msg-qa" href="#/x/0/y/0">🏛 Блуждать по залам</a>
                 <a class="msg-qa" href="#/search">🔍 Искать текст</a>
                 <a class="msg-qa" href="#/atlas">🗺️ Атлас жанров</a>
-                <a class="msg-qa" href="#/page/random">🎲 Случайная страница</a>
+                <a class="msg-qa" href="#/random">🎲 Случайная страница</a>
               </div>
               <span class="msg-time">${h.timeStr()}</span>
             </div>
@@ -46,13 +46,13 @@
 
     renderWander(route) {
       const parts = route.parts;
-      let x = 0, y = 0, wall = 1;
+      let x = '0', y = '0';
       for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'x') x = parts[i + 1];
+        if (parts[i] === 'y') y = parts[i + 1];
       }
-      const hallInfo = lib.xyToHallXY(x, y);
+      const nx = Number(x) || 0, ny = Number(y) || 0;
+      const hallInfo = lib.xyToHallXY(nx, ny);
 
       /* Build chat messages showing the room content */
       const messages = [];
@@ -62,33 +62,31 @@
         type: 'them',
         name: 'Библиотекарь',
         avatar: '📚',
-        text: `Ты в зале <strong>X:${x} Y:${y}</strong>. Сектор ${hallInfo.sector}, зал ${hallInfo.hall}. На стене ${wall} из 6 — 5 полок по 32 тома.`,
+        text: `Ты в зале <strong>X:${x} Y:${y}</strong>. Сектор ${hallInfo.sector}, зал ${hallInfo.hall}. 10 книг на полке.`,
         time: h.timeStr(),
       });
 
       /* Show book spines as message */
-      for (let s = 1; s <= Number(ALG.shelvesPerWall); s++) {
-        const spines = [];
-        for (let v = 1; v <= Number(ALG.volumesPerShelf); v++) {
-          const spineText = lib.getBookSpine(x, y, wall, s, v);
-          const cls = lib.classifySpine(spineText);
-          const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(x, y, wall, s, v, 1));
-          if (cls === 'text') {
-            spines.push(`<a class="msg-book-link" href="${pageUrl}">📖 Том ${v}: ${u.esc(spineText.slice(0, 30))}</a>`);
-          } else if (cls === 'noise') {
-            spines.push(`<a class="msg-book-link msg-book-noise" href="${pageUrl}">📕 Том ${v}: шум</a>`);
-          } else {
-            spines.push(`<a class="msg-book-link msg-book-empty" href="${pageUrl}">📄 Том ${v}: пусто</a>`);
-          }
+      const spines = [];
+      for (let z = 1; z <= 10; z++) {
+        const spineText = lib.getBookSpine(nx, ny, z);
+        const cls = lib.classifySpine(spineText);
+        const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(nx, ny, z));
+        if (cls === 'text') {
+          spines.push(`<a class="msg-book-link" href="${pageUrl}">📖 Том ${z}: ${u.esc(spineText.slice(0, 30))}</a>`);
+        } else if (cls === 'noise') {
+          spines.push(`<a class="msg-book-link msg-book-noise" href="${pageUrl}">📕 Том ${z}: шум</a>`);
+        } else {
+          spines.push(`<a class="msg-book-link msg-book-empty" href="${pageUrl}">📄 Том ${z}: пусто</a>`);
         }
-        messages.push({
-          type: 'them',
-          name: 'Библиотекарь',
-          avatar: '📚',
-          text: `<strong>Полка ${s}</strong><br>${spines.join('<br>')}`,
-          time: h.timeStr(),
-        });
       }
+      messages.push({
+        type: 'them',
+        name: 'Библиотекарь',
+        avatar: '📚',
+        text: spines.join('<br>'),
+        time: h.timeStr(),
+      });
 
       /* Navigation hints */
       const navBtns = [
@@ -102,10 +100,6 @@
 
       const navHTML = navBtns.map(d =>
         `<button class="msg-nav-btn" data-dq="${d.dq}" data-dr="${d.dr}">${d.label}</button>`
-      ).join('');
-
-      const wallTabsHTML = [1,2,3,4,5,6].map(w =>
-        `<button class="msg-wall-btn ${wall === w ? 'active' : ''}" data-wall="${w}">С${w}</button>`
       ).join('');
 
       /* Render messages */
@@ -124,7 +118,7 @@
       <section class="t-messenger wander fade-in">
         <div class="msg-room-header">
           <span class="msg-room-title">📚 Зал X:${x} Y:${y}</span>
-          <a class="genre-badge" href="#/atlas" style="color:${lib.GENRE_COLORS[lib.classifyRegion(x, y).kind]};border-color:${lib.GENRE_COLORS[lib.classifyRegion(x, y).kind]}40;background:${lib.GENRE_COLORS[lib.classifyRegion(x, y).kind]}15">${lib.classifyRegion(x, y).icon} ${lib.classifyRegion(x, y).label}</a>
+          <a class="genre-badge" href="#/atlas" style="color:${lib.GENRE_COLORS[lib.classifyRegion(nx, ny).kind]};border-color:${lib.GENRE_COLORS[lib.classifyRegion(nx, ny).kind]}40;background:${lib.GENRE_COLORS[lib.classifyRegion(nx, ny).kind]}15">${lib.classifyRegion(nx, ny).icon} ${lib.classifyRegion(nx, ny).label}</a>
           <span class="msg-room-sub">Сектор ${hallInfo.sector}</span>
         </div>
         <div class="msg-chat" id="msgChat">
@@ -133,8 +127,7 @@
             <div class="msg-avatar">📚</div>
             <div class="msg-bubble">
               <div class="msg-name">Библиотекарь</div>
-              <p>Куда идём? Выбери стену или направление:</p>
-              <div class="msg-wall-row">${wallTabsHTML}</div>
+              <p>Куда идём? Выбери направление:</p>
               <div class="msg-nav-row">${navHTML}</div>
               <span class="msg-time">${h.timeStr()}</span>
             </div>
@@ -161,25 +154,20 @@
 
     bindWander(route) {
       const parts = route.parts;
-      let x = 0, y = 0;
+      let x = '0', y = '0';
       for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'x') x = parts[i + 1];
+        if (parts[i] === 'y') y = parts[i + 1];
       }
+      const nx = Number(x) || 0, ny = Number(y) || 0;
       /* Track visit on wander map */
-      store.pushWanderVisit(x, y);
-      store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
+      store.pushWanderVisit(nx, ny);
+      store.pushJourneyStep(nx, ny, lib.classifyRegion(nx, ny).kind);
       /* Navigation buttons */
       u.$$('.msg-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/x/${x + dq}/y/${y + dr}`;
-        });
-      });
-      /* Wall tabs */
-      u.$$('.msg-wall-btn[data-wall]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
+          location.hash = `#/x/${nx + dq}/y/${ny + dr}`;
         });
       });
       /* Random */

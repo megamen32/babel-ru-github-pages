@@ -209,83 +209,63 @@
   }
 
   /* Chunked scan for next inhabited page.
-     Uses token decoder — scans increasing Z values for lower temperature
-     (more human-like text).  Yields to UI between chunks so the
-     odometer animation can run. */
+     Uses the inhabited layer (filler generators) to create a page
+     with readable content at a nearby hex coordinate.
+     Discovery-based: coordinate determines genre, filler creates content. */
   function findNextInhabitedChunked(coords) {
     return new Promise((resolve, reject) => {
       try {
-        const x = BigInt(coords.x || 0);
-        const y = BigInt(coords.y || 0);
-        const startZ = BigInt(coords.z || 1);
-        const CHUNK = 5;
-        const MAX_SCAN = 100;
-        let i = 1;
-        let bestResult = null;
-        let bestTemp = 1.0;
+        /* Strategy: pick a nearby hex coordinate and generate
+           an inhabited page there using the region's filler generator. */
+        const currentX = Number(coords.x || 0);
+        const currentY = Number(coords.y || 0);
 
-        function scanChunk() {
-          const limit = Math.min(i + CHUNK - 1, MAX_SCAN);
+        /* Step 1: scan nearby hexes for a non-noise region */
+        const nearby = lib.scanInhabitedNearby(currentX, currentY, 3);
+        let targetX, targetY;
 
-          for (; i <= limit; i++) {
-            /* Scan in both Z directions */
-            const offsets = [BigInt(i), -BigInt(i)];
-            for (const offset of offsets) {
-              const newZ = startZ + offset;
-              if (newZ < 1n) continue;
-
-              try {
-                const temp = lib.computeTemperature(newZ);
-                const text = lib.decodePage(x, y, newZ);
-                const detection = lib.classifyPageByTemp(newZ);
-                const newCoords = lib.xyToCoordinates(x, y, newZ);
-                const xy = { x, y };
-
-                /* Ищем страницу с более низкой температурой */
-                if (temp < bestTemp) {
-                  bestTemp = temp;
-                  bestResult = {
-                    number: lib.coordinatesToNumber(newCoords),
-                    coords: newCoords,
-                    coordinates: newCoords,
-                    xy,
-                    text,
-                    detection,
-                    scanned: i,
-                    offset: Number(offset),
-                    regionGenre: {
-                      kind: detection.kind,
-                      label: detection.label,
-                      icon: detection.icon,
-                    },
-                    scanDistance: Math.abs(Number(offset)),
-                    temperature: temp,
-                  };
-                }
-
-                /* Нашли хорошую обитаемую страницу */
-                if (temp < 0.15) {
-                  resolve(bestResult);
-                  return;
-                }
-              } catch { continue; }
-            }
-          }
-
-          if (i > MAX_SCAN) {
-            if (bestResult) {
-              bestResult.belowThreshold = bestTemp > 0.3;
-              resolve(bestResult);
-            } else {
-              resolve(null);
-            }
-            return;
-          }
-
-          setTimeout(scanChunk, 0);
+        if (nearby.length > 0) {
+          /* Pick a random non-noise neighbor */
+          const pick = nearby[Math.floor(Math.random() * nearby.length)];
+          targetX = currentX + pick.dx;
+          targetY = currentY + pick.dy;
+        } else {
+          /* Fallback: jump to a random nearby hex */
+          targetX = currentX + Math.floor(Math.random() * 10) - 5;
+          targetY = currentY + Math.floor(Math.random() * 10) - 5;
         }
 
-        setTimeout(scanChunk, 10);
+        /* Step 2: generate an inhabited page at the target coordinates */
+        const region = lib.classifyRegion(targetX, targetY);
+        const modeMap = {
+          dialogue: 'dialogue', diary: 'diary', post: 'post',
+          log: 'log', text: 'words', noise: 'words'
+        };
+        const mode = modeMap[region.kind] || 'words';
+
+        /* Generate filler content for the page */
+        const seed = `next-inhabited:${targetX}:${targetY}:${Date.now()}`;
+        const fillerIndices = lib.createFillerIndices(mode, seed, ALG.pageLength);
+        const number = lib.coordinatesToNumber(
+          lib.xyToCoordinates(targetX, targetY, 1)
+        );
+
+        /* Build the result with target coordinates */
+        const targetCoords = lib.xyToCoordinates(targetX, targetY, 1);
+        const text = u.indicesToString(fillerIndices);
+
+        resolve({
+          number,
+          coords: targetCoords,
+          coordinates: targetCoords,
+          xy: { x: BigInt(targetX), y: BigInt(targetY) },
+          text,
+          detection: { score: 0.7, kind: mode, label: region.label },
+          scanned: Math.abs(targetX - currentX) + Math.abs(targetY - currentY),
+          offset: 1,
+          regionGenre: { kind: region.kind, label: region.label, icon: region.icon },
+          scanDistance: Math.abs(targetX - currentX) + Math.abs(targetY - currentY),
+        });
       } catch (err) { reject(err); }
     });
   }

@@ -42,8 +42,7 @@
               &nbsp;&nbsp;<span class="term-cmd">go [направление]</span> — перейти в зал (сз/св/з/в/юз/юв)<br>
               &nbsp;&nbsp;<span class="term-cmd">search [текст]</span> — найти текст<br>
               &nbsp;&nbsp;<span class="term-cmd">random</span> — случайный зал<br>
-              &nbsp;&nbsp;<span class="term-cmd">read [том]</span> — прочитать том (1-32)<br>
-              &nbsp;&nbsp;<span class="term-cmd">wall [1-6]</span> — переключить стену
+              &nbsp;&nbsp;<span class="term-cmd">read [том]</span> — прочитать том (1-10)
             </div>
           </div>
           <div class="term-input-row">
@@ -73,7 +72,7 @@
         let response = '';
 
         if (cmd[0] === 'help') {
-          response = 'go [сз/св/з/в/юз/юв] · search [текст] · random · read [1-32] · wall [1-6]';
+          response = 'go [сз/св/з/в/юз/юв] · search [текст] · random · read [1-10]';
         } else if (cmd[0] === 'random') {
           const { x, y } = lib.randomHallXY();
           location.hash = `#/x/${x}/y/${y}`;
@@ -97,13 +96,13 @@
 
     renderWander(route) {
       const parts = route.parts;
-      let x = 0, y = 0, wall = 1;
+      let x = '0', y = '0';
       for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'x') x = parts[i + 1];
+        if (parts[i] === 'y') y = parts[i + 1];
       }
-      const hallInfo = lib.xyToHallXY(x, y);
+      const nx = Number(x) || 0, ny = Number(y) || 0;
+      const hallInfo = lib.xyToHallXY(nx, ny);
 
       /* ASCII hex map */
       const mapLines = [];
@@ -128,26 +127,26 @@
 
       /* Book listing */
       let bookList = '';
-      for (let v = 1; v <= Math.min(Number(ALG.volumesPerShelf), 10); v++) {
-        const spineText = lib.getBookSpine(x, y, wall, 1, v);
-        const stats = h.charStats(lib.numberToIndices(lib.coordinatesToNumber(lib.xyToCoordinates(x, y, wall, 1, v, 1))));
-        const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(x, y, wall, 1, v, 1));
+      for (let z = 1; z <= 10; z++) {
+        const spineText = lib.getBookSpine(nx, ny, z);
+        const stats = h.charStats(lib.numberToIndices(lib.coordinatesToNumber(lib.xyToCoordinates(nx, ny, z))));
+        const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(nx, ny, z));
         const label = spineText ? u.esc(spineText.slice(0, 30)) : '(пусто)';
-        bookList += `<a class="term-link" href="${pageUrl}">Том ${v}</a> [${stats.label}] ${label}<br>`;
+        bookList += `<a class="term-link" href="${pageUrl}">Том ${z}</a> [${stats.label}] ${label}<br>`;
       }
 
       return `
       <section class="t-terminal wander fade-in">
         <div class="term-screen">
-          <div class="term-titlebar">babel:// залы/x:${x}/y:${y}/стена:${wall}</div>
+          <div class="term-titlebar">babel:// залы/x:${x}/y:${y}</div>
           <div class="term-output" id="termOutput">
             <div class="term-line term-output-text">
 <pre class="term-ascii-map">${mapLines.join('\n')}</pre>
             </div>
             <div class="term-line term-output-text">
-Сектор ${hallInfo.sector} · Зал ${hallInfo.hall} · Стена ${wall}<br>
-${lib.classifyRegion(x, y).icon} ${lib.classifyRegion(x, y).label}<br>
-Полка 1 — ${Math.min(Number(ALG.volumesPerShelf), 10)} из ${ALG.volumesPerShelf} томов:<br><br>
+Сектор ${hallInfo.sector} · Зал ${hallInfo.hall}<br>
+${lib.classifyRegion(nx, ny).icon} ${lib.classifyRegion(nx, ny).label}<br>
+10 книг:<br><br>
 ${bookList}
             </div>
             <div class="term-line term-output-text">
@@ -164,20 +163,20 @@ ${bookList}
 
     bindWander(route) {
       const parts = route.parts;
-      let x = 0, y = 0, wall = 1;
+      let x = '0', y = '0';
       for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'x') x = parts[i + 1];
+        if (parts[i] === 'y') y = parts[i + 1];
       }
-      store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
+      const nx = Number(x) || 0, ny = Number(y) || 0;
+      store.pushJourneyStep(nx, ny, lib.classifyRegion(nx, ny).kind);
 
       /* Direction links */
       u.$$('.term-dir[data-dq]').forEach(el => {
         el.style.cursor = 'pointer';
         el.addEventListener('click', () => {
           const dq = parseInt(el.dataset.dq), dr = parseInt(el.dataset.dr);
-          location.hash = `#/x/${x + dq}/y/${y + dr}`;
+          location.hash = `#/x/${nx + dq}/y/${ny + dr}`;
         });
       });
 
@@ -203,17 +202,13 @@ ${bookList}
         if (cmd[0] === 'go') {
           const dirMap = { 'сз': [0,-1], 'св': [1,-1], 'з': [-1,0], 'в': [1,0], 'юз': [-1,1], 'юв': [0,1] };
           const d = dirMap[cmd[1]];
-          if (d) { location.hash = `#/x/${x + d[0]}/y/${y + d[1]}`; return; }
-        }
-        if (cmd[0] === 'wall' && cmd[1]) {
-          const w = parseInt(cmd[1]);
-          if (w >= 1 && w <= 6) { location.hash = `#/x/${x}/y/${y}/w/${w}`; return; }
+          if (d) { location.hash = `#/x/${nx + d[0]}/y/${ny + d[1]}`; return; }
         }
         if (cmd[0] === 'search') {
           location.hash = `#/search?q=${encodeURIComponent(val.slice(val.indexOf(' ') + 1))}`;
           return;
         }
-        output.innerHTML += `<div class="term-line term-output-text">Неизвестная команда. Набери: go [направление] · wall [1-6] · random · search [текст]</div>`;
+        output.innerHTML += `<div class="term-line term-output-text">Неизвестная команда. Набери: go [направление] · random · search [текст]</div>`;
         output.scrollTop = output.scrollHeight;
       });
     },

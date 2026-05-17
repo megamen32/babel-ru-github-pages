@@ -18,7 +18,7 @@
       for (let i = 0; i < 6; i++) {
         const rx = Math.floor(Math.random() * 200) - 100;
         const ry = Math.floor(Math.random() * 200) - 100;
-        const data = lib.getPageByXY(rx, ry, 1, 1, 1, 1);
+        const data = lib.getPageByXY(rx, ry, 1);
         const stats = h.charStats(data.indices);
         const snippet = h.pageSnippet(data.indices, 120);
         const pageUrl = lib.coordsToPageUrl(data.coordinates);
@@ -28,7 +28,7 @@
             <span class="feed-avatar">📖</span>
             <div class="feed-author">
               <span class="feed-author-name">Зал X:${rx} Y:${ry}</span>
-              <span class="feed-author-sub">Сектор ${data.coordinates.sector} · Том ${data.coordinates.volume}</span>
+              <span class="feed-author-sub">Z:${data.coordinates.z}</span>
             </div>
             <span class="feed-density ${stats.label === 'Читаемая' ? 'fd-read' : stats.label === 'Разреженная' ? 'fd-sparse' : 'fd-noise'}">${stats.label}</span>
           </div>
@@ -58,7 +58,7 @@
             <div class="feed-story-avatar">🔍</div>
             <span>Поиск</span>
           </a>
-          <a class="feed-story" href="#/page/random">
+          <a class="feed-story" href="#/random">
             <div class="feed-story-avatar">🎲</div>
             <span>Случайная</span>
           </a>
@@ -73,18 +73,18 @@
 
     renderWander(route) {
       const parts = route.parts;
-      let x = 0, y = 0, wall = 1;
+      let x = '0', y = '0';
       for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'x') x = parts[i + 1];
+        if (parts[i] === 'y') y = parts[i + 1];
       }
-      const hallInfo = lib.xyToHallXY(x, y);
+      const nx = Number(x) || 0, ny = Number(y) || 0;
+      const hallInfo = lib.xyToHallXY(nx, ny);
 
-      /* All books on current wall as feed posts */
+      /* Books as feed posts */
       let posts = '';
-      for (let v = 1; v <= Math.min(Number(ALG.volumesPerShelf), 16); v++) {
-        const data = lib.getPageByXY(x, y, wall, 1, v, 1);
+      for (let z = 1; z <= 10; z++) {
+        const data = lib.getPageByXY(nx, ny, z);
         const stats = h.charStats(data.indices);
         const snippet = h.pageSnippet(data.indices, 150);
         const pageUrl = lib.coordsToPageUrl(data.coordinates);
@@ -93,15 +93,15 @@
           <div class="feed-post-header">
             <span class="feed-avatar">📖</span>
             <div class="feed-author">
-              <span class="feed-author-name">Том ${v}</span>
-              <span class="feed-author-sub">Полка 1 · Стена ${wall}</span>
+              <span class="feed-author-name">Том ${z}</span>
+              <span class="feed-author-sub">Z:${z}</span>
             </div>
             <span class="feed-density ${stats.label === 'Читаемая' ? 'fd-read' : stats.label === 'Разреженная' ? 'fd-sparse' : 'fd-noise'}">${stats.label}</span>
           </div>
           <div class="feed-post-body">${u.esc(snippet)}</div>
           <div class="feed-post-footer">
             <a class="feed-action" href="${pageUrl}">📖 Читать</a>
-            <a class="feed-action" href="#/x/${x}/y/${y}/w/${wall === 6 ? 1 : wall + 1}">➡️ Стена</a>
+            <a class="feed-action" href="#/x/${x}/y/${y}">🏛 Зал</a>
           </div>
         </article>`;
       }
@@ -125,30 +125,23 @@
         <div class="feed-nav-row">
           ${dirs.map(d => `<button class="feed-nav-btn" data-dq="${d.dq}" data-dr="${d.dr}">${d.label}</button>`).join('')}
         </div>
-        <div class="feed-wall-row">
-          ${[1,2,3,4,5,6].map(w => `<button class="feed-wall-btn ${wall === w ? 'active' : ''}" data-wall="${w}">С${w}</button>`).join('')}
-        </div>
         <div class="feed-timeline">${posts}</div>
       </section>`;
     },
 
     bindWander(route) {
       const parts = route.parts;
-      let x = 0, y = 0;
+      let x = '0', y = '0';
       for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'x') x = parts[i + 1];
+        if (parts[i] === 'y') y = parts[i + 1];
       }
-      store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
+      const nx = Number(x) || 0, ny = Number(y) || 0;
+      store.pushJourneyStep(nx, ny, lib.classifyRegion(nx, ny).kind);
       u.$$('.feed-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/x/${x + dq}/y/${y + dr}`;
-        });
-      });
-      u.$$('.feed-wall-btn[data-wall]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
+          location.hash = `#/x/${nx + dq}/y/${ny + dr}`;
         });
       });
       const rb = u.$('#randomHallBtn');

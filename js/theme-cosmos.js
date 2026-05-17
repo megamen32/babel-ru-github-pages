@@ -37,7 +37,7 @@
             <h2>Атлас</h2>
             <p>Путешествуй по жанрам</p>
           </a>
-          <a class="cosmos-card" href="#/page/random">
+          <a class="cosmos-card" href="#/random">
             <span class="cosmos-card-icon">🎲</span>
             <h2>Случайная</h2>
             <p>Случайная страница</p>
@@ -91,12 +91,12 @@
 
     renderWander(route) {
       const parts = route.parts;
-      let x = 0, y = 0, wall = 1;
+      let x = 0, y = 0;
       for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'wall') wall = parseInt(parts[i + 1]) || 1;
+        if (parts[i] === 'x') x = parts[i + 1];
+        if (parts[i] === 'y') y = parts[i + 1];
       }
+      const nx = Number(x) || 0, ny = Number(y) || 0;
       const hallInfo = lib.xyToHallXY(x, y);
 
       /* Hex map — CSS hexagons */
@@ -110,44 +110,35 @@
       ];
 
       const hexCells = hexDirs.map((d, i) => {
-        const nx = x + d.dq, ny = y + d.dr;
-        const spineText = lib.getBookSpine(nx, ny, 1, 1, 1);
-        const preview = u.esc(h.pageSnippet(lib.numberToIndices(lib.coordinatesToNumber(lib.xyToCoordinates(nx, ny, 1, 1, 1, 1))), 30));
+        const hx = nx + d.dq, hy = ny + d.dr;
+        const spineText = lib.getBookSpine(hx, hy, 1);
+        const preview = u.esc(h.pageSnippet(lib.numberToIndices(lib.coordinatesToNumber(lib.xyToCoordinates(hx, hy, 1))), 30));
         return `<button class="cosmos-hex-cell" data-dq="${d.dq}" data-dr="${d.dr}" title="${d.label}">
           <span class="cosmos-hex-label">${d.label}</span>
           <span class="cosmos-hex-preview">${preview}</span>
         </button>`;
       });
 
-      /* Shelves */
-      let shelvesHTML = '';
-      for (let s = 1; s <= Number(ALG.shelvesPerWall); s++) {
-        let books = '';
-        for (let v = 1; v <= Number(ALG.volumesPerShelf); v++) {
-          const spineText = lib.getBookSpine(x, y, wall, s, v);
-          const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(x, y, wall, s, v, 1));
-          books += `<a class="cosmos-book" href="${pageUrl}">Т.${v}</a>`;
-        }
-        shelvesHTML += `<div class="cosmos-shelf"><span class="cosmos-shelf-num">П.${s}</span>${books}</div>`;
+      /* Books — show volumes z=1..10 */
+      let booksHTML = '';
+      for (let z = 1; z <= 10; z++) {
+        const pageUrl = lib.coordsToPageUrl(lib.xyToCoordinates(x, y, z));
+        booksHTML += `<a class="cosmos-book" href="${pageUrl}">Z:${z}</a>`;
       }
 
       return `
       <section class="t-cosmos wander fade-in">
         <div class="cosmos-room-header">
           <h1>Звёздный зал</h1>
-          <span class="cosmos-coords">⭐ X:${x} Y:${y} · ${lib.classifyRegion(x, y).icon} ${lib.classifyRegion(x, y).label}</span>
+          <span class="cosmos-coords">⭐ X:${nx} Y:${ny} · ${lib.classifyRegion(nx, ny).icon} ${lib.classifyRegion(nx, ny).label}</span>
         </div>
 
         <div class="cosmos-hex-map">
-          <div class="cosmos-hex-center">⬡<br><small>X:${x} Y:${y}</small></div>
+          <div class="cosmos-hex-center">⬡<br><small>X:${nx} Y:${ny}</small></div>
           ${hexCells.join('')}
         </div>
 
-        <div class="cosmos-wall-tabs">
-          ${[1,2,3,4,5,6].map(w => `<button class="cosmos-wall-tab ${wall === w ? 'active' : ''}" data-wall="${w}">С${w}</button>`).join('')}
-        </div>
-
-        <div class="cosmos-shelves">${shelvesHTML}</div>
+        <div class="cosmos-shelves"><div class="cosmos-shelf"><span class="cosmos-shelf-num">Z</span>${booksHTML}</div></div>
 
         <div class="cosmos-actions">
           <button class="cosmos-btn" id="randomHallBtn">🎲 Случайный зал</button>
@@ -161,21 +152,17 @@
       const parts = route.parts;
       let x = 0, y = 0;
       for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === 'x') x = parseInt(parts[i + 1]) || 0;
-        if (parts[i] === 'y') y = parseInt(parts[i + 1]) || 0;
+        if (parts[i] === 'x') x = parts[i + 1];
+        if (parts[i] === 'y') y = parts[i + 1];
       }
+      const nx = Number(x) || 0, ny = Number(y) || 0;
       /* Track visit on wander map */
-      store.pushWanderVisit(x, y);
-      store.pushJourneyStep(x, y, lib.classifyRegion(x, y).kind);
+      store.pushWanderVisit(nx, ny);
+      store.pushJourneyStep(nx, ny, lib.classifyRegion(nx, ny).kind);
       u.$$('.cosmos-hex-cell[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {
           const dq = parseInt(btn.dataset.dq), dr = parseInt(btn.dataset.dr);
-          location.hash = `#/x/${x + dq}/y/${y + dr}`;
-        });
-      });
-      u.$$('.cosmos-wall-tab[data-wall]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          location.hash = `#/x/${x}/y/${y}/w/${btn.dataset.wall}`;
+          location.hash = `#/x/${nx + dq}/y/${ny + dr}`;
         });
       });
       const rb = u.$('#randomHallBtn');
