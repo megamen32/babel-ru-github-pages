@@ -269,18 +269,19 @@
     }
 
     if (USE_PREFIX_CODEC && _addressCodec && !forcedTokens) {
-      /* Новая архитектура: префиксное декодирование с температурой */
+      /* Префиксное декодирование — temperature всегда 1.0
+         Энкодинг использует temperature=1.0 для обратимости.
+         z-зависимая температура при декодировании ломает консистентность
+         поиска: тот же битовый поток декодируется другими Хаффман-таблицами,
+         давая другой текст. Гравитация языка уже работает через структуру
+         адресного пространства (малые адреса → частые токены). */
       try {
         const bx = typeof x === 'bigint' ? x : BigInt(x);
         const by = typeof y === 'bigint' ? y : BigInt(y);
         const bz = typeof z === 'bigint' ? z : BigInt(z || 1);
         const internalAddr = _coordPerm.coordToInternalAddress(bx, by, bz);
         const totalBits = Number(TOTAL_BITS);
-        /* Температурный слой: z → temperature → коррекция весов декодера
-           Малый z → низкая температура → человекоподобный текст
-           Большой z → высокая температура → шум */
-        const temperature = _tt.computeTemperature(bz);
-        return _addressCodec.decodeAddressToPage(internalAddr, totalBits, temperature);
+        return _addressCodec.decodeAddressToPage(internalAddr, totalBits, 1.0);
       } catch (e) {
         /* Fallback на старый декодер при ошибке */
         console.warn('Prefix codec error, falling back to PRNG:', e);

@@ -593,7 +593,7 @@
             const v = resultsByMode[mode];
             if (!v) continue;
             const gi = GENRE_INFO[mode];
-            const vCoords = { sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
+            const vCoords = { x: BigInt(v.coordinates.x || 0), y: BigInt(v.coordinates.y || 0), z: BigInt(v.coordinates.z || 1), sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
             const vXY = { x: BigInt(v.xy.x), y: BigInt(v.xy.y) };
             const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${v.range.start}:${v.range.length}` });
             if (mode === 'dialogue') {

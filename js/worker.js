@@ -1796,6 +1796,7 @@ function createSearchVariants(phraseRaw, mode, countRaw) {
     const coords = rawIndexToCoordinates(unpermuteIndex(number));
     const xy = coordinatesToXY(coords);
     variants.push({ mode, number: number.toString(), coordinates: {
+      x: coords.x.toString(), y: coords.y.toString(), z: coords.z.toString(),
       sector: coords.sector.toString(), hall: coords.hall.toString(),
       wall: coords.wall.toString(), shelf: coords.shelf.toString(),
       volume: coords.volume.toString(), page: coords.page.toString(),
@@ -1922,6 +1923,7 @@ function getPageData(numberStr) {
   return {
     indices, text,
     coords: {
+      x: coords.x.toString(), y: coords.y.toString(), z: coords.z.toString(),
       sector: coords.sector.toString(), hall: coords.hall.toString(),
       wall: coords.wall.toString(), shelf: coords.shelf.toString(),
       volume: coords.volume.toString(), page: coords.page.toString(),
@@ -1956,6 +1958,7 @@ function prefixDecodePage(x, y, z, mode) {
     return {
       text,
       coords: {
+        x: coords.x.toString(), y: coords.y.toString(), z: coords.z.toString(),
         sector: coords.sector.toString(), hall: coords.hall.toString(),
         wall: coords.wall.toString(), shelf: coords.shelf.toString(),
         volume: coords.volume.toString(), page: coords.page.toString(),
@@ -1969,22 +1972,24 @@ function prefixDecodePage(x, y, z, mode) {
     };
   }
 
-  /* Human mode (default): prefix codec with temperature */
-  /* Compute internal address via Feistel permutation */
+  /* Human mode (default): prefix codec — always temperature=1.0
+     The prefix codec encoding always uses temperature=1.0 for reversibility.
+     Using z-dependent temperature during decoding would decode the same
+     bitstream with different Huffman tables, producing different text and
+     breaking search result consistency. Language gravity already works
+     through the address space structure (small addresses → frequent tokens). */
   const internalAddr = coordToInternalAddress(bx, by, bz);
   const totalBits = Number(TOTAL_BITS);
 
-  /* Compute temperature from z */
-  const temperature = computeTemperature(bz);
-
-  /* Decode page */
-  const text = decodeAddressToPage(internalAddr, totalBits, temperature);
+  /* Decode page — temperature must be 1.0 to match encoding */
+  const text = decodeAddressToPage(internalAddr, totalBits, 1.0);
 
   const classification = classifyDecodedPage(text);
 
   return {
     text,
     coords: {
+      x: coords.x.toString(), y: coords.y.toString(), z: coords.z.toString(),
       sector: coords.sector.toString(), hall: coords.hall.toString(),
       wall: coords.wall.toString(), shelf: coords.shelf.toString(),
       volume: coords.volume.toString(), page: coords.page.toString(),
@@ -1992,7 +1997,7 @@ function prefixDecodePage(x, y, z, mode) {
     xy: { x: xy.x.toString(), y: xy.y.toString() },
     number: internalAddr.toString(),
     title: pageTitle(coords),
-    temperature,
+    temperature: 1.0,
     classification,
     engine: 'prefix',
   };
