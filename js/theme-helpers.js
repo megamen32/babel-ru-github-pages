@@ -209,48 +209,45 @@
   }
 
   /* Chunked scan for next inhabited page.
-     Scans a few pages at a time, yielding to the UI between
-     chunks so the odometer animation can run.  Resolves with
-     the best result found (same shape as findNextInhabitedFromCoords). */
+     Uses token decoder — scans increasing Z values for lower temperature
+     (more human-like text).  Yields to UI between chunks so the
+     odometer animation can run. */
   function findNextInhabitedChunked(coords) {
     return new Promise((resolve, reject) => {
       try {
-        const number = lib.coordinatesToNumber(coords);
-        const CHUNK = 5;        /* pages per chunk */
+        const x = BigInt(coords.x || 0);
+        const y = BigInt(coords.y || 0);
+        const startZ = BigInt(coords.z || 1);
+        const CHUNK = 5;
         const MAX_SCAN = 100;
-        const THRESHOLD = 0.35;
-        const start = BigInt(number);
-        const maxNum = lib.maxPageNumber();
-
-        let bestResult = null;
-        let bestScore = 0;
         let i = 1;
+        let bestResult = null;
+        let bestTemp = 1.0;
 
         function scanChunk() {
           const limit = Math.min(i + CHUNK - 1, MAX_SCAN);
 
           for (; i <= limit; i++) {
+            /* Scan in both Z directions */
             const offsets = [BigInt(i), -BigInt(i)];
             for (const offset of offsets) {
-              const candidateNumber = start + offset;
-              if (candidateNumber < 0n || candidateNumber >= maxNum) continue;
+              const newZ = startZ + offset;
+              if (newZ < 1n) continue;
 
               try {
-                const indices = lib.numberToIndices(candidateNumber);
-                const text = u.indicesToString(indices);
-                const detection = lib.detectRussianText(text);
+                const temp = lib.computeTemperature(newZ);
+                const text = lib.decodePage(x, y, newZ);
+                const detection = lib.classifyPageByTemp(newZ);
+                const newCoords = lib.xyToCoordinates(x, y, newZ);
+                const xy = { x, y };
 
-                if (detection.score > bestScore) {
-                  bestScore = detection.score;
-                  const rawIdx = lib.unpermuteIndex(candidateNumber);
-                  const c = lib.rawIndexToCoordinates(rawIdx);
-                  let xy = { x: 0n, y: 0n };
-                  try { xy = lib.coordinatesToXY(c); } catch {}
-
+                /* Ищем страницу с более низкой температурой */
+                if (temp < bestTemp) {
+                  bestTemp = temp;
                   bestResult = {
-                    number: candidateNumber,
-                    coords: c,
-                    coordinates: c,
+                    number: lib.coordinatesToNumber(newCoords),
+                    coords: newCoords,
+                    coordinates: newCoords,
                     xy,
                     text,
                     detection,
@@ -259,14 +256,15 @@
                     regionGenre: {
                       kind: detection.kind,
                       label: detection.label,
-                      icon: detection.kind === 'russian' ? '📖'
-                          : detection.kind === 'sparse' ? '🌫️' : '🔇',
+                      icon: detection.icon,
                     },
                     scanDistance: Math.abs(Number(offset)),
+                    temperature: temp,
                   };
                 }
 
-                if (detection.score >= THRESHOLD) {
+                /* Нашли хорошую обитаемую страницу */
+                if (temp < 0.15) {
                   resolve(bestResult);
                   return;
                 }
@@ -276,7 +274,7 @@
 
           if (i > MAX_SCAN) {
             if (bestResult) {
-              bestResult.belowThreshold = true;
+              bestResult.belowThreshold = bestTemp > 0.3;
               resolve(bestResult);
             } else {
               resolve(null);
@@ -284,12 +282,9 @@
             return;
           }
 
-          /* Yield to UI then scan next chunk */
           setTimeout(scanChunk, 0);
         }
 
-        /* Delay first chunk so the odometer animation can start
-           before the scan begins blocking the main thread */
         setTimeout(scanChunk, 10);
       } catch (err) { reject(err); }
     });
@@ -426,6 +421,25 @@
     const total = indices.length;
     const letters = s.cyrillic + s.latin;
     const readability = Math.round(letters / total * 100);
+    const label = readability > 60 ? 'Читаемая' : readability > 30 ? 'Разреженная' : 'Шум';
+    return { ...s, total, letters, readability, label };
+  }
+
+  /* Character stats from text string (for token-decoded pages) */
+  function textToCharStats(text) {
+    let s = { cyrillic: 0, latin: 0, spaces: 0, digits: 0, punctuation: 0, emoji: 0 };
+    for (const ch of String(text)) {
+      if (ch === ' ') s.spaces++;
+      else if (ch === '\n') s.spaces++;
+      else if (/[а-яё]/i.test(ch)) s.cyrillic++;
+      else if (/[a-z]/i.test(ch)) s.latin++;
+      else if (/[0-9]/.test(ch)) s.digits++;
+      else if (/[.,!?;:—\-""()…@#_/*=+\[\]{}<>~`^|\\&%$']/.test(ch)) s.punctuation++;
+      else s.emoji++;
+    }
+    const total = String(text).length;
+    const letters = s.cyrillic + s.latin;
+    const readability = total > 0 ? Math.round(letters / total * 100) : 0;
     const label = readability > 60 ? 'Читаемая' : readability > 30 ? 'Разреженная' : 'Шум';
     return { ...s, total, letters, readability, label };
   }
@@ -686,6 +700,7 @@
     renderDialogueSearchPreview,
     renderDialoguePageThread,
     charStats,
+    textToCharStats,
     pageSnippet,
     drawMiniHex,
     safeNum,

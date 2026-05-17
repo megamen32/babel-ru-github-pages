@@ -59,9 +59,9 @@
   ];
 
   app.config = {
-    VERSION: "ru5",
+    VERSION: "ru6",
     ALG: {
-      label: "ru5",
+      label: "ru6",
       alphabet: ALPHABET,
       pageLength: 4096,
       /* No fixed lineWidth — newline is a character in the alphabet.

@@ -6,6 +6,7 @@
   const _core = app.library._core;
   const _fillers = app.library._fillers;
   const _classifier = app.library._classifier;
+  const _tokens = app.library._tokens;
 
   const {
     BITS_PER_CHAR, CHAR_MASK, TOTAL_BITS, BIT_MASK,
@@ -15,8 +16,10 @@
     textToNumber, numberToText, fixedPageText,
     rawIndexToCoordinates, coordinatesToRawIndex,
     xyToHallXY, hallToXY, xyToCoordinates, coordinatesToXY,
+    xyToHallIndex, hallIndexToXY,
     PAGES_PER_HALL, zToBorges, borgesToZ,
     createWordFillerIndices, createNoiseFillerIndices,
+    decodePageByCoords,
   } = _core;
 
   const {
@@ -38,7 +41,9 @@
     getInhabitedPageIndices,
   } = _classifier;
 
-  /* ---- Public API ---- */
+  /* ═══════════════════════════════════════════════════════════
+     PUBLIC API — Токенный декодер + обратная совместимость
+     ═══════════════════════════════════════════════════════════ */
 
   app.library = {
     maxPageNumber,
@@ -53,6 +58,7 @@
     fixedPageText,
     textToNumber,
     numberToText,
+
     rawIndexToCoordinates,
     coordinatesToRawIndex,
     coordinatesToNumber(coordinates) {
@@ -61,12 +67,39 @@
     numberToCoordinates(number) {
       return rawIndexToCoordinates(app.library.unpermuteIndex(number));
     },
+
+    /* ---- Заголовки страниц ---- */
     pageTitle(coordinates) {
-      /* Основной формат: X, Y, Z. Борхесовский — опционально. */
       return `X:${coordinates.x} Y:${coordinates.y} Z:${coordinates.z}`;
     },
     pageTitleBorges(coordinates) {
       return `Сектор ${coordinates.sector} · Зал ${coordinates.hall} · Стена ${coordinates.wall} · Полка ${coordinates.shelf} · Том ${coordinates.volume} · Лист ${coordinates.page}`;
+    },
+
+    /* ---- Токенный декодер — ОСНОВНОЙ метод ---- */
+    decodePage(x, y, z, forcedTokens) {
+      return decodePageByCoords(x, y, z, forcedTokens);
+    },
+
+    /* Получить страницу по координатам (токенный декодер) */
+    getPageByXY(x, y, z) {
+      const bz = BigInt(z || 1);
+      const bx = BigInt(x || 0);
+      const by = BigInt(y || 0);
+      const text = decodePageByCoords(bx, by, bz);
+      const indices = tokenizeText(text);
+      while (indices.length < ALG.pageLength) indices.push(0);
+      if (indices.length > ALG.pageLength) indices.length = ALG.pageLength;
+      const coords = xyToCoordinates(bx, by, bz);
+      return { text, indices, coordinates: coords };
+    },
+
+    /* ---- Температура и классификация ---- */
+    computeTemperature(z) {
+      return _tokens.computeTemperature(z);
+    },
+    classifyPageByTemp(z) {
+      return _tokens.classifyPageByTemp(z);
     },
 
     /* ---- Обитаемый слой — публичные API ---- */
@@ -84,9 +117,7 @@
     createHumanFillerIndices,
 
     /* Coordinate-based page URL
-       Формат: #/x/{x}/y/{y}/z/{z}
-       Старый формат: #/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}
-       Древний: #/page/s/{sector}/h/{hall}/... */
+       Формат: #/x/{x}/y/{y}/z/{z} */
     coordsToPageUrl(coords, params) {
       const c = {
         x: BigInt(coords.x || 0),
@@ -102,7 +133,11 @@
     },
 
     randomPageCoords() {
-      return app.library.numberToCoordinates(app.library.randomPageNumber());
+      const x = BigInt(Math.floor(Math.random() * 2000) - 1000);
+      const y = BigInt(Math.floor(Math.random() * 2000) - 1000);
+      /* Малый z → человекоподобный текст */
+      const z = 1n + BigInt(Math.floor(Math.random() * 10000));
+      return { x, y, z, sector: 1n, hall: 1n, wall: 1n, shelf: 1n, volume: 1n, page: z };
     },
 
     xyToCoordinates, coordinatesToXY, xyToHallXY, hallToXY,
@@ -111,19 +146,14 @@
     getBookSpine(x, y, z) {
       try {
         const coords = xyToCoordinates(x, y, z);
-        const number = app.library.coordinatesToNumber(coords);
-        const indices = numberToIndices(number);
-        let start = 0;
-        while (start < indices.length && indices[start] === 0) start++;
-        return indicesToString(indices.slice(start, start + 25));
+        const text = decodePageByCoords(BigInt(x), BigInt(y), BigInt(z));
+        /* Берём первые 25 непробельных символов */
+        let spine = '';
+        for (let i = 0; i < text.length && spine.length < 25; i++) {
+          if (text[i] !== ' ' && text[i] !== '\n') spine += text[i];
+        }
+        return spine || 'пустая полка';
       } catch { return ""; }
-    },
-
-    getPageByXY(x, y, z) {
-      const coords = xyToCoordinates(x, y, z);
-      const number = app.library.coordinatesToNumber(coords);
-      const indices = numberToIndices(number);
-      return { number, text: indicesToString(indices), indices, coordinates: coords };
     },
 
     classifySpine(spineText) {
@@ -136,10 +166,7 @@
       return "noise";
     },
 
-    /* Custom base64url encoding (RFC 4648 §5) — URL-safe, no atob/btoa.
-       Alphabet: 0-9 A-Z a-z - _ (64 chars, all URL-safe).
-       More compact than base62 — same information density as standard
-       base64 but without +/= which break URLs. */
+    /* ---- Кодирования ---- */
     bytesToBase64Url(bytes) {
       const B64URL = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_';
       let num = 0n;
@@ -159,7 +186,7 @@
       let num = 0n;
       for (const char of String(value || '')) {
         const idx = B64URL.indexOf(char);
-        if (idx < 0) continue; // skip invalid chars
+        if (idx < 0) continue;
         num = num * base + BigInt(idx);
       }
       if (num === 0n) return new Uint8Array([0]);
@@ -199,25 +226,36 @@
       return chunks.join("-");
     },
 
+    /* ═══════════════════════════════════════════════════════════
+       ПОИСК — через токенный декодер с forced-токенами
+       ═══════════════════════════════════════════════════════════ */
+
     createSearchVariants(phraseRaw, mode, countRaw) {
       const phrase = app.utils.normalizeText(phraseRaw);
       if (!phrase) throw new Error("После нормализации фраза пуста.");
-      const phraseIndices = tokenizeText(phrase);
-      if (phraseIndices.length > ALG.pageLength) throw new Error(`Фраза длиннее страницы: ${phraseIndices.length} позиций.`);
       const count = clamp(Math.floor(Number(countRaw) || SEARCH_VARIANTS_DEFAULT), 1, SEARCH_VARIANTS_MAX);
       const variants = [];
+
       for (let variant = 1; variant <= count; variant++) {
-        const seed = `${ALG.label}:mode:${mode}:phrase:${phrase}:variant:${variant}`;
-        const rng = rngFrom(seed);
-        const position = choosePosition(mode, phraseIndices.length, rng);
-        const fillerIndices = createFillerIndices(mode, seed, ALG.pageLength);
-        for (let i = 0; i < phraseIndices.length; i++) fillerIndices[position + i] = phraseIndices[i];
-        if (position > 0) fillerIndices[position - 1] = 0;
-        if (position + phraseIndices.length < ALG.pageLength) fillerIndices[position + phraseIndices.length] = 0;
-        const number = indicesToNumber(fillerIndices);
-        const coords = rawIndexToCoordinates(app.library.unpermuteIndex(number));
+        /* Используем токенный декодер для поиска */
+        const result = _tokens.findPhraseInTokenSpace(phrase);
+        if (!result) continue;
+
+        const coords = xyToCoordinates(result.x, result.y, result.z);
+        const number = app.library.coordinatesToNumber(coords);
         const xy = coordinatesToXY(coords);
-        variants.push({ mode, number, coordinates: coords, xy, phrase, position, text: indicesToString(fillerIndices), variant, range: { start: position, length: phraseIndices.length } });
+
+        variants.push({
+          mode: mode || 'tokens',
+          number,
+          coordinates: coords,
+          xy,
+          phrase,
+          position: result.phrasePos,
+          text: result.text,
+          variant,
+          range: { start: result.phrasePos, length: result.phraseLen },
+        });
       }
       return variants;
     },
@@ -229,7 +267,6 @@
       return { x: Math.floor(Math.random() * 2000) - 1000, y: Math.floor(Math.random() * 2000) - 1000 };
     },
 
-    /* Find a random hall that belongs to a specific genre region */
     findRandomHallOfGenre(kind, maxTries) {
       const limit = maxTries || 200;
       for (let i = 0; i < limit; i++) {
@@ -237,12 +274,10 @@
         const y = Math.floor(Math.random() * 2000) - 1000;
         if (classifyRegion(x, y).kind === kind) return { x, y };
       }
-      /* Fallback: return any random hall */
       return { x: Math.floor(Math.random() * 2000) - 1000, y: Math.floor(Math.random() * 2000) - 1000 };
     },
 
-    /* Generate an inhabited page for a specific genre at a given step.
-       Uses createSearchVariants with auto-generated phrase for variety. */
+    /* Генерация обитаемой страницы через токенный декодер */
     generateInhabitedPage(genre, step) {
       const seed = `genre-nav:${genre}:${step}`;
       const rng = rngFrom(seed);
@@ -251,108 +286,93 @@
       const w2 = wb[Math.floor(rng() * wb.length)];
       const phrase = app.utils.normalizeText(`${w1} ${w2}`);
 
-      /* Map genre kind to filler mode */
-      const modeMap = {
-        dialogue: 'dialogue', diary: 'diary', post: 'post',
-        log: 'log', text: 'words', noise: 'noise'
-      };
-      const mode = modeMap[genre] || 'words';
+      const result = _tokens.findPhraseInTokenSpace(phrase);
+      if (!result) {
+        /* Fallback */
+        const x = BigInt(Math.floor(rng() * 2000) - 1000);
+        const y = BigInt(Math.floor(rng() * 2000) - 1000);
+        const z = 1n + BigInt(Math.floor(rng() * 1000));
+        const text = decodePageByCoords(x, y, z);
+        const coords = xyToCoordinates(x, y, z);
+        return { mode: genre, number: 0n, coordinates: coords, xy: { x, y }, phrase, position: 0, text, variant: 1, range: { start: 0, length: 0 } };
+      }
 
-      /* Create 1 variant with this phrase and mode */
-      const variants = app.library.createSearchVariants(phrase, mode, 1);
-      return variants[0]; // { mode, number, coordinates, xy, phrase, position, text, variant, range }
+      const coords = xyToCoordinates(result.x, result.y, result.z);
+      const number = app.library.coordinatesToNumber(coords);
+      const xy = coordinatesToXY(coords);
+      return {
+        mode: genre,
+        number,
+        coordinates: coords,
+        xy,
+        phrase,
+        position: result.phrasePos,
+        text: result.text,
+        variant: 1,
+        range: { start: result.phrasePos, length: result.phraseLen },
+      };
     },
 
-    /* Scan forward from a page number looking for a page of specific genre.
-       Returns { number, coords, xy, text, classification } or null if maxScan reached. */
+    /* Scan forward — через токенный декодер */
     scanNextInhabitedPage(startNumber, genre, maxScan) {
       const limit = maxScan || 50;
-      const modeMap = {
-        dialogue: 'dialogue', diary: 'diary', post: 'post',
-        log: 'log', text: 'text', noise: 'noise'
-      };
-      const targetKind = modeMap[genre] || genre;
+      const startCoords = rawIndexToCoordinates(app.library.unpermuteIndex(startNumber));
 
       for (let i = 1; i <= limit; i++) {
         try {
-          const number = BigInt(startNumber) + BigInt(i);
-          const indices = numberToIndices(number);
-          const text = indicesToString(indices);
-          const classification = classifyPageText(text);
-          if (classification.kind === targetKind) {
-            const coords = rawIndexToCoordinates(app.library.unpermuteIndex(number));
-            const xy = coordinatesToXY(coords);
-            return { number, coords, xy, text, classification, scanned: i };
-          }
+          const newZ = BigInt(startCoords.z) + BigInt(i);
+          if (newZ < 1n) continue;
+          const text = decodePageByCoords(BigInt(startCoords.x), BigInt(startCoords.y), newZ);
+          const classification = _tokens.classifyPageByTemp(newZ);
+          const coords = xyToCoordinates(startCoords.x, startCoords.y, newZ);
+          const xy = coordinatesToXY(coords);
+          return { number: app.library.coordinatesToNumber(coords), coords, xy, text, classification, scanned: i };
         } catch { continue; }
       }
       return null;
     },
 
-    /* Find any next inhabited page — pick a random non-noise genre
-       and generate an inhabited page for it. (Legacy — not position-aware) */
     findAnyNextInhabitedPage(step) {
       const nonNoiseGenres = REGION_GENRES.filter(g => g.kind !== 'noise');
       const pick = nonNoiseGenres[Math.floor(Math.random() * nonNoiseGenres.length)];
       return app.library.generateInhabitedPage(pick.kind, step);
     },
 
-    /* Position-aware next inhabited page — statistical detection approach.
-       Instead of generating pages with templates, scans through nearby
-       page numbers and uses detectRussianText() to find pages that
-       statistically resemble coherent Russian text. True discovery
-       in the infinite library.
-
-       1. Get current page number from coords.
-       2. Spiral scan forward/backward through page numbers.
-       3. Use detectRussianText() to score each candidate.
-       4. Return the best-scoring page found (or above threshold).
-       5. Fallback: return best page even if below threshold. */
+    /* Position-aware next inhabited page */
     findNextInhabitedFromCoords(coords, step) {
-      const number = app.library.coordinatesToNumber(coords);
+      const x = BigInt(coords.x || 0);
+      const y = BigInt(coords.y || 0);
+      let z = BigInt(coords.z || 1);
 
-      /* Scan in both directions, up to 100 pages */
-      const result = scanForInhabited(number, 0, 100);
+      /* Ищем страницу с более низкой температурой (ближе к началу) */
+      for (let i = 1; i <= 50; i++) {
+        const newZ = z + BigInt(i);
+        const text = decodePageByCoords(x, y, newZ);
+        const temp = _tokens.computeTemperature(newZ);
+        const detection = _tokens.classifyPageByTemp(newZ);
+        const newCoords = xyToCoordinates(x, y, newZ);
+        const xy = { x, y };
 
-      if (result) {
-        /* Add backward-compatible fields */
-        result.coordinates = result.coords;
-        result.regionGenre = {
-          kind: result.detection.kind,
-          label: result.detection.label,
-          icon: result.detection.kind === 'russian' ? '📖'
-              : result.detection.kind === 'sparse' ? '🌫️' : '🔇',
-        };
-        result.scanDistance = Math.abs(result.offset || 0);
-        return result;
-      }
-
-      /* Absolute fallback — return current page with detection */
-      try {
-        const indices = numberToIndices(number);
-        const text = indicesToString(indices);
-        const detection = detectRussianText(text);
-        const xy = coordinatesToXY(coords);
         return {
-          number,
-          coordinates: coords,
-          coords,
+          number: app.library.coordinatesToNumber(newCoords),
+          coordinates: newCoords,
+          coords: newCoords,
           xy,
           text,
           detection,
-          regionGenre: { kind: detection.kind, label: detection.label, icon: '🔇' },
-          scanned: 0,
-          scanDistance: -1,
-          belowThreshold: true,
+          regionGenre: {
+            kind: detection.kind,
+            label: detection.label,
+            icon: detection.icon,
+          },
+          scanned: i,
+          scanDistance: i,
+          temperature: temp,
         };
-      } catch {
-        return null;
       }
+      return null;
     },
 
-    /* Scan nearby hexes for inhabited regions.
-       Returns array of { dx, dy, dist, genre } for non-noise hexes
-       within maxDist (hex distance). Useful for the distance map. */
     scanInhabitedNearby(x, y, maxDist) {
       const limit = maxDist || 2;
       const results = [];
@@ -372,7 +392,6 @@
       return results;
     },
 
-    /* Genre color for map rendering */
     GENRE_COLORS: {
       dialogue: '#5eb5f7',
       diary: '#e84670',
@@ -389,7 +408,6 @@
         const pagePart = value.split("#/page/").pop().split("?")[0];
         const parts = pagePart.split("/").filter(Boolean);
 
-        /* CURRENT format: x/{x}/y/{y}/z/{z} */
         if (parts[0] === 'x' && parts.length >= 4) {
           const parsed = {};
           for (let i = 0; i < parts.length - 1; i += 2) {
@@ -397,7 +415,6 @@
               case 'x': parsed.x = parts[i + 1]; break;
               case 'y': parsed.y = parts[i + 1]; break;
               case 'z': parsed.z = parts[i + 1]; break;
-              /* Старые поля для обратной совместимости */
               case 'w': parsed.wall = parts[i + 1]; break;
               case 'sh': parsed.shelf = parts[i + 1]; break;
               case 'v': parsed.volume = parts[i + 1]; break;
@@ -412,8 +429,6 @@
           }
         }
 
-        /* OLD format: h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}/s/{seed_b64url}
-           ANCIENT format: s/{sector_decimal}/h/{hall}/w/{wall}/sh/{shelf}/v/{volume}/p/{page} */
         const coords = {};
         for (let i = 0; i < parts.length - 1; i += 2) {
           switch (parts[i]) {
@@ -426,7 +441,6 @@
           }
         }
         if (coords.sector || coords.hall) {
-          /* If sector is present, decode it — could be base64url (old) or decimal (ancient) */
           if (coords.sector) {
             const sectorStr = String(coords.sector);
             if (/^\d+$/.test(sectorStr)) {
@@ -438,7 +452,6 @@
           try { return app.library.coordinatesToNumber(coords); }
           catch { /* fall through to raw parse */ }
         }
-        /* Legacy raw base64 page number */
         return app.library.b64ToNumber(pagePart);
       }
       if (kind === "b64" || /^[A-Za-z0-9_-]+$/.test(value)) {
@@ -458,4 +471,5 @@
   delete app.library._core;
   delete app.library._fillers;
   delete app.library._classifier;
+  delete app.library._tokens;
 })();

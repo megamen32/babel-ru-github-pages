@@ -3,7 +3,7 @@
    Caches all assets on first install, serves from cache.
    ═══════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'babel-v9.0-modules';
+const CACHE_NAME = 'babel-v10.0-token-decoder';
 
 const ASSETS = [
   './',
@@ -11,6 +11,7 @@ const ASSETS = [
   './css/style.css',
   './js/config.js',
   './js/utils.js',
+  './js/lib-tokens.js',
   './js/lib-core.js',
   './js/lib-fillers.js',
   './js/lib-classifier.js',

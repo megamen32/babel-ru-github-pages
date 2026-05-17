@@ -26,29 +26,47 @@
       return `<div class="${themeClass}"><div class="notice">Неверный адрес страницы</div></div>`;
     }
 
-    const indices = lib.numberToIndices(number);
+    /* Используем токенный декодер для генерации страницы */
     const coords = lib.numberToCoordinates(number);
     const xy = lib.coordinatesToXY(coords);
+    const z = BigInt(coords.z || 1);
+    const pageData = lib.getPageByXY(xy.x, xy.y, z);
+    const text = pageData.text;
+    const indices = pageData.indices;
     const highlight = lib.parseHighlight(route.params);
-    const pageTextHTML = u.renderPageFromIndices(indices, highlight);
-    const stats = h.charStats(indices);
-    const b36 = lib.prettyBase36(number);
 
-    const pageNum = Number(coords.page);
-    const totalPages = Number(ALG.pagesPerVolume);
-    const prevPage = pageNum > 1
-      ? lib.coordsToPageUrl({...coords, page: BigInt(pageNum - 1)})
-      : null;
-    const nextPage = pageNum < totalPages
-      ? lib.coordsToPageUrl({...coords, page: BigInt(pageNum + 1)})
-      : null;
+    /* Рендерим текст — конвертируем в HTML */
+    let pageTextHTML = '';
+    if (highlight) {
+      /* С подсветкой */
+      const before = u.esc(text.slice(0, highlight.start));
+      const marked = u.esc(text.slice(highlight.start, highlight.start + highlight.length));
+      const after = u.esc(text.slice(highlight.start + highlight.length));
+      pageTextHTML = before + '<mark>' + marked + '</mark>' + after;
+    } else {
+      pageTextHTML = u.esc(text);
+    }
+    /* Newlines → <br> */
+    pageTextHTML = pageTextHTML.replace(/\n/g, '<br>');
+
+    const stats = h.textToCharStats(text);
+    const b36 = lib.prettyBase36(number);
+    const temp = lib.computeTemperature(z);
+    const tempLabel = temp < 0.15 ? 'Язык' : temp < 0.35 ? 'Разговор' : temp < 0.55 ? 'Смешанный' : temp < 0.75 ? 'Шум' : 'Хаос';
+    const tempPercent = Math.round((1 - temp) * 100);
+
+    /* Навигация по Z */
+    const prevZ = z > 1n ? z - 1n : null;
+    const nextZ = z + 1n;
+    const prevUrl = prevZ ? lib.coordsToPageUrl({...coords, z: prevZ}) : null;
+    const nextUrl = lib.coordsToPageUrl({...coords, z: nextZ});
 
     try { store.pushHistory({ url: location.hash, title: lib.pageTitle(coords) }); } catch {}
 
     /* Fingerprint */
     const fingerprintColors = [];
     for (let i = 0; i < 64; i++) {
-      const idx = indices[i] || 0;
+      const idx = i < indices.length ? indices[i] : 0;
       const h2 = (idx * 29 + i * 7) % 360;
       const s = 50 + (idx % 40);
       const l = 30 + (idx % 30);
@@ -60,25 +78,25 @@
     <section class="${themeClass} page-view fade-in">
       <div class="page-breadcrumbs">
         <a href="#/">Вавилон</a><span class="sep">›</span>
-        <a href="#/x/${h.fmtXY(xy.x)}/y/${h.fmtXY(xy.y)}/w/${coords.wall}">Зал X:${h.fmtXY(xy.x)} Y:${h.fmtXY(xy.y)}</a><span class="sep">›</span>
-        <span>Том ${coords.volume} · Лист ${pageNum}</span>
+        <a href="#/x/${h.fmtXY(xy.x)}/y/${h.fmtXY(xy.y)}">Зал X:${h.fmtXY(xy.x)} Y:${h.fmtXY(xy.y)}</a><span class="sep">›</span>
+        <span>Страница Z:${z}</span>
       </div>
 
       <div class="page-header">
         <div>
-          <h2>Том ${coords.volume} · Лист ${pageNum}</h2>
-          <span class="page-header-sub">Полка ${coords.shelf} · Стена ${coords.wall} из 6</span>
+          <h2>Страница Z:${z}</h2>
+          <span class="page-header-sub">Зал X:${h.fmtXY(xy.x)} Y:${h.fmtXY(xy.y)} · Температура ${temp.toFixed(2)}</span>
         </div>
         <div class="page-density">
-          <span class="density-badge density-${stats.label === 'Читаемая' ? 'readable' : stats.label === 'Разреженная' ? 'sparse' : 'noise'}">${stats.label}</span>
-          <span class="density-pct">${stats.readability}%</span>
+          <span class="density-badge density-${stats.label === 'Читаемая' ? 'readable' : stats.label === 'Разреженная' ? 'sparse' : 'noise'}">${tempLabel}</span>
+          <span class="density-pct">${tempPercent}%</span>
         </div>
       </div>
 
       <div class="page-nav">
-        ${prevPage ? `<a class="btn-outline" href="${prevPage}">← Лист ${pageNum - 1}</a>` : '<span></span>'}
-        <span class="page-num">Лист ${pageNum} из ${totalPages}</span>
-        ${nextPage ? `<a class="btn-outline" href="${nextPage}">Лист ${pageNum + 1} →</a>` : '<span></span>'}
+        ${prevUrl ? `<a class="btn-outline" href="${prevUrl}">← Z:${prevZ}</a>` : '<span></span>'}
+        <span class="page-num">Z:${z} · ${tempLabel}</span>
+        ${nextUrl ? `<a class="btn-outline" href="${nextUrl}">Z:${nextZ} →</a>` : '<span></span>'}
       </div>
 
       <div class="page-fingerprint">${fpHTML}</div>
@@ -137,7 +155,11 @@
     });
     const copyBtn = u.$('#copyTextBtn');
     if (copyBtn) copyBtn.addEventListener('click', () => {
-      u.copyText(lib.numberToText(number), 'Текст скопирован');
+      const coords2 = lib.numberToCoordinates(number);
+      const xy2 = lib.coordinatesToXY(coords2);
+      const z2 = BigInt(coords2.z || 1);
+      const pageData = lib.getPageByXY(xy2.x, xy2.y, z2);
+      u.copyText(pageData.text, 'Текст скопирован');
     });
     const linkBtn = u.$('#copyLinkBtn');
     if (linkBtn) linkBtn.addEventListener('click', () => {
@@ -685,6 +707,7 @@
     fmtXY: h.fmtXY,
     fmtCoord: h.fmtCoord,
     charStats: h.charStats,
+    textToCharStats: h.textToCharStats,
     pageSnippet: h.pageSnippet,
     sharedPageRender,
     bindSharedPage,
