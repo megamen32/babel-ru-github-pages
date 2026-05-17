@@ -7,6 +7,8 @@
   const _fillers = app.library._fillers;
   const _classifier = app.library._classifier;
   const _tokens = app.library._tokens;
+  const _addressCodec = app.library._addressCodec;
+  const _coordPerm = app.library._coordPerm;
 
   const {
     BITS_PER_CHAR, CHAR_MASK, TOTAL_BITS, BIT_MASK,
@@ -20,6 +22,7 @@
     PAGES_PER_HALL, zToBorges, borgesToZ,
     createWordFillerIndices, createNoiseFillerIndices,
     decodePageByCoords,
+    USE_PREFIX_CODEC,
   } = _core;
 
   const {
@@ -42,7 +45,7 @@
   } = _classifier;
 
   /* ═══════════════════════════════════════════════════════════
-     PUBLIC API — Токенный декодер + обратная совместимость
+     PUBLIC API — Префиксный кодек + обратная совместимость
      ═══════════════════════════════════════════════════════════ */
 
   app.library = {
@@ -68,7 +71,54 @@
       return rawIndexToCoordinates(app.library.unpermuteIndex(number));
     },
 
-    /* ---- Заголовки страниц ---- */
+    /* ─── Флаг архитектуры ─── */
+    USE_PREFIX_CODEC,
+
+    /* ═══════════════════════════════════════════════════════════
+       ПРЕФИКСНЫЙ КОДЕК — новые API
+       ═══════════════════════════════════════════════════════════ */
+
+    /* Декодирование: BigInt-адрес → страница */
+    decodeAddressToPage(address) {
+      return _addressCodec.decodeAddressToPage(address, Number(TOTAL_BITS));
+    },
+
+    /* Кодирование: текст → BigInt-адрес (ЧЕСТНЫЙ энкодинг) */
+    encodePageToAddress(text) {
+      return _addressCodec.encodePageToAddress(text);
+    },
+
+    /* Поиск фразы: фраза → адрес → координаты (честный) */
+    encodePhraseToCoords(phrase) {
+      const result = _addressCodec.searchPhraseToAddress(phrase);
+      if (!result) return null;
+
+      /* Конвертируем адрес в координаты */
+      const coords = _coordPerm.internalAddressToCoord(result.address);
+      const fullCoords = xyToCoordinates(coords.x, coords.y, coords.z);
+      const number = app.library.coordinatesToNumber(fullCoords);
+      const xy = coordinatesToXY(fullCoords);
+
+      return {
+        number,
+        coordinates: fullCoords,
+        xy,
+        phrase,
+        position: result.phrasePos,
+        text: result.text,
+        variant: 1,
+        range: { start: result.phrasePos, length: result.phraseLen },
+        mode: 'prefix',
+      };
+    },
+
+    /* Классификация страницы по тексту (префиксный кодек) */
+    classifyPageByText(text) {
+      return _addressCodec.classifyDecodedPage(text);
+    },
+
+    /* ─── Заголовки страниц ─── */
+
     pageTitle(coordinates) {
       return `X:${coordinates.x} Y:${coordinates.y} Z:${coordinates.z}`;
     },
@@ -76,12 +126,13 @@
       return `Сектор ${coordinates.sector} · Зал ${coordinates.hall} · Стена ${coordinates.wall} · Полка ${coordinates.shelf} · Том ${coordinates.volume} · Лист ${coordinates.page}`;
     },
 
-    /* ---- Токенный декодер — ОСНОВНОЙ метод ---- */
+    /* ─── Токенный декодер — ОСНОВНОЙ метод ─── */
+
     decodePage(x, y, z, forcedTokens) {
       return decodePageByCoords(x, y, z, forcedTokens);
     },
 
-    /* Получить страницу по координатам (токенный декодер) */
+    /* Получить страницу по координатам */
     getPageByXY(x, y, z) {
       const bz = BigInt(z || 1);
       const bx = BigInt(x || 0);
@@ -94,7 +145,8 @@
       return { text, indices, coordinates: coords };
     },
 
-    /* ---- Температура и классификация ---- */
+    /* ─── Температура и классификация ─── */
+
     computeTemperature(z) {
       return _tokens.computeTemperature(z);
     },
@@ -102,7 +154,8 @@
       return _tokens.classifyPageByTemp(z);
     },
 
-    /* ---- Обитаемый слой — публичные API ---- */
+    /* ─── Обитаемый слой — публичные API ─── */
+
     classifyPageText,
     detectRussianText,
     scanForInhabited,
@@ -116,8 +169,8 @@
     createLogFillerIndices,
     createHumanFillerIndices,
 
-    /* Coordinate-based page URL
-       Формат: #/x/{x}/y/{y}/z/{z} */
+    /* ─── URL ─── */
+
     coordsToPageUrl(coords, params) {
       const c = {
         x: BigInt(coords.x || 0),
@@ -135,7 +188,6 @@
     randomPageCoords() {
       const x = BigInt(Math.floor(Math.random() * 2000) - 1000);
       const y = BigInt(Math.floor(Math.random() * 2000) - 1000);
-      /* Малый z → человекоподобный текст */
       const z = 1n + BigInt(Math.floor(Math.random() * 10000));
       return { x, y, z, sector: 1n, hall: 1n, wall: 1n, shelf: 1n, volume: 1n, page: z };
     },
@@ -147,7 +199,6 @@
       try {
         const coords = xyToCoordinates(x, y, z);
         const text = decodePageByCoords(BigInt(x), BigInt(y), BigInt(z));
-        /* Берём первые 25 непробельных символов */
         let spine = '';
         for (let i = 0; i < text.length && spine.length < 25; i++) {
           if (text[i] !== ' ' && text[i] !== '\n') spine += text[i];
@@ -166,7 +217,8 @@
       return "noise";
     },
 
-    /* ---- Кодирования ---- */
+    /* ─── Кодирования ─── */
+
     bytesToBase64Url(bytes) {
       const B64URL = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_';
       let num = 0n;
@@ -227,7 +279,7 @@
     },
 
     /* ═══════════════════════════════════════════════════════════
-       ПОИСК — через токенный декодер с forced-токенами
+       ПОИСК — честный через префиксный кодек + legacy fallback
        ═══════════════════════════════════════════════════════════ */
 
     createSearchVariants(phraseRaw, mode, countRaw) {
@@ -236,8 +288,19 @@
       const count = clamp(Math.floor(Number(countRaw) || SEARCH_VARIANTS_DEFAULT), 1, SEARCH_VARIANTS_MAX);
       const variants = [];
 
+      /* Если включён префиксный кодек — используем честный поиск */
+      if (USE_PREFIX_CODEC && _addressCodec) {
+        for (let variant = 1; variant <= count; variant++) {
+          const result = app.library.encodePhraseToCoords(phrase);
+          if (!result) continue;
+          result.variant = variant;
+          variants.push(result);
+        }
+        if (variants.length > 0) return variants;
+      }
+
+      /* Legacy fallback: PRNG-based search */
       for (let variant = 1; variant <= count; variant++) {
-        /* Используем токенный декодер для поиска */
         const result = _tokens.findPhraseInTokenSpace(phrase);
         if (!result) continue;
 
@@ -277,7 +340,7 @@
       return { x: Math.floor(Math.random() * 2000) - 1000, y: Math.floor(Math.random() * 2000) - 1000 };
     },
 
-    /* Генерация обитаемой страницы через токенный декодер */
+    /* Генерация обитаемой страницы */
     generateInhabitedPage(genre, step) {
       const seed = `genre-nav:${genre}:${step}`;
       const rng = rngFrom(seed);
@@ -286,9 +349,15 @@
       const w2 = wb[Math.floor(rng() * wb.length)];
       const phrase = app.utils.normalizeText(`${w1} ${w2}`);
 
+      /* Пробуем честный поиск через префиксный кодек */
+      if (USE_PREFIX_CODEC && _addressCodec) {
+        const result = app.library.encodePhraseToCoords(phrase);
+        if (result) return { ...result, mode: genre };
+      }
+
+      /* Legacy fallback */
       const result = _tokens.findPhraseInTokenSpace(phrase);
       if (!result) {
-        /* Fallback */
         const x = BigInt(Math.floor(rng() * 2000) - 1000);
         const y = BigInt(Math.floor(rng() * 2000) - 1000);
         const z = 1n + BigInt(Math.floor(rng() * 1000));
@@ -313,7 +382,7 @@
       };
     },
 
-    /* Scan forward — через токенный декодер */
+    /* Scan forward */
     scanNextInhabitedPage(startNumber, genre, maxScan) {
       const limit = maxScan || 50;
       const startCoords = rawIndexToCoordinates(app.library.unpermuteIndex(startNumber));
@@ -323,7 +392,10 @@
           const newZ = BigInt(startCoords.z) + BigInt(i);
           if (newZ < 1n) continue;
           const text = decodePageByCoords(BigInt(startCoords.x), BigInt(startCoords.y), newZ);
-          const classification = _tokens.classifyPageByTemp(newZ);
+          /* Классификация: используем текстовый анализатор если префиксный кодек */
+          const classification = USE_PREFIX_CODEC && _addressCodec
+            ? _addressCodec.classifyDecodedPage(text)
+            : _tokens.classifyPageByTemp(newZ);
           const coords = xyToCoordinates(startCoords.x, startCoords.y, newZ);
           const xy = coordinatesToXY(coords);
           return { number: app.library.coordinatesToNumber(coords), coords, xy, text, classification, scanned: i };
@@ -344,12 +416,19 @@
       const y = BigInt(coords.y || 0);
       let z = BigInt(coords.z || 1);
 
-      /* Ищем страницу с более низкой температурой (ближе к началу) */
       for (let i = 1; i <= 50; i++) {
         const newZ = z + BigInt(i);
         const text = decodePageByCoords(x, y, newZ);
-        const temp = _tokens.computeTemperature(newZ);
-        const detection = _tokens.classifyPageByTemp(newZ);
+
+        let detection, temp;
+        if (USE_PREFIX_CODEC && _addressCodec) {
+          detection = _addressCodec.classifyDecodedPage(text);
+          temp = 1.0 - (detection.score || 0);
+        } else {
+          temp = _tokens.computeTemperature(newZ);
+          detection = _tokens.classifyPageByTemp(newZ);
+        }
+
         const newCoords = xyToCoordinates(x, y, newZ);
         const xy = { x, y };
 
@@ -472,4 +551,8 @@
   delete app.library._fillers;
   delete app.library._classifier;
   delete app.library._tokens;
+  delete app.library._prefix;
+  delete app.library._tokenTable;
+  delete app.library._addressCodec;
+  delete app.library._coordPerm;
 })();

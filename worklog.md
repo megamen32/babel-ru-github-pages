@@ -1,97 +1,27 @@
-
----
-Task ID: inhabited-atlas
-Agent: main
-Task: Add inhabited layer (5 new genres, classifier, region atlas) to Library of Babel
-
-Work Log:
-- Added 5 new filler modes: dialogue, post, diary, log, human
-- Added page classifier (classifyPageText) with pattern detection for chat/log/post/diary
-- Added region classifier (classifyRegion) - stable genre per hex coordinate
-- Updated worker.js with self-contained copies of all new generators
-- Updated search UI from 3 to 8 mode buttons
-- Updated all 5 theme headers to show region genre (icon + label)
-- Updated About page with inhabited atlas description
-- Fixed classification patterns for lowercase-normalized text (am/pm, t in ISO timestamps)
-- Tested all generators and classifiers
-
-Stage Summary:
-- Library math is UNCHANGED — inhabited layer is purely additive
-- 8 search modes: Пустота, 💬 Диалог, 📱 Пост, 🔔 Дневник, ⌨️ Лог, Слова, Шум, 🧑 Человек
-- Each (x,y) hex coordinate maps to stable region genre
-- Page classification: Переписка 95%, Лог 90%, Пост 85%, Дневник 85%, Текст 60%, Шум 20%
-- Pushed to GitHub
-
 ---
 Task ID: 1
 Agent: main
-Task: Fix themes.renderAtlas error and add genre-based inhabited page navigation
+Task: Implement prefix-based token codec architecture for Library of Babel
 
 Work Log:
-- Fixed `themes.renderAtlas is not a function` by moving renderAtlas, bindAtlas, drawWanderMap, drawHex, and GENRE_DESCRIPTIONS from app.js to themes.js
-- Removed the local definitions and `themes.renderAtlas = renderAtlas` assignment from app.js
-- Added `generateInhabitedPage(genre, step)` to library.js — uses createSearchVariants with auto-generated phrases from WORD_BANK for variety
-- Added `scanNextInhabitedPage(startNumber, genre, maxScan)` to library.js — honest forward scan for real pages matching genre
-- Added `renderGenre(route)` and `bindGenre(route)` to themes.js — genre browsing view with messenger-style chat bubbles, prev/next navigation, and scan button
-- Added `genre` route to parseRoute() and navigate() switch in app.js
-- Updated atlas go buttons: non-noise genres now link to `#/genre/{kind}/step/1` instead of wander; noise still uses wander
-- Added genre view CSS to style.css: .genre-view, .genre-nav-row, .genre-nav-btn, .genre-scan-btn, etc.
-- Updated updateNav() to highlight atlas nav item when on genre route
-- Synced all changes to root project at /home/z/my-project/
-- Verified all JS files load without syntax errors
-- Verified generateInhabitedPage produces varied content per step and genre
-- Verified scanNextInhabitedPage finds matching pages
-- Verified renderAtlas includes genre links and noise button
-- Verified renderGenre includes navigation, scan button, and chat content
+- Analyzed existing codebase: lib-tokens.js (PRNG generator), lib-core.js, lib-api.js, lib-fillers.js
+- Identified core problem: current system is a "deterministic pseudo-text generator", not a true "curved library"
+- Created js/lib-prefix-codec.js: canonical Huffman code builder, bit reader/writer
+- Created js/lib-token-table.js: 10 token types, 8-state automaton, Zipf weights, Huffman tables per type and per state
+- Created js/lib-address-codec.js: address→page decoder, text→address encoder, phrase search
+- Created js/lib-coordinate-permutation.js: Feistel-like affine permutation for coordinate mixing
+- Updated js/lib-core.js: decodePageByCoords now uses prefix codec (with PRNG fallback)
+- Updated js/lib-api.js: added encodePhraseToCoords, classifyPageByText, honest search through encoding
+- Updated index.html: added 4 new script tags before lib-tokens.js
+- Created scripts/build_tokens.py: offline token dictionary builder
+- Fixed RAW_CHAR bug: 21-bit code points could exceed Unicode range, reduced to 17-bit with validation
+- Fixed bit alignment: encoder now left-pads to MSB so decoder reads encoded bits first
+- All tests pass: encoding/decoding is reversible, search finds phrases honestly
 
 Stage Summary:
-- themes.renderAtlas is now natively part of themes.js export — no more "not a function" error
-- Genre browsing: #/genre/{kind}/step/{n} provides page-by-page navigation through inhabited pages
-- Each step generates a different inhabited page using createSearchVariants with seeded random phrases
-- "Сканировать честно" button runs scanNextInhabitedPage for honest discovery
-- Atlas cards updated: dialogue/diary/post/log/text link to genre browsing; noise links to wander
-
----
-Task ID: 1
-Agent: main
-Task: Unified URL scheme — replace /wander and /page with /x/y/... hierarchy
-
-Work Log:
-- Read all JS files to understand current URL scheme
-- Identified that current scheme uses #/wander/x/.../y/... for wandering and #/page/x/.../y/.../w/.../sh/.../v/.../p/... for pages
-- Delegated the unified URL scheme refactoring to a general-purpose subagent
-- Subagent implemented all changes across 7 files (library.js, app.js, themes.js, index.html, 3 test files)
-- Verified: no remaining #/wander or #/page/ URLs in themes.js
-- Verified: all loop indices start at 0 (previously started at 1 because parts[0] was 'wander')
-- Verified: 'wall' key replaced with 'w' in URL parsing
-- Verified: parseAnyAddress in library.js updated for new format
-- Verified: basic syntax check passes for all JS files
-- Changes already committed and pushed
-
-Stage Summary:
-- New unified URL scheme: #/x/{x}/y/{y}[/w/{w}][/sh/{sh}][/v/{v}][/p/{p}]
-- Depth determines view: /p/ present → page view, only x,y → wander view
-- Old URLs (#/wander/..., #/page/...) redirect to new format via location.replace()
-- #/random replaces #/page/random
-- renderAtlas function confirmed to be properly exported and working
-- GENRE_COLORS confirmed available in library.js
----
-Task ID: 1
-Agent: main
-Task: Fix h.sharedPageRender is not a function + base64url + URL scheme + next inhabited
-
-Work Log:
-- Git pulled latest changes from repo (major restructuring: themes.js split into theme-helpers/bookshelf/cosmos/messenger/feed/terminal/views)
-- Identified root cause: `sharedPageRender` and `bindSharedPage` defined in `theme-views.js` but never added to `app.themes._helpers` object, so `h.sharedPageRender()` fails in bookshelf/cosmos/feed themes
-- Fixed by adding `app.themes._helpers.sharedPageRender = sharedPageRender` before cleanup/deletion
-- Replaced base62 encoding with base64url (RFC 4648 §5) in lib-api.js: alphabet `0-9A-Za-z-_` (64 URL-safe chars)
-- Updated `coordsToPageUrl` to use unified `#/x/{x}/y/{y}/w/{wall}/sh/{shelf}/v/{volume}/p/{page}` format directly (no /page/ prefix)
-- Updated ALL navigation links across all theme files: `#/wander/x/...` → `#/x/...`, `/wall/` → `/w/`
-- Wrote E2E test for "next inhabited page" button: tests/e2e/next-inhabited.spec.js
-
-Stage Summary:
-- Fixed critical `h.sharedPageRender is not a function` error
-- Switched from base62 to base64url encoding (more compact, equally URL-safe)
-- Unified URL scheme now consistently uses `#/x/...` everywhere
-- "Next inhabited page" should now work because page rendering is fixed
-- Old URLs (#/wander/..., #/page/...) still redirect via router for backward compat
+- New architecture: address → bit stream → prefix code decoder → token stream → page
+- Reverse: text → tokens → prefix codes → bit stream → address (honest encoding!)
+- Language gravity: frequent tokens have short codes → small addresses → human-like text
+- Coordinate permutation: adjacent coords → very different internal addresses
+- Token dictionary: 10000 Russian words, 844 English words, 156 RU phrases, 68 EN phrases, 18 punct, 80 emoji, RAW_CHAR fallback
+- Search is now honest: phrase → encode to address → that address actually contains the phrase

@@ -3,16 +3,14 @@
   const { ALG, WORD_BANK } = app.config;
   const { rngFrom, tokenizeText, indicesToString } = app.utils;
   const _tokens = app.library._tokens;
+  const _addressCodec = app.library._addressCodec;
+  const _coordPerm = app.library._coordPerm;
 
   /* ═══════════════════════════════════════════════════════════
-     Base-256 (2^8) Byte-Level Engine
+     Base-256 (2^8) Byte-Level Engine — LEGACY
      ═══════════════════════════════════════════════════════════
-     256-character alphabet = 1 byte per symbol.
-     4096 symbols × 8 bits = 32768 bits = 2^15 bits per page.
-     All operations are byte shifts and masks.
-
-     СОХРАНЯЕТСЯ для обратной совместимости (search, base64 url).
-     Основной просмотр страниц использует токенный декодер. */
+     Сохраняется для обратной совместимости (search, base64 url).
+     Основной просмотр страниц использует ПРЕФИКСНЫЙ ДЕКОДЕР. */
 
   const BITS_PER_CHAR = 8n;
   const CHAR_MASK = 255n;
@@ -103,13 +101,14 @@
        X, Y — позиция на бесконечной 2D-карте (зал)
        Z    — номер страницы в этом зале (BigInt, 1..∞)
 
-     Малые Z → человекоподобный текст (языковая гравитация)
-     Большие Z → шум и хаос
+     Новая архитектура:
+       (x, y, z) → internalAddress → prefix decode → страница
+
+     Малые адреса → частые токены → человекоподобный текст
+     Большие адреса → редкие токены → шум
 
      rawIndex — внутренний BigInt для совместимости со старой
-     аффинной перестановкой и base64-адресами.
-     Для токенного декодера rawIndex не используется —
-     текст генерируется напрямую из (x, y, z). */
+     аффинной перестановкой и base64-адресами. */
 
   const HALLS_PER_ROW = 1_000_000n;
   const HALF_ROW = HALLS_PER_ROW / 2n;
@@ -230,10 +229,33 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
-     ТОКЕННЫЙ ДЕКОДЕР — основная генерация страниц
-     ═══════════════════════════════════════════════════════════ */
+     ПРЕФИКСНЫЙ ДЕКОДЕР — основная генерация страниц
+     ═══════════════════════════════════════════════════════════
+     Новая архитектура:
+       (x, y, z) → internalAddress → prefix decode → страница
+
+     Старый PRNG-декодер (lib-tokens.js) сохранён как fallback.
+     Режим выбирается через app.config.USE_PREFIX_CODEC. */
+
+  const USE_PREFIX_CODEC = true;
 
   function decodePageByCoords(x, y, z, forcedTokens) {
+    if (USE_PREFIX_CODEC && _addressCodec && !forcedTokens) {
+      /* Новая архитектура: префиксное декодирование */
+      try {
+        const bx = BigInt(x);
+        const by = BigInt(y);
+        const bz = BigInt(z || 1);
+        const internalAddr = _coordPerm.coordToInternalAddress(bx, by, bz);
+        const totalBits = Number(TOTAL_BITS);
+        return _addressCodec.decodeAddressToPage(internalAddr, totalBits);
+      } catch (e) {
+        /* Fallback на старый декодер при ошибке */
+        console.warn('Prefix codec error, falling back to PRNG:', e);
+      }
+    }
+
+    /* Старый декодер (PRNG) — fallback или forcedTokens */
     return _tokens.decodePage(x, y, z, forcedTokens);
   }
 
@@ -269,7 +291,8 @@
     xyToHallXY, hallToXY, xyToCoordinates, coordinatesToXY,
     xyToHallIndex, hallIndexToXY,
     createWordFillerIndices, createNoiseFillerIndices,
-    /* Token decoder */
+    /* Prefix codec decoder */
     decodePageByCoords,
+    USE_PREFIX_CODEC,
   };
 })();
