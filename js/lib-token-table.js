@@ -465,10 +465,12 @@
    */
   function computeTemperature(z) {
     const absZ = z < 0n ? -z : z;
-    if (absZ <= 1n) return 0.1;
-    const logZ = Math.log10(Number(absZ));
-    return Math.min(1.0, 0.1 + logZ * 0.09);
-    /* 0.1 при z=1, ~0.4 при z=1000, 1.0 при z=10^10 */
+    if (absZ <= 1n) return 0.05;
+    /* log10(absZ) через длину десятичного представления — без потолка */
+    const s = absZ.toString();
+    const log10 = s.length - 1 + (s.length > 1 ? (Number(s[0] + '.' + s.slice(1, 4)) - Number(s[0])) : 0);
+    return log10 * 0.1;
+    /* 0.05 при z=1, ~0.30 при z=10^3, ~0.60 при z=10^6, 1.0 при z=10^10, растёт далее */
   }
 
   /* ═══════════════════════════════════════════════════════════

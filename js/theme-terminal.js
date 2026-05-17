@@ -85,6 +85,17 @@
           const d = dirMap[cmd[1]];
           if (d) { location.hash = `#/x/${d[0]}/y/${d[1]}`; return; }
           response = 'Неизвестное направление. Используй: сз св з в юз юв';
+        } else if (cmd[0] === 'read') {
+          const vol = parseInt(cmd[1]) || 1;
+          const clampVol = Math.max(1, Math.min(10, vol));
+          /* Текущие координаты из URL */
+          const hash = location.hash;
+          const xMatch = hash.match(/\/x\/(-?\d+)/);
+          const yMatch = hash.match(/\/y\/(-?\d+)/);
+          const cx = xMatch ? xMatch[1] : '0';
+          const cy = yMatch ? yMatch[1] : '0';
+          location.hash = `#/x/${cx}/y/${cy}/z/${clampVol}`;
+          return;
         } else {
           response = `Команда не найдена: ${u.esc(cmd[0])}. Набери help для справки.`;
         }

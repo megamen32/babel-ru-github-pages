@@ -69,7 +69,7 @@ for (let i = 0; i < ALPHABET.length; i++) {
 }
 
 const ALG = {
-  label: "ru5",
+  label: "ru6",
   alphabet: ALPHABET,
   pageLength: 4096,
   pagesPerVolume: 410n,

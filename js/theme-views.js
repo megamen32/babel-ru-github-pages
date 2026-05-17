@@ -178,9 +178,14 @@
           backBtn.style.display = '';
           backBtn.addEventListener('click', () => {
             const history2 = store.readStore('babelHistory');
-            /* second-to-last = the page before current */
+            /* Удаляем текущую запись и переходим к предыдущей */
             if (history2.length >= 2) {
-              location.hash = history2[1].url;
+              history2.shift(); // убрать текущую (самую новую)
+              store.writeStore('babelHistory', history2, 100);
+              const prev = history2[0];
+              if (prev && prev.url) {
+                location.hash = prev.url;
+              }
             }
           });
         }
@@ -675,12 +680,18 @@
       dropdown.classList.toggle('open');
     });
 
-    /* Close on outside click */
-    document.addEventListener('click', e => {
-      if (!e.target.closest('.theme-picker')) {
-        dropdown.classList.remove('open');
-      }
-    });
+    /* Close on outside click — remove previous listener first */
+    if (!window._themePickerOutsideClick) {
+      window._themePickerOutsideClick = (e) => {
+        if (!e.target.closest('.theme-picker')) {
+          const dd = document.getElementById('themePickerDropdown');
+          if (dd) dd.classList.remove('open');
+        }
+      };
+    } else {
+      document.removeEventListener('click', window._themePickerOutsideClick);
+    }
+    document.addEventListener('click', window._themePickerOutsideClick);
 
     u.$$('.theme-picker-option[data-theme]').forEach(btn => {
       btn.addEventListener('click', () => {

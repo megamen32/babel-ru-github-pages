@@ -137,6 +137,7 @@
         if (parts[i] === 'y') y = parts[i + 1];
       }
       const nx = Number(x) || 0, ny = Number(y) || 0;
+      store.pushWanderVisit(nx, ny);
       store.pushJourneyStep(nx, ny, lib.classifyRegion(nx, ny).kind);
       u.$$('.feed-nav-btn[data-dq]').forEach(btn => {
         btn.addEventListener('click', () => {

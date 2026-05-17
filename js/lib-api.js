@@ -203,7 +203,9 @@
         y: typeof coords.y === 'bigint' ? coords.y : BigInt(coords.y || 0),
         z: typeof coords.z === 'bigint' ? coords.z : BigInt(coords.z || 1),
       };
-      const base = `#/x/${c.x}/y/${c.y}/z/${c.z}`;
+      /* Используем base36 для компактных URL: 
+         BigInt → base36 сокращает длину в ~2 раза */
+      const base = `#/x/${c.x.toString(36)}/y/${c.y.toString(36)}/z/${c.z.toString(36)}`;
       if (params) {
         const qs = new URLSearchParams(params).toString();
         return `${base}?${qs}`;
@@ -215,7 +217,8 @@
       const x = BigInt(Math.floor(Math.random() * 200000) - 100000);
       const y = BigInt(Math.floor(Math.random() * 200000) - 100000);
       const z = 1n + BigInt(Math.floor(Math.random() * 1000000));
-      return { x, y, z, sector: 1n, hall: 1n, wall: 1n, shelf: 1n, volume: 1n, page: z };
+      const coords = xyToCoordinates(x, y, z);
+      return coords;
     },
 
     xyToCoordinates, coordinatesToXY, xyToHallXY, hallToXY,

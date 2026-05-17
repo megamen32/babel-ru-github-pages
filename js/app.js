@@ -28,6 +28,27 @@
     let isOldCoordFormat = false; // for redirect to new format (h/ or s/ based)
     let needsRedirect = null; // URL to redirect to for old-format URLs
 
+    /* Парсинг координаты: поддерживает decimal и base36 */
+    function parseCoord(val) {
+      if (val == null) return val;
+      /* Проверяем, похоже ли на base36 (содержит буквы a-z) */
+      if (/^[0-9a-z-]+$/i.test(val) && /[a-z]/i.test(val)) {
+        try {
+          const neg = val.startsWith('-');
+          const abs = neg ? val.slice(1) : val;
+          /* base36 → BigInt */
+          let result = 0n;
+          for (const ch of abs.toLowerCase()) {
+            const code = ch.charCodeAt(0);
+            const digit = code <= 57 ? code - 48 : code - 87;
+            result = result * 36n + BigInt(digit);
+          }
+          return String(neg ? -result : result);
+        } catch { /* fallback to decimal */ }
+      }
+      return val;
+    }
+
     /* UNIFIED format: #/x/{x}/y/{y}[/z/{z}]
        Depth determines view:
          - If /z/{z} present → page view
@@ -38,9 +59,9 @@
       pageXY = {};
       for (let i = 0; i < parts.length - 1; i += 2) {
         switch (parts[i]) {
-          case 'x': pageXY.x = parts[i + 1]; break;
-          case 'y': pageXY.y = parts[i + 1]; break;
-          case 'z': pageXY.z = parts[i + 1]; break;
+          case 'x': pageXY.x = parseCoord(parts[i + 1]); break;
+          case 'y': pageXY.y = parseCoord(parts[i + 1]); break;
+          case 'z': pageXY.z = parseCoord(parts[i + 1]); break;
           /* Старые поля — для редиректа */
           case 'w': pageXY.wall = parseInt(parts[i + 1]) || 1; break;
           case 'sh': pageXY.shelf = parseInt(parts[i + 1]) || 1; break;
@@ -160,7 +181,7 @@
     if (currentCleanup) { currentCleanup(); currentCleanup = null; }
 
     /* Also clean up any canvas animations from previous view */
-    document.querySelectorAll('canvas[_cleanup]').forEach(c => {
+    document.querySelectorAll('canvas').forEach(c => {
       if (typeof c._cleanup === 'function') c._cleanup();
     });
 
