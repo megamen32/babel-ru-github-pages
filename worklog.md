@@ -50,3 +50,28 @@ Stage Summary:
 - Each step generates a different inhabited page using createSearchVariants with seeded random phrases
 - "Сканировать честно" button runs scanNextInhabitedPage for honest discovery
 - Atlas cards updated: dialogue/diary/post/log/text link to genre browsing; noise links to wander
+
+---
+Task ID: 1
+Agent: main
+Task: Unified URL scheme — replace /wander and /page with /x/y/... hierarchy
+
+Work Log:
+- Read all JS files to understand current URL scheme
+- Identified that current scheme uses #/wander/x/.../y/... for wandering and #/page/x/.../y/.../w/.../sh/.../v/.../p/... for pages
+- Delegated the unified URL scheme refactoring to a general-purpose subagent
+- Subagent implemented all changes across 7 files (library.js, app.js, themes.js, index.html, 3 test files)
+- Verified: no remaining #/wander or #/page/ URLs in themes.js
+- Verified: all loop indices start at 0 (previously started at 1 because parts[0] was 'wander')
+- Verified: 'wall' key replaced with 'w' in URL parsing
+- Verified: parseAnyAddress in library.js updated for new format
+- Verified: basic syntax check passes for all JS files
+- Changes already committed and pushed
+
+Stage Summary:
+- New unified URL scheme: #/x/{x}/y/{y}[/w/{w}][/sh/{sh}][/v/{v}][/p/{p}]
+- Depth determines view: /p/ present → page view, only x,y → wander view
+- Old URLs (#/wander/..., #/page/...) redirect to new format via location.replace()
+- #/random replaces #/page/random
+- renderAtlas function confirmed to be properly exported and working
+- GENRE_COLORS confirmed available in library.js
