@@ -414,7 +414,7 @@
     findNextInhabitedFromCoords(coords, step) {
       const x = BigInt(coords.x || 0);
       const y = BigInt(coords.y || 0);
-      let z = BigInt(coords.z || 1);
+      const z = BigInt(coords.z || 1);
 
       for (let i = 1; i <= 50; i++) {
         const newZ = z + BigInt(i);
@@ -428,6 +428,9 @@
           temp = _tokens.computeTemperature(newZ);
           detection = _tokens.classifyPageByTemp(newZ);
         }
+
+        /* Пропускаем шум и хаос — ищем обитаемую страницу */
+        if (detection.kind === 'raw' || detection.kind === 'noise') continue;
 
         const newCoords = xyToCoordinates(x, y, newZ);
         const xy = { x, y };

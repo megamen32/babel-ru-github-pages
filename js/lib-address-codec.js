@@ -67,9 +67,9 @@
       } else if (tokenType === T.DOT) {
         result += '.';
       } else if (tokenType === T.RAW_CHAR) {
-        /* RAW_CHAR: читаем 17-битный Unicode code point (BMP: 0..0x1FFFF) */
+        /* RAW_CHAR: читаем 21-битный Unicode code point (0..0x10FFFF) */
         let cp = 0;
-        for (let i = 0; i < 17; i++) {
+        for (let i = 0; i < 21; i++) {
           cp = (cp << 1) | readBit();
         }
         /* Проверяем валидность code point */
@@ -221,11 +221,36 @@
     const lowerDecoded = decodedText.toLowerCase();
     const phrasePos = lowerDecoded.indexOf(normalized);
 
+    /* Если фраза не нашлась в декодированном тексте —
+       пробуем посимвольный поиск по словам фразы */
+    let foundPos = phrasePos;
+    let foundLen = normalized.length;
+
+    if (foundPos < 0) {
+      /* Попробуем найти каждое слово фразы отдельно */
+      const phraseWords = normalized.split(/\s+/).filter(Boolean);
+      let bestPos = -1;
+      for (const word of phraseWords) {
+        const wp = lowerDecoded.indexOf(word);
+        if (wp >= 0) {
+          if (bestPos < 0 || wp < bestPos) bestPos = wp;
+        }
+      }
+      if (bestPos >= 0) {
+        foundPos = bestPos;
+        foundLen = phraseWords[0].length;
+      } else {
+        /* Фраза действительно не найдена — помечаем начало */
+        foundPos = 0;
+        foundLen = 0;
+      }
+    }
+
     return {
       address,
       text: decodedText,
-      phrasePos: phrasePos >= 0 ? phrasePos : 0,
-      phraseLen: normalized.length,
+      phrasePos: foundPos >= 0 ? foundPos : 0,
+      phraseLen: foundLen,
     };
   }
 
