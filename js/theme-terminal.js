@@ -299,7 +299,9 @@ ${bookList}
       /* Async load page text via prefix codec */
       const pageTextEl = u.$('#termPageText');
       const statsEl = u.$('#termStats');
-      const libraryMode = h.getLibraryMode();
+      /* Use engine from URL if specified (from search results), otherwise use current library mode */
+      const urlEngine = lib.getEngineFromUrl(route.params);
+      const libraryMode = urlEngine || h.getLibraryMode();
       app.workerBridge.getPrefixPageData(
         String(xy.x), String(xy.y), String(coords.z), libraryMode
       ).then(data => {

@@ -250,8 +250,8 @@
     catch { return 'human'; }
   }
 
-  function decodePageByCoords(x, y, z, forcedTokens) {
-    const libraryMode = getLibraryMode();
+  function decodePageByCoords(x, y, z, forcedTokens, forcedMode) {
+    const libraryMode = forcedMode || getLibraryMode();
 
     /* Random mode: always use byte-level decode */
     if (libraryMode === 'random') {

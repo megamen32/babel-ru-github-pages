@@ -149,8 +149,8 @@
 
     /* ─── Токенный декодер — ОСНОВНОЙ метод ─── */
 
-    decodePage(x, y, z, forcedTokens) {
-      return decodePageByCoords(x, y, z, forcedTokens);
+    decodePage(x, y, z, forcedTokens, forcedMode) {
+      return decodePageByCoords(x, y, z, forcedTokens, forcedMode);
     },
 
     /* Получить страницу по координатам */
@@ -212,6 +212,14 @@
         return `${base}?${qs}`;
       }
       return base;
+    },
+
+    /* Get engine mode from URL params — 'prefix' or 'random' */
+    getEngineFromUrl(params) {
+      if (!params) return null;
+      const engine = params.get('engine');
+      if (engine === 'prefix' || engine === 'random') return engine;
+      return null;
     },
 
     randomPageCoords() {

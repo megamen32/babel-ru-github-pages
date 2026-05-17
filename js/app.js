@@ -447,8 +447,11 @@
           <p>Вот несколько входов в это множество:</p>
         </div>`;
 
-        /* Render one card per genre */
-        const genreOrder = ['prefix', 'empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+        /* Render one card per genre — order depends on library mode */
+        const currentMode = themes.getLibraryMode();
+        const genreOrder = currentMode === 'random'
+          ? ['empty', 'dialogue', 'post', 'diary', 'log', 'words', 'prefix']
+          : ['prefix', 'empty', 'dialogue', 'post', 'diary', 'log', 'words'];
         for (const mode of genreOrder) {
           const v = resultsByMode[mode];
           if (!v) continue;
@@ -459,7 +462,11 @@
           const snippet = app.utils.snippetByRange(v.text, v.range, 80);
           const snippetEscaped = esc(snippet);
           const highlightedSnippet = snippetEscaped.replace(phraseEscaped, `<mark>${phraseEscaped}</mark>`);
-          const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${v.range.start}:${v.range.length}` });
+          const urlParams = { hl: `${v.range.start}:${v.range.length}` };
+          /* Pass engine mode: prefix results use prefix codec, legacy use random */
+          if (mode === 'prefix') urlParams.engine = 'prefix';
+          else urlParams.engine = 'random';
+          const pageUrl = lib.coordsToPageUrl(vCoords, urlParams);
           const wanderUrl = `#/x/${themes.fmtXY(vXY.x)}/y/${themes.fmtXY(vXY.y)}`;
           html += `
           <div class="catalog-card">

@@ -319,7 +319,9 @@
       const chat = u.$('#msgChat');
 
       /* Async page load via Prefix Codec Worker */
-      const libraryMode = h.getLibraryMode();
+      /* Use engine from URL if specified (from search results), otherwise use current library mode */
+      const urlEngine = lib.getEngineFromUrl(route.params);
+      const libraryMode = urlEngine || h.getLibraryMode();
       app.workerBridge.getPrefixPageData(
         String(xy.x), String(xy.y), String(coords.z), libraryMode
       ).then(data => {
@@ -587,15 +589,22 @@
             </div>
           </div>`;
 
-          /* Render one card per genre */
-          const genreOrder = ['prefix', 'empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+          /* Render one card per genre — order depends on library mode */
+          const currentLibMode = h.getLibraryMode();
+          const genreOrder = currentLibMode === 'random'
+            ? ['empty', 'dialogue', 'post', 'diary', 'log', 'words', 'prefix']
+            : ['prefix', 'empty', 'dialogue', 'post', 'diary', 'log', 'words'];
           for (const mode of genreOrder) {
             const v = resultsByMode[mode];
             if (!v) continue;
             const gi = GENRE_INFO[mode];
             const vCoords = { x: BigInt(v.coordinates.x || 0), y: BigInt(v.coordinates.y || 0), z: BigInt(v.coordinates.z || 1), sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
             const vXY = { x: BigInt(v.xy.x), y: BigInt(v.xy.y) };
-            const pageUrl = lib.coordsToPageUrl(vCoords, { hl: `${v.range.start}:${v.range.length}` });
+            const urlParams = { hl: `${v.range.start}:${v.range.length}` };
+            /* Pass engine mode: prefix results use prefix codec, legacy use random */
+            if (mode === 'prefix') urlParams.engine = 'prefix';
+            else urlParams.engine = 'random';
+            const pageUrl = lib.coordsToPageUrl(vCoords, urlParams);
             if (mode === 'dialogue') {
               const dialoguePreview = h.renderDialogueSearchPreview(v, pageUrl);
               if (dialoguePreview) {
