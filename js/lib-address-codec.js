@@ -203,9 +203,9 @@
       if (tokenType === T.SPACE || tokenType === T.NEWLINE || tokenType === T.DOT) {
         /* Одинарные токены — Level 2 не нужен */
       } else if (tokenType === T.RAW_CHAR) {
-        /* Кодируем Unicode code point (21 бит) */
+        /* RAW_CHAR: 17-bit Unicode code point (BMP: 0..0x1FFFF) — matches decoder */
         const cp = token.codePoint;
-        for (let i = 20; i >= 0; i--) {
+        for (let i = 16; i >= 0; i--) {
           writer.writeBit((cp >> i) & 1);
         }
       } else {
