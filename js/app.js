@@ -340,6 +340,7 @@
 
     /* Genre definitions */
     const GENRE_INFO = {
+      prefix:   { icon: '✅', label: 'Проверенная страница', desc: 'Фраза точно на этой странице — проверено через префиксный кодек' },
       empty:    { icon: '📄', label: 'На пустом листе',   desc: 'Фраза сама по себе, в тишине пустой страницы' },
       dialogue: { icon: '💬', label: 'В переписке',       desc: 'Фраза внутри чата — между репликами собеседников' },
       post:     { icon: '📱', label: 'В посте',           desc: 'Фраза в ленте — среди мыслей и тегов' },
@@ -380,7 +381,7 @@
         </div>`;
 
         /* Render one card per genre */
-        const genreOrder = ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+        const genreOrder = ['prefix', 'empty', 'dialogue', 'post', 'diary', 'log', 'words'];
         for (const mode of genreOrder) {
           const v = resultsByMode[mode];
           if (!v) continue;

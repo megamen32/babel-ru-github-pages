@@ -209,62 +209,62 @@
   }
 
   /* Chunked scan for next inhabited page.
-     Uses the inhabited layer (filler generators) to create a page
-     with readable content at a nearby hex coordinate.
-     Discovery-based: coordinate determines genre, filler creates content. */
+     Uses the PREFIX CODEC to find a real page with readable content.
+     The page the user sees is the SAME page that was found — no mismatch.
+
+     Strategy:
+       1. Pick a genre based on nearby hex regions
+       2. Use generateInhabitedPage() which encodes a random phrase
+          through the prefix codec, guaranteeing the phrase exists
+          on the decoded page
+       3. Navigate to the resulting coordinates — the prefix codec
+          will decode the same content that was verified */
   function findNextInhabitedChunked(coords) {
     return new Promise((resolve, reject) => {
       try {
-        /* Strategy: pick a nearby hex coordinate and generate
-           an inhabited page there using the region's filler generator. */
         const currentX = Number(coords.x || 0);
         const currentY = Number(coords.y || 0);
 
-        /* Step 1: scan nearby hexes for a non-noise region */
+        /* Step 1: determine genre from nearby region */
         const nearby = lib.scanInhabitedNearby(currentX, currentY, 3);
-        let targetX, targetY;
+        let genre;
 
         if (nearby.length > 0) {
-          /* Pick a random non-noise neighbor */
           const pick = nearby[Math.floor(Math.random() * nearby.length)];
-          targetX = currentX + pick.dx;
-          targetY = currentY + pick.dy;
+          genre = pick.genre.kind;
         } else {
-          /* Fallback: jump to a random nearby hex */
-          targetX = currentX + Math.floor(Math.random() * 10) - 5;
-          targetY = currentY + Math.floor(Math.random() * 10) - 5;
+          /* Fallback: pick a random non-noise genre */
+          const nonNoise = lib.REGION_GENRES.filter(g => g.kind !== 'noise');
+          genre = nonNoise[Math.floor(Math.random() * nonNoise.length)].kind;
         }
 
-        /* Step 2: generate an inhabited page at the target coordinates */
-        const region = lib.classifyRegion(targetX, targetY);
-        const modeMap = {
-          dialogue: 'dialogue', diary: 'diary', post: 'post',
-          log: 'log', text: 'words', noise: 'words'
-        };
-        const mode = modeMap[region.kind] || 'words';
+        /* Step 2: use generateInhabitedPage() which goes through
+           the prefix codec. This guarantees the resulting page
+           actually contains readable text when decoded. */
+        const step = Date.now();
+        const result = lib.generateInhabitedPage(genre, step);
 
-        /* Generate filler content for the page */
-        const seed = `next-inhabited:${targetX}:${targetY}:${Date.now()}`;
-        const fillerIndices = lib.createFillerIndices(mode, seed, ALG.pageLength);
-        const number = lib.coordinatesToNumber(
-          lib.xyToCoordinates(targetX, targetY, 1)
-        );
+        if (!result) {
+          reject(new Error('Не удалось найти обитаемую страницу'));
+          return;
+        }
 
-        /* Build the result with target coordinates */
-        const targetCoords = lib.xyToCoordinates(targetX, targetY, 1);
-        const text = u.indicesToString(fillerIndices);
+        /* Classify the ACTUAL decoded text for accurate genre label */
+        const detection = lib.classifyPageByText(result.text);
 
         resolve({
-          number,
-          coords: targetCoords,
-          coordinates: targetCoords,
-          xy: { x: BigInt(targetX), y: BigInt(targetY) },
-          text,
-          detection: { score: 0.7, kind: mode, label: region.label },
-          scanned: Math.abs(targetX - currentX) + Math.abs(targetY - currentY),
+          number: result.number,
+          coords: result.coordinates,
+          coordinates: result.coordinates,
+          xy: result.xy,
+          text: result.text,
+          phrase: result.phrase,
+          range: result.range,
+          detection: { score: detection.score || 0.7, kind: detection.kind || genre, label: detection.label || genre },
+          scanned: 1,
           offset: 1,
-          regionGenre: { kind: region.kind, label: region.label, icon: region.icon },
-          scanDistance: Math.abs(targetX - currentX) + Math.abs(targetY - currentY),
+          regionGenre: { kind: detection.kind || genre, label: detection.label || genre, icon: detection.icon || '📖' },
+          scanDistance: 1,
         });
       } catch (err) { reject(err); }
     });

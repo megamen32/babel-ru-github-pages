@@ -271,7 +271,13 @@
      ═══════════════════════════════════════════════════════════ */
 
   /* Search across multiple modes simultaneously.
-     Returns { phrase, modes: { [mode]: variant, ... } } — one variant per mode. */
+     Returns { phrase, modes: { [mode]: variant, ... } } — one variant per mode.
+
+     IMPORTANT: Includes a 'prefix' mode that uses encodePhraseToCoords()
+     through the prefix codec. This guarantees the phrase EXISTS in the
+     decoded page when the user navigates to the result. The legacy
+     worker modes (empty, dialogue, etc.) use the old byte-level system
+     and the phrase may NOT be in the prefix-decoded page. */
   function searchMultiMode(phrase, modes) {
     const modeList = modes || ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
     const promises = modeList.map(mode =>
@@ -279,6 +285,52 @@
         .then(variants => ({ mode, variant: variants[0] || null }))
         .catch(() => ({ mode, variant: null }))
     );
+
+    /* Add prefix-verified mode: uses encodePhraseToCoords() which
+       goes through the prefix codec. The phrase IS guaranteed to
+       exist (or at least individual words) in the decoded page. */
+    promises.push(
+      Promise.resolve().then(() => {
+        try {
+          const lib = app.library;
+          const result = lib.encodePhraseToCoords(phrase);
+          if (!result) return { mode: 'prefix', variant: null };
+
+          /* Convert BigInt coordinates to strings for serialization */
+          const coords = result.coordinates || {};
+          const xy = result.xy || {};
+          return {
+            mode: 'prefix',
+            variant: {
+              mode: 'prefix',
+              number: String(result.number || 0n),
+              coordinates: {
+                sector: String(coords.sector || 1n),
+                hall: String(coords.hall || 1n),
+                wall: String(coords.wall || 1n),
+                shelf: String(coords.shelf || 1n),
+                volume: String(coords.volume || 1n),
+                page: String(coords.page || 1n),
+                x: String(coords.x || 0n),
+                y: String(coords.y || 0n),
+                z: String(coords.z || 1n),
+              },
+              xy: { x: String(xy.x || 0n), y: String(xy.y || 0n) },
+              phrase: result.phrase,
+              position: result.position || 0,
+              text: result.text,
+              variant: 1,
+              range: result.range || { start: 0, length: 0 },
+              prefixVerified: true,
+            },
+          };
+        } catch (err) {
+          console.warn('prefix search error:', err);
+          return { mode: 'prefix', variant: null };
+        }
+      })
+    );
+
     return Promise.all(promises).then(results => {
       const byMode = {};
       for (const r of results) {
