@@ -151,47 +151,36 @@
     return value;
   }
 
-  /* ---- XY Coordinate System (Szudzik pairing) ---- */
+  /* ---- XY Coordinate System (modular grid) ----
 
-  function szudzikPair(x, y) {
-    const a = x >= 0 ? 2 * x : -2 * x - 1;
-    const b = y >= 0 ? 2 * y : -2 * y - 1;
-    return a >= b ? a * a + a + b : b * b + a;
-  }
+     hallIndex = (sector-1)*20 + (hall-1) — линейный индекс зала.
+     Разбиваем на сетку шириной GRID_W:
+       x = hallIndex % GRID_W - HALF_W
+       y = hallIndex / GRID_W - HALF_W
+     Обратное:
+       hallIndex = (x + HALF_W) + (y + HALF_W) * GRID_W
+     Всё в BigInt — никакого переполнения, никаких Infinity. */
 
-  function bigSqrt(n) {
-    if (n < 0n) throw new Error("sqrt of negative");
-    if (n < 2n) return n;
-    let x = n;
-    let y = (x + 1n) / 2n;
-    while (y < x) { x = y; y = (x + n / x) / 2n; }
-    return x;
-  }
-
-  function szudzikUnpair(n) {
-    const bn = BigInt(n);
-    const m = bigSqrt(bn);
-    let a, b;
-    if (bn - m * m < m) { a = bn - m * m; b = m; }
-    else { a = m; b = bn - m * m - m; }
-    const x = a % 2n === 0n ? a / 2n : -(a + 1n) / 2n;
-    const y = b % 2n === 0n ? b / 2n : -(b + 1n) / 2n;
-    return { x, y };
-  }
+  const GRID_W = 1_000_000n;  // ширина сетки = 1 млн залов
+  const HALF_W = GRID_W / 2n; // 500 000 — центр сетки в (0,0)
 
   function xyToHallXY(x, y) {
-    const linear = szudzikPair(x, y);
-    return { sector: BigInt(Math.floor(linear / 20)) + 1n, hall: BigInt(linear % 20) + 1n };
+    const bx = BigInt(x);
+    const by = BigInt(y);
+    const hallIndex = (bx + HALF_W) + (by + HALF_W) * GRID_W;
+    return { sector: hallIndex / 20n + 1n, hall: hallIndex % 20n + 1n };
   }
 
   function hallToXY(sector, hall) {
-    return szudzikUnpair((BigInt(sector) - 1n) * 20n + (BigInt(hall) - 1n));
+    const hallIndex = (BigInt(sector) - 1n) * 20n + (BigInt(hall) - 1n);
+    return {
+      x: (hallIndex % GRID_W) - HALF_W,
+      y: (hallIndex / GRID_W) - HALF_W,
+    };
   }
 
   function xyToCoordinates(x, y, wall, shelf, volume, page) {
-    const nx = Number(x);
-    const ny = Number(y);
-    const { sector, hall } = xyToHallXY(nx, ny);
+    const { sector, hall } = xyToHallXY(x, y);
     return { sector, hall, wall: BigInt(wall || 1), shelf: BigInt(shelf || 1), volume: BigInt(volume || 1), page: BigInt(page || 1) };
   }
 
@@ -226,7 +215,6 @@
     indicesToNumber, numberToIndices,
     textToNumber, numberToText, fixedPageText,
     rawIndexToCoordinates, coordinatesToRawIndex,
-    szudzikPair, bigSqrt, szudzikUnpair,
     xyToHallXY, hallToXY, xyToCoordinates, coordinatesToXY,
     createWordFillerIndices, createNoiseFillerIndices,
   };

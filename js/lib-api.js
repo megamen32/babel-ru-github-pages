@@ -14,7 +14,6 @@
     indicesToNumber, numberToIndices,
     textToNumber, numberToText, fixedPageText,
     rawIndexToCoordinates, coordinatesToRawIndex,
-    szudzikPair, bigSqrt, szudzikUnpair,
     xyToHallXY, hallToXY, xyToCoordinates, coordinatesToXY,
     createWordFillerIndices, createNoiseFillerIndices,
   } = _core;
@@ -109,7 +108,7 @@
       return app.library.numberToCoordinates(app.library.randomPageNumber());
     },
 
-    xyToCoordinates, coordinatesToXY, xyToHallXY, hallToXY, szudzikPair, szudzikUnpair,
+    xyToCoordinates, coordinatesToXY, xyToHallXY, hallToXY,
 
     getBookSpine(x, y, wall, shelf, volume) {
       try {
