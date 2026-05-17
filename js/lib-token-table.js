@@ -2,6 +2,11 @@
   'use strict';
   const app = window.BabelApp = window.BabelApp || {};
 
+  /* Захватываем ссылку на _prefix при загрузке IIFE.
+     lib-api.js позже удалит app.library._prefix (cleanup),
+     но замыкание сохранит живую ссылку. */
+  const _prefix = app.library._prefix;
+
   /* ═══════════════════════════════════════════════════════════
      ТОКЕННАЯ ТАБЛИЦА — словарь + типы + веса + конечный автомат
      ═══════════════════════════════════════════════════════════
@@ -425,7 +430,7 @@
     }
 
     /* ─── Строим Хаффман-декодеры для каждого типа (Level 2) ─── */
-    const _prefix = app.library._prefix;
+    /* _prefix захвачен в замыкании IIFE (app.library._prefix удаляется lib-api.js) */
     const typeDecoders = new Array(TYPE_COUNT);
 
     for (let type = 0; type < TYPE_COUNT; type++) {

@@ -2,6 +2,12 @@
   'use strict';
   const app = window.BabelApp = window.BabelApp || {};
 
+  /* Захватываем ссылки на модули при загрузке IIFE.
+     lib-api.js позже удалит их из app.library (cleanup),
+     но замыкание сохранит живую ссылку. */
+  const _tokenTable = app.library._tokenTable;
+  const _prefix = app.library._prefix;
+
   /* ═══════════════════════════════════════════════════════════
      АДРЕСНЫЙ КОДЕК — обратимая система: адрес ↔ страница
      ═══════════════════════════════════════════════════════════
@@ -27,12 +33,12 @@
      ═══════════════════════════════════════════════════════════ */
 
   function decodeAddressToPage(address, totalBits) {
-    const tt = app.library._tokenTable;
+    const tt = _tokenTable;
     const table = tt.buildTokenTable();
     const { typeDecoders, stateDecoders, STATE_TRANSITIONS, allTokens, typeOffsets } = table;
     const T = tt.T;
 
-    const reader = app.library._prefix.createBitReader(address, totalBits);
+    const reader = _prefix.createBitReader(address, totalBits);
     const readBit = () => reader.readBit();
 
     let result = '';
@@ -107,7 +113,7 @@
      Позволяет найти «честный» адрес для любой фразы. */
 
   function encodePageToAddress(text) {
-    const tt = app.library._tokenTable;
+    const tt = _tokenTable;
     const table = tt.buildTokenTable();
     const { typeDecoders, stateDecoders, STATE_TRANSITIONS, allTokens, typeOffsets } = table;
     const T = tt.T;
@@ -117,7 +123,7 @@
 
     const ALG = app.config.ALG;
     const TOTAL_BITS = Number(8n * BigInt(ALG.pageLength));
-    const writer = app.library._prefix.createBitWriter(TOTAL_BITS);
+    const writer = _prefix.createBitWriter(TOTAL_BITS);
 
     let state = tt.S.START;
 
