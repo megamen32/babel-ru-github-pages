@@ -53,3 +53,29 @@ Stage Summary:
 - Temperature layer: z→temperature mapping (0.1 at z=1, ~0.4 at z=1000, 1.0 at z=10^10) modulates state transition weights
 - Worker.js now supports prefix codec decode + search via new message types
 - All legacy functionality preserved (byte-level engine, PRNG fillers, old URL formats)
+---
+Task ID: 1
+Agent: main
+Task: Rebuild and commit token dictionary + fix RAW_CHAR bit width bug
+
+Work Log:
+- Rebuilt data/tokens.ru-en.v2.json using scripts/build_tokens.py with wordfreq
+  - 50K RU words, 50K EN words, 20K RU/EN bigrams, 5K RU/EN trigrams, 2K emoji
+  - Total: 152,346 tokens, 4.6 MB
+- Committed dictionary + all JS changes to git (commit c898537)
+- Found and fixed RAW_CHAR encode/decode bit width mismatch
+  - Encoder wrote 21-bit code points, decoder read 17-bit
+  - Standardized on 17 bits (0..0x1FFFF, covers BMP + our 256-char alphabet)
+  - Fixed in both worker.js and lib-address-codec.js (commit c692d10)
+
+Stage Summary:
+- Dictionary rebuilt from wordfreq and committed to project
+- RAW_CHAR roundtrip bug fixed (21→17 bit consistency)
+- All 6 original tasks now completed:
+  1. ✅ Dictionary expanded (152K tokens)
+  2. ✅ Encoder tokenization works (greedy longest match)
+  3. ✅ RAW_CHAR weight reduced to 100, bit width fixed
+  4. ✅ Worker.js updated with prefix codec
+  5. ✅ Temperature layer added (z-dependent weight shifting)
+  6. ✅ Feistel permutation replaces affine
+
