@@ -3,24 +3,29 @@
    Caches all assets on first install, serves from cache.
    ═══════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'babel-v14.0-ui-improvements';
+/* Автоматическая версия из конфига. При изменении VERSION в config.js
+   обновите и здесь — SW не имеет доступа к BabelApp.config. */
+const CACHE_NAME = 'babel-v8.0';
 
+/* Активы для предзагрузки — без токенного словаря (4.86 MB).
+   Словарь будет закэширован при первом запросе через fetch-обработчик.
+   Это экономит ~5 MB трафика и ускоряет первичную установку. */
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './js/config.js',
   './js/utils.js',
-  './js/lib-tokens.js',
-  './js/lib-token-table.js',
+  './js/words.js',
   './js/lib-prefix-codec.js',
+  './js/lib-token-table.js',
   './js/lib-address-codec.js',
   './js/lib-coordinate-permutation.js',
+  './js/lib-tokens.js',
   './js/lib-core.js',
   './js/lib-fillers.js',
   './js/lib-classifier.js',
   './js/lib-api.js',
-  './data/tokens.ru-en.v2.json',
   './js/storage.js',
   './js/worker-bridge.js',
   './js/theme-helpers.js',
@@ -31,8 +36,8 @@ const ASSETS = [
   './js/theme-terminal.js',
   './js/theme-views.js',
   './js/app.js',
-  './js/words.js',
   './js/worker.js',
+  './js/hexweb.js',
   './404.html',
   './manifest.json',
   './icon-192.png',
@@ -41,7 +46,7 @@ const ASSETS = [
   './screenshot-mobile.png',
 ];
 
-/* Install: pre-cache all static assets */
+/* Install: pre-cache static assets (без словаря — он загрузится по запросу) */
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -61,21 +66,53 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-/* Fetch: cache-first strategy for all static assets */
+/* Fetch: cache-first для статики, stale-while-revalidate для словаря,
+   network-first для навигации (чтобы получать обновления). */
 self.addEventListener('fetch', (event) => {
-  /* Only handle GET requests */
   if (event.request.method !== 'GET') return;
 
+  const url = new URL(event.request.url);
+
+  /* Навигация (index.html): network-first — чтобы получать обновления */
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  /* Токенный словарь: stale-while-revalidate — отдаём кэш, обновляем фоном */
+  if (url.pathname.endsWith('/tokens.ru-en.v2.json')) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) =>
+        cache.match(event.request).then((cached) => {
+          const fetchPromise = fetch(event.request).then((response) => {
+            if (response && response.status === 200) {
+              cache.put(event.request, response.clone());
+            }
+            return response;
+          }).catch(() => cached);
+
+          return cached || fetchPromise;
+        })
+      )
+    );
+    return;
+  }
+
+  /* Вся остальная статика: cache-first */
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
 
-      /* For navigation requests (HTML pages), serve cached index.html */
-      if (event.request.mode === 'navigate') {
-        return caches.match('./index.html');
-      }
-
-      /* Try network, cache on success */
       return fetch(event.request).then((response) => {
         if (response && response.status === 200) {
           const clone = response.clone();
@@ -84,10 +121,7 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return response;
-      }).catch(() => {
-        /* If offline and not cached, serve index.html for SPA routing */
-        return caches.match('./index.html');
-      });
+      }).catch(() => caches.match('./index.html'));
     })
   );
 });

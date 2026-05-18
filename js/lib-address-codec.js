@@ -93,14 +93,20 @@
     let result = '';
     let state = tt.S.START;
 
-    while (result.length < PAGE_LEN) {
+    /* Array+join для длинных строк — быстрее, чем result += на каждой итерации.
+       Собираем массив частей, join'им один раз в конце. */
+    const parts = [];
+    let partsLen = 0;
+
+    while (partsLen < PAGE_LEN) {
       /* Level 1: определяем тип токена по текущему состоянию */
       const stateDec = stateDecoders[state];
       const transIdx = stateDec.decode(readBit);
       const trans = STATE_TRANSITIONS[state][transIdx];
       if (!trans) {
         /* Fallback: пробел */
-        result += ' ';
+        parts.push(' ');
+        partsLen++;
         state = tt.S.AFTER_SPACE;
         continue;
       }
@@ -110,11 +116,14 @@
 
       /* Level 2: определяем конкретный токен */
       if (tokenType === T.SPACE) {
-        result += ' ';
+        parts.push(' ');
+        partsLen++;
       } else if (tokenType === T.NEWLINE) {
-        result += '\n';
+        parts.push('\n');
+        partsLen++;
       } else if (tokenType === T.DOT) {
-        result += '.';
+        parts.push('.');
+        partsLen++;
       } else if (tokenType === T.RAW_CHAR) {
         /* RAW_CHAR: читаем 21-битный Unicode code point (0..0x10FFFF) */
         let cp = 0;
@@ -123,26 +132,35 @@
         }
         /* Проверяем валидность code point */
         if (cp >= 0 && cp <= 0x10FFFF && !(cp >= 0xD800 && cp <= 0xDFFF)) {
-          result += String.fromCodePoint(cp);
+          const ch = String.fromCodePoint(cp);
+          parts.push(ch);
+          partsLen += ch.length;
         } else {
-          result += '?'; /* невалидный code point → заменяем */
+          parts.push('?');
+          partsLen++;
         }
       } else {
         /* Декодируем токен из Хаффмана для данного типа */
         const typeDec = typeDecoders[tokenType];
         if (!typeDec) {
-          result += ' ';
+          parts.push(' ');
+          partsLen++;
           continue;
         }
         const tokenIdx = typeDec.decode(readBit);
         const globalIdx = typeOffsets[tokenType] + tokenIdx;
         if (globalIdx < allTokens.length) {
-          result += allTokens[globalIdx].text;
+          const text = allTokens[globalIdx].text;
+          parts.push(text);
+          partsLen += text.length;
         } else {
-          result += ' ';
+          parts.push(' ');
+          partsLen++;
         }
       }
     }
+
+    result = parts.join('');
 
     /* Обрезаем до точной длины */
     if (result.length > PAGE_LEN) {

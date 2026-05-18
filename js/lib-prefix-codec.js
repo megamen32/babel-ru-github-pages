@@ -84,14 +84,25 @@
     const n = weights.length;
     const maxLen = Math.max(...lengths);
 
-    /* Группируем по длине для быстрого декодирования */
-    const byLen = new Map();
-    for (let i = 0; i < n; i++) {
-      const len = lengths[i];
-      if (!byLen.has(len)) byLen.set(len, new Map());
-      byLen.get(len).set(codes[i].code, i);
+    /* ─── Быстрая lookup-таблица для декодирования ───
+       Для каждого возможного количества прочитанных бит (1..maxLen)
+       строим массив: lookup[len][code] = symbolIndex | -1.
+       Это устраняет Map.has()/Map.get() на каждый символ —
+       прямой индексный доступ вместо хэш-поиска.
+       Int16Array компактнее обычных массивов и гарантирует
+       типизированный доступ без boxing. */
+
+    const lookup = new Array(maxLen + 1);
+    for (let len = 1; len <= maxLen; len++) {
+      const size = 1 << len;
+      const table = new Int16Array(size).fill(-1);
+      for (let i = 0; i < n; i++) {
+        if (lengths[i] === len) {
+          table[codes[i].code] = i;
+        }
+      }
+      lookup[len] = table;
     }
-    const sortedLens = [...byLen.keys()].sort((a, b) => a - b);
 
     return {
       codes,       // array of { code, len } — для энкодинга
@@ -99,13 +110,15 @@
       maxLen,      // максимальная длина кода
       count: n,    // количество символов
 
-      /* Декодирование: читаем биты из потока, возвращаем индекс символа */
+      /* Декодирование: читаем биты из потока, возвращаем индекс символа.
+         Per-length Int16Array lookup — прямой индексный доступ,
+         без Map.has()/Map.get() на каждый символ. */
       decode(readBit) {
         let acc = 0;
-        for (let bit = 0; bit < this.maxLen + 1; bit++) {
+        for (let bit = 0; bit < maxLen; bit++) {
           acc = (acc << 1) | readBit();
-          const m = byLen.get(bit + 1);
-          if (m && m.has(acc)) return m.get(acc);
+          const table = lookup[bit + 1];
+          if (table[acc] >= 0) return table[acc];
         }
         return 0; // fallback
       },
