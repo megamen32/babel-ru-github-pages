@@ -110,55 +110,29 @@
      rawIndex — внутренний BigInt для совместимости со старой
      аффинной перестановкой и base64-адресами. */
 
-  const HALLS_PER_ROW = 1_000_000n;
-  const HALF_ROW = HALLS_PER_ROW / 2n;
+  /* ═══════════════════════════════════════════════════════════
+     СИСТЕМА КООРДИНАТ — делегирование к _coordPerm
+     ═══════════════════════════════════════════════════════════
+     Базовые функции (xyToHallIndex, hallIndexToXY, zToBorges,
+     borgesToZ, coordToRawIndex, rawIndexToCoord) определены
+     в lib-coordinate-permutation.js и доступны через _coordPerm.
+     Здесь только обогащённые обёртки с sector/hall/borges. */
 
-  /* Количество страниц на зал для совместимости со старой системой */
-  const PAGES_PER_HALL = ALG.wallsPerHall * ALG.shelvesPerWall * ALG.volumesPerShelf * ALG.pagesPerVolume;
+  const HALLS_PER_ROW = _coordPerm.HALLS_PER_ROW;
+  const HALF_ROW = _coordPerm.HALF_ROW;
+  const PAGES_PER_HALL = _coordPerm.PAGES_PER_HALL;
 
-  /* ---- X,Y ↔ hallIndex ---- */
+  /* Делегирование базовых функций */
+  const xyToHallIndex = (x, y) => _coordPerm.xyToHallIndex(x, y);
+  const hallIndexToXY = (hi) => _coordPerm.hallIndexToXY(hi);
+  const zToBorges = (z) => _coordPerm.zToBorges(z);
+  const borgesToZ = (w, sh, v, p) => _coordPerm.borgesToZ(w, sh, v, p);
 
-  function xyToHallIndex(x, y) {
-    return (BigInt(x) + HALF_ROW) + (BigInt(y) + HALF_ROW) * HALLS_PER_ROW;
-  }
-
-  function hallIndexToXY(hallIndex) {
-    const hi = BigInt(hallIndex);
-    return {
-      x: (hi % HALLS_PER_ROW) - HALF_ROW,
-      y: (hi / HALLS_PER_ROW) - HALF_ROW,
-    };
-  }
-
-  /* ---- Борхесовский display-формат (только для отображения) ---- */
-
-  function zToBorges(z) {
-    let v = z - 1n;
-    const page = (v % ALG.pagesPerVolume) + 1n;
-    v /= ALG.pagesPerVolume;
-    const volume = (v % ALG.volumesPerShelf) + 1n;
-    v /= ALG.volumesPerShelf;
-    const shelf = (v % ALG.shelvesPerWall) + 1n;
-    v /= ALG.shelvesPerWall;
-    const wall = v + 1n;
-    return { wall, shelf, volume, page };
-  }
-
-  function borgesToZ(wall, shelf, volume, page) {
-    return ((wall - 1n) * ALG.shelvesPerWall * ALG.volumesPerShelf * ALG.pagesPerVolume
-          + (shelf - 1n) * ALG.volumesPerShelf * ALG.pagesPerVolume
-          + (volume - 1n) * ALG.pagesPerVolume
-          + page);
-  }
-
-  /* ---- Coordinate ↔ rawIndex (для старой системы) ---- */
+  /* ---- Coordinate ↔ rawIndex (обогащённые версии) ---- */
 
   function rawIndexToCoordinates(rawIndex) {
-    let value = BigInt(rawIndex);
-    const z = (value % PAGES_PER_HALL) + 1n;
-    const hallIndex = value / PAGES_PER_HALL;
-    const x = (hallIndex % HALLS_PER_ROW) - HALF_ROW;
-    const y = (hallIndex / HALLS_PER_ROW) - HALF_ROW;
+    const { x, y, z } = _coordPerm.rawIndexToCoord(rawIndex);
+    const hallIndex = (BigInt(x) + HALF_ROW) + (BigInt(y) + HALF_ROW) * HALLS_PER_ROW;
     const sector = hallIndex / ALG.hallsPerSector + 1n;
     const hall = (hallIndex % ALG.hallsPerSector) + 1n;
     const borges = zToBorges(z);
@@ -166,6 +140,11 @@
   }
 
   function coordinatesToRawIndex(coordinates) {
+    /* Прямой путь: если есть x,y,z — делегируем */
+    if (coordinates.x != null && coordinates.y != null && coordinates.z != null) {
+      return _coordPerm.coordToRawIndex(coordinates.x, coordinates.y, coordinates.z);
+    }
+    /* Обратная совместимость: sector/hall или borges-формат */
     let hallIndex;
     if (coordinates.x != null || coordinates.y != null) {
       const bx = BigInt(coordinates.x || 0);
@@ -174,38 +153,24 @@
     } else {
       const sector = BigInt(coordinates.sector || 1);
       const hall = BigInt(coordinates.hall || 1);
-      if (sector < 1n || hall < 1n || hall > ALG.hallsPerSector) {
-        throw new Error("Координаты вне геометрии библиотеки.");
-      }
       hallIndex = (sector - 1n) * ALG.hallsPerSector + (hall - 1n);
     }
-
     let z;
     if (coordinates.z != null) {
       z = BigInt(coordinates.z);
       if (z < 1n) z = 1n;
     } else {
-      const wall = BigInt(coordinates.wall || 1);
-      const shelf = BigInt(coordinates.shelf || 1);
-      const volume = BigInt(coordinates.volume || 1);
-      const page = BigInt(coordinates.page || 1);
-      if (wall < 1n || wall > ALG.wallsPerHall ||
-          shelf < 1n || shelf > ALG.shelvesPerWall ||
-          volume < 1n || volume > ALG.volumesPerShelf ||
-          page < 1n || page > ALG.pagesPerVolume) {
-        throw new Error("Координаты вне геометрии библиотеки.");
-      }
-      z = borgesToZ(wall, shelf, volume, page);
+      z = borgesToZ(
+        BigInt(coordinates.wall || 1),
+        BigInt(coordinates.shelf || 1),
+        BigInt(coordinates.volume || 1),
+        BigInt(coordinates.page || 1)
+      );
     }
-
-    const value = hallIndex * PAGES_PER_HALL + (z - 1n);
-    if (value >= maxPageNumber()) {
-      throw new Error("Координаты выводят страницу за пределы пространства.");
-    }
-    return value;
+    return hallIndex * PAGES_PER_HALL + (z - 1n);
   }
 
-  /* ---- XY helpers ---- */
+  /* ---- XY helpers (обогащённые обёртки) ---- */
 
   function xyToHallXY(x, y) {
     const hallIndex = xyToHallIndex(x, y);
@@ -213,15 +178,11 @@
   }
 
   function hallToXY(sector, hall) {
-    const hallIndex = (BigInt(sector) - 1n) * ALG.hallsPerSector + (BigInt(hall) - 1n);
-    return hallIndexToXY(hallIndex);
+    return hallIndexToXY((BigInt(sector) - 1n) * ALG.hallsPerSector + (BigInt(hall) - 1n));
   }
 
   function xyToCoordinates(x, y, z) {
-    const { sector, hall } = xyToHallXY(x, y);
-    const bz = typeof z === 'bigint' ? z : BigInt(z || 1);
-    const borges = zToBorges(bz);
-    return { x: BigInt(x), y: BigInt(y), z: bz, sector, hall, ...borges };
+    return _coordPerm.xyToFullCoords(x, y, z);
   }
 
   function coordinatesToXY(coords) {

@@ -61,7 +61,7 @@
   app.config = {
     VERSION: "8.0",
     ALG: {
-      label: "ru6",
+      label: "v8.0",
       alphabet: ALPHABET,
       pageLength: 4096,
       /* No fixed lineWidth — newline is a character in the alphabet.
