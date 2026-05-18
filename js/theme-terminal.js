@@ -299,9 +299,9 @@ ${bookList}
       /* Async load page text via prefix codec */
       const pageTextEl = u.$('#termPageText');
       const statsEl = u.$('#termStats');
-      /* Use engine from URL if specified (from search results), otherwise use current library mode */
-      const urlEngine = lib.getEngineFromUrl(route.params);
-      const libraryMode = urlEngine || h.getLibraryMode();
+      /* Use mode from URL if specified (from search results), otherwise use current library mode */
+      const urlMode = lib.getModeFromUrl(route.params);
+      const libraryMode = urlMode || h.getLibraryMode();
       app.workerBridge.getPrefixPageData(
         String(xy.x), String(xy.y), String(coords.z), libraryMode
       ).then(data => {

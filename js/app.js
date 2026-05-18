@@ -423,7 +423,7 @@
       }
     });
 
-    /* Async search via Worker — multi-mode */
+    /* Async search via Worker — multi-mode (mode-aware) */
     let isActive = true;
     let jokeTicker = null;
 
@@ -431,39 +431,47 @@
       const bridge = app.workerBridge;
       const chatContainer = resultsSlot.closest('.msg-chat') || resultsSlot;
       jokeTicker = bridge.startJokeTicker(chatContainer, { seedText: q });
+      const currentLibraryMode = themes.getLibraryMode();
 
-      bridge.searchMultiMode(q).then(({ phrase, modes: resultsByMode }) => {
+      bridge.searchMultiMode(q, null, currentLibraryMode).then(({ phrase, modes: resultsByMode, libraryMode }) => {
         if (!isActive) return;
         jokeTicker.stop();
 
-        const phraseEscaped = esc(phrase);
+          const phraseEscaped = esc(phrase);
+          const otherMode = libraryMode === 'human' ? 'random' : 'human';
+          const otherModeInfo = themes.LIBRARY_MODES[otherMode];
 
-        /* Explanation header */
-        let html = `
-        <div class="search-explanation">
-          <h2>Фраза: «${phraseEscaped}»</h2>
-          <p>Эта фраза — не адрес одной страницы. Это дверь в целое <strong>облако страниц</strong>. Она может быть в начале листа или в конце; вокруг — пустота, шум, переписка, дневник. Каждый вариант — настоящая страница с собственным адресом.</p>
-          <p>Вот несколько входов в это множество:</p>
-        </div>`;
+          /* Explanation header */
+          let html = `
+          <div class="search-explanation">
+            <h2>Фраза: «${phraseEscaped}»</h2>
+            <p>Режим: <strong>${themes.LIBRARY_MODES[libraryMode].icon} ${themes.LIBRARY_MODES[libraryMode].name}</strong>. Координаты подобраны так, чтобы при открытии в этом режиме фраза была на месте.</p>
+            <p>Эта фраза — не адрес одной страницы. Это дверь в целое <strong>облако страниц</strong>. Она может быть в начале листа или в конце; вокруг — пустота, шум, переписка, дневник. Каждый вариант — настоящая страница с собственным адресом.</p>
+            <p>Вот несколько входов в это множество:</p>
+          </div>`;
 
-        /* Render one card per genre — same order regardless of library mode,
-           all results work in both modes */
-        const genreOrder = ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+        /* Render results — adapt to library mode.
+           Human mode: prefix variants.
+           Random mode: genre variants. */
+        const genreOrder = libraryMode === 'human'
+          ? Object.keys(resultsByMode) /* prefix variant keys */
+          : ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
         for (const mode of genreOrder) {
           const v = resultsByMode[mode];
           if (!v) continue;
-          const gi = GENRE_INFO[mode];
-          const vNumber = BigInt(v.number);
+          const isPrefix = libraryMode === 'human';
+          const gi = isPrefix
+            ? { icon: '📖', label: `Вариант ${v.variant || mode}`, desc: 'Честный поиск через префиксный кодек — фраза гарантированно на месте' }
+            : GENRE_INFO[mode];
+          const vNumber = BigInt(v.number || 0);
           const vCoords = { x: BigInt(v.coordinates.x || 0), y: BigInt(v.coordinates.y || 0), z: BigInt(v.coordinates.z || 1), sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
           const vXY = { x: BigInt(v.xy.x), y: BigInt(v.xy.y) };
           const snippet = app.utils.snippetByRange(v.text, v.range, 80);
           const snippetEscaped = esc(snippet);
           const highlightedSnippet = snippetEscaped.replace(phraseEscaped, `<mark>${phraseEscaped}</mark>`);
-          /* No engine= parameter — page decodes in whatever library mode
-             the user is currently in (human or random). This makes all
-             search results compatible with both modes. */
+          /* Include mode in URL so the page opens in the correct library mode */
           const urlParams = { hl: `${v.range.start}:${v.range.length}` };
-          const pageUrl = lib.coordsToPageUrl(vCoords, urlParams);
+          const pageUrl = lib.coordsToPageUrl(vCoords, urlParams, libraryMode);
           const wanderUrl = `#/x/${themes.fmtXY(vXY.x)}/y/${themes.fmtXY(vXY.y)}`;
           html += `
           <div class="catalog-card">
@@ -483,9 +491,11 @@
           </div>`;
         }
 
-        /* Closing explanation */
+        /* Closing explanation with other-mode link */
         html += `
         <div class="search-explanation search-explanation-after">
+          <p class="search-other-mode">${otherModeInfo.icon} Та же фраза в режиме «${otherModeInfo.name}» ищется асинхронно — ссылка появится ниже.</p>
+          <div id="otherModeResultSlot"></div>
           <details class="search-details">
             <summary>Почему так много вариантов?</summary>
             <div class="search-details-content">
@@ -498,6 +508,20 @@
         </div>`;
 
         resultsSlot.innerHTML = html;
+
+        /* Async: find same phrase in other mode */
+        const otherModeSlot = document.getElementById('otherModeResultSlot');
+        if (otherModeSlot) {
+          bridge.findInOtherMode(phrase, libraryMode).then(otherResult => {
+            if (!isActive || !otherResult) return;
+            const otherCoords = { x: BigInt(otherResult.coordinates.x || 0), y: BigInt(otherResult.coordinates.y || 0), z: BigInt(otherResult.coordinates.z || 1), sector: BigInt(otherResult.coordinates.sector), hall: BigInt(otherResult.coordinates.hall), wall: BigInt(otherResult.coordinates.wall), shelf: BigInt(otherResult.coordinates.shelf), volume: BigInt(otherResult.coordinates.volume), page: BigInt(otherResult.coordinates.page) };
+            const otherXY = { x: BigInt(otherResult.xy.x), y: BigInt(otherResult.xy.y) };
+            const otherUrlParams = otherResult.range ? { hl: `${otherResult.range.start}:${otherResult.range.length}` } : {};
+            const otherPageUrl = lib.coordsToPageUrl(otherCoords, otherUrlParams, otherResult.libraryMode);
+            otherModeSlot.innerHTML = `
+            <a class="teleport-btn" href="${otherPageUrl}">${otherModeInfo.icon} Открыть в «${otherModeInfo.name}» (X:${themes.fmtXY(otherXY.x)} Y:${themes.fmtXY(otherXY.y)})</a>`;
+          }).catch(() => {});
+        }
       }).catch(err => {
         if (!isActive) return;
         jokeTicker.stop();

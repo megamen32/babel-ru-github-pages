@@ -319,9 +319,9 @@
       const chat = u.$('#msgChat');
 
       /* Async page load via Prefix Codec Worker */
-      /* Use engine from URL if specified (from search results), otherwise use current library mode */
-      const urlEngine = lib.getEngineFromUrl(route.params);
-      const libraryMode = urlEngine || h.getLibraryMode();
+      /* Use mode from URL if specified (from search results), otherwise use current library mode */
+      const urlMode = lib.getModeFromUrl(route.params);
+      const libraryMode = urlMode || h.getLibraryMode();
       app.workerBridge.getPrefixPageData(
         String(xy.x), String(xy.y), String(coords.z), libraryMode
       ).then(data => {
@@ -386,6 +386,54 @@
         if (contentSlot) contentSlot.innerHTML = bubblesHTML;
         if (navMsg) navMsg.style.display = '';
         if (chat) chat.scrollTop = chat.scrollHeight;
+
+        /* Async: find same phrase in other library mode */
+        const highlightPhrase = highlight
+          ? fullText.slice(highlight.start, highlight.start + highlight.length).trim()
+          : '';
+        if (highlightPhrase && chat) {
+          const otherMode = libraryMode === 'human' ? 'random' : 'human';
+          const otherModeInfo = h.LIBRARY_MODES[otherMode];
+          /* Placeholder message */
+          const otherModeMsg = document.createElement('div');
+          otherModeMsg.className = 'msg msg-them babel-other-mode-msg';
+          otherModeMsg.innerHTML = `
+            <div class="msg-avatar">${otherModeInfo.icon}</div>
+            <div class="msg-bubble">
+              <div class="msg-name">${otherModeInfo.name} режим</div>
+              <p class="msg-text">Ищу эту фразу в другом режиме…</p>
+              <span class="msg-time">${h.timeStr()}</span>
+            </div>`;
+          chat.appendChild(otherModeMsg);
+
+          app.workerBridge.findInOtherMode(highlightPhrase, libraryMode).then(otherResult => {
+            if (!otherResult || !chat.isConnected) {
+              if (otherModeMsg.parentNode) otherModeMsg.parentNode.removeChild(otherModeMsg);
+              return;
+            }
+            const otherCoords = { x: BigInt(otherResult.coordinates.x || 0), y: BigInt(otherResult.coordinates.y || 0), z: BigInt(otherResult.coordinates.z || 1), sector: BigInt(otherResult.coordinates.sector), hall: BigInt(otherResult.coordinates.hall), wall: BigInt(otherResult.coordinates.wall), shelf: BigInt(otherResult.coordinates.shelf), volume: BigInt(otherResult.coordinates.volume), page: BigInt(otherResult.coordinates.page) };
+            const otherXY = { x: BigInt(otherResult.xy.x), y: BigInt(otherResult.xy.y) };
+            const otherUrlParams = otherResult.range ? { hl: `${otherResult.range.start}:${otherResult.range.length}` } : {};
+            const otherPageUrl = lib.coordsToPageUrl(otherCoords, otherUrlParams, otherResult.libraryMode);
+            otherModeMsg.innerHTML = `
+              <div class="msg-avatar">${otherModeInfo.icon}</div>
+              <div class="msg-bubble">
+                <div class="msg-name">${otherModeInfo.name} режим</div>
+                <p class="msg-text">Эта же фраза существует по другим координатам в режиме «${otherModeInfo.name}»:</p>
+                <div class="msg-search-coords">
+                  <span>X:${h.fmtXY(otherXY.x)}</span>
+                  <span>Y:${h.fmtXY(otherXY.y)}</span>
+                </div>
+                <div class="msg-search-actions">
+                  <a class="msg-qa" href="${otherPageUrl}">${otherModeInfo.icon} Открыть в «${otherModeInfo.name}»</a>
+                </div>
+                <span class="msg-time">${h.timeStr()}</span>
+              </div>`;
+            if (chat) chat.scrollTop = chat.scrollHeight;
+          }).catch(() => {
+            if (otherModeMsg.parentNode) otherModeMsg.parentNode.removeChild(otherModeMsg);
+          });
+        }
       }).catch(err => {
         if (contentSlot) contentSlot.innerHTML = `<div class="msg msg-them"><div class="msg-bubble"><p>Ошибка: ${u.esc(err.message)}</p></div></div>`;
       });
@@ -557,21 +605,25 @@
         });
       }
 
-      /* Async search: if query exists, search across ALL modes */
+      /* Async search: if query exists, search across ALL modes (mode-aware) */
       if (q && resultsSlot) {
         const cloud = u.describeSearchCloud(q);
+        const currentLibraryMode = h.getLibraryMode();
         /* Show typing indicator */
         typingEl = app.workerBridge.showTyping(chat, 'Библиотекарь');
         /* Show jokes while waiting */
         jokeTicker = app.workerBridge.startJokeTicker(chat, { seedText: q });
         requestAnimationFrame(keepUserMessageInView);
 
-        app.workerBridge.searchMultiMode(q).then(({ phrase, modes: resultsByMode }) => {
+        app.workerBridge.searchMultiMode(q, null, currentLibraryMode).then(({ phrase, modes: resultsByMode, libraryMode }) => {
           if (!isActive) return;
           app.workerBridge.removeTyping(typingEl);
           jokeTicker.stop();
 
           const phraseEsc = u.esc(phrase);
+          const otherMode = libraryMode === 'human' ? 'random' : 'human';
+          const otherModeInfo = h.LIBRARY_MODES[otherMode];
+          const currentModeInfo = h.LIBRARY_MODES[libraryMode];
           const countLine = cloud.exactCount
             ? `<p class="msg-search-count">Для этой фразы подходит ровно <strong>${u.esc(cloud.exactCount)}</strong> вариантов страниц.</p>`
             : `<p class="msg-search-count">Для этой фразы подходит <strong>${u.esc(cloud.formula)}</strong>, то есть <strong>${u.esc(cloud.binaryFormula)}</strong> вариантов. Это ${u.esc(cloud.scientific)} и примерно ${cloud.digits.toLocaleString('ru-RU')} цифр.</p>`;
@@ -581,6 +633,7 @@
             <div class="msg-avatar">📚</div>
             <div class="msg-bubble">
               <div class="msg-name">Библиотекарь</div>
+              <p>Режим: <strong>${currentModeInfo.icon} ${currentModeInfo.name}</strong>. Координаты подобраны так, чтобы фраза была на месте при открытии в этом режиме.</p>
               <p>Эта фраза — не адрес одной страницы. Это дверь в целое <strong>облако страниц</strong>.</p>
               <p>Она может быть в начале листа или в конце. Вокруг может быть пустота, случайный шум, переписка, дневник — и <em>каждый вариант</em> — это настоящая страница с собственным адресом в библиотеке.</p>
               ${countLine}
@@ -589,21 +642,25 @@
             </div>
           </div>`;
 
-          /* Render one card per genre — same order regardless of library mode,
-             all results work in both modes */
-          const genreOrder = ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
-          for (const mode of genreOrder) {
+          /* Render results — adapt to library mode.
+             Human mode: prefix variants (each variant is a different address).
+             Random mode: genre variants (empty, dialogue, etc.). */
+          const resultKeys = libraryMode === 'human'
+            ? Object.keys(resultsByMode) /* prefix variant keys */
+            : ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+          for (const mode of resultKeys) {
             const v = resultsByMode[mode];
             if (!v) continue;
-            const gi = GENRE_INFO[mode];
+            const isPrefix = libraryMode === 'human';
+            const gi = isPrefix
+              ? { icon: '📖', label: `Вариант ${v.variant || mode}`, desc: 'Честный поиск — фраза гарантированно на месте' }
+              : GENRE_INFO[mode];
             const vCoords = { x: BigInt(v.coordinates.x || 0), y: BigInt(v.coordinates.y || 0), z: BigInt(v.coordinates.z || 1), sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
             const vXY = { x: BigInt(v.xy.x), y: BigInt(v.xy.y) };
-            /* No engine= parameter — page decodes in whatever library mode
-               the user is currently in (human or random). This makes all
-               search results compatible with both modes. */
+            /* Include mode in URL so the page opens in the correct library mode */
             const urlParams = { hl: `${v.range.start}:${v.range.length}` };
-            const pageUrl = lib.coordsToPageUrl(vCoords, urlParams);
-            if (mode === 'dialogue') {
+            const pageUrl = lib.coordsToPageUrl(vCoords, urlParams, libraryMode);
+            if (mode === 'dialogue' && !isPrefix) {
               const dialoguePreview = h.renderDialogueSearchPreview(v, pageUrl);
               if (dialoguePreview) {
                 html += dialoguePreview;
@@ -634,13 +691,15 @@
             </div>`;
           }
 
-          /* Closing message */
+          /* Closing message with other-mode link placeholder */
           html += `
           <div class="msg msg-them">
             <div class="msg-avatar">📚</div>
             <div class="msg-bubble">
               <div class="msg-name">Библиотекарь</div>
               <p>Каждый вариант — не подделка, а отдельная полная страница с собственным адресом. Одна фраза — множество страниц. Один результат — только один вход в это множество.</p>
+              <p>${otherModeInfo.icon} Та же фраза в режиме «${otherModeInfo.name}» — ищу…</p>
+              <div id="msgOtherModeSlot"></div>
               <details class="msg-details">
                 <summary>Почему так много вариантов?</summary>
                 <div class="msg-details-content">
@@ -655,6 +714,19 @@
           </div>`;
 
           resultsSlot.innerHTML = html;
+
+          /* Async: find same phrase in other mode */
+          const otherModeSlot = u.$('#msgOtherModeSlot');
+          if (otherModeSlot) {
+            app.workerBridge.findInOtherMode(phrase, libraryMode).then(otherResult => {
+              if (!isActive || !otherResult) return;
+              const otherCoords = { x: BigInt(otherResult.coordinates.x || 0), y: BigInt(otherResult.coordinates.y || 0), z: BigInt(otherResult.coordinates.z || 1), sector: BigInt(otherResult.coordinates.sector), hall: BigInt(otherResult.coordinates.hall), wall: BigInt(otherResult.coordinates.wall), shelf: BigInt(otherResult.coordinates.shelf), volume: BigInt(otherResult.coordinates.volume), page: BigInt(otherResult.coordinates.page) };
+              const otherXY = { x: BigInt(otherResult.xy.x), y: BigInt(otherResult.xy.y) };
+              const otherUrlParams = otherResult.range ? { hl: `${otherResult.range.start}:${otherResult.range.length}` } : {};
+              const otherPageUrl = lib.coordsToPageUrl(otherCoords, otherUrlParams, otherResult.libraryMode);
+              otherModeSlot.innerHTML = `<a class="msg-qa" href="${otherPageUrl}">${otherModeInfo.icon} Открыть в «${otherModeInfo.name}» (X:${h.fmtXY(otherXY.x)} Y:${h.fmtXY(otherXY.y)})</a>`;
+            }).catch(() => {});
+          }
           keepUserMessageInView();
         }).catch(err => {
           if (!isActive) return;

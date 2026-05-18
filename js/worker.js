@@ -138,6 +138,38 @@ function createSearchVariants(phrase, mode, count) {
   });
 }
 
+/* ─── Search: phrase → address variants (Feistel-compatible for random mode) ─── */
+
+function createSearchVariantsFeistel(phrase, mode, count) {
+  /* Feistel-compatible search for random library mode.
+     Uses the same lib.createSearchVariants but forces mode to 'random'
+     so that coordinates decode correctly through Feistel permutation
+     when prefixDecodePage uses mode='random'. */
+  const effectiveMode = mode || 'random';
+  const variants = lib.createSearchVariants(phrase, effectiveMode, count);
+  return variants.map(v => {
+    const c = v.coordinates || {};
+    const xy = v.xy || {};
+    return {
+      mode: v.mode || effectiveMode,
+      number: String(v.number || 0n),
+      coordinates: {
+        x: String(c.x || 0n), y: String(c.y || 0n), z: String(c.z || 1n),
+        sector: String(c.sector || 1n), hall: String(c.hall || 1n),
+        wall: String(c.wall || 1n), shelf: String(c.shelf || 1n),
+        volume: String(c.volume || 1n), page: String(c.page || 1n),
+      },
+      xy: { x: String(xy.x || 0n), y: String(xy.y || 0n) },
+      phrase: v.phrase,
+      position: v.position || v.range?.start || 0,
+      text: v.text,
+      variant: v.variant || 1,
+      range: v.range || { start: 0, length: 0 },
+      phraseFound: v.phraseFound !== false,
+    };
+  });
+}
+
 /* ─── Page data from BigInt number (legacy byte-level) ─── */
 
 function getPageData(number) {
@@ -188,8 +220,8 @@ async function handleMessageAsync(type, payload) {
 
     case 'prefixSearch': {
       await ensureDictionary();
-      const { phrase } = payload;
-      const result = lib.encodePhraseToCoords(phrase, 1);
+      const { phrase, variant } = payload;
+      const result = lib.encodePhraseToCoords(phrase, variant || 1);
       if (!result) return { found: false, phrase };
 
       const c = result.coordinates || {};
@@ -233,6 +265,12 @@ self.onmessage = async function(e) {
       case 'search': {
         const { phrase, mode, count } = payload;
         result = createSearchVariants(phrase, mode, count);
+        break;
+      }
+      case 'searchRandom': {
+        /* Feistel-compatible search for random library mode */
+        const { phrase, mode, count } = payload;
+        result = createSearchVariantsFeistel(phrase, mode, count);
         break;
       }
       case 'pageData': {

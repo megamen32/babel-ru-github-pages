@@ -271,27 +271,106 @@
      ═══════════════════════════════════════════════════════════ */
 
   /* Search across multiple modes simultaneously.
-     Returns { phrase, modes: { [mode]: variant, ... } } — one variant per mode.
+     Mode-aware: uses prefixSearch for human mode, Feistel filler search for random mode.
 
-     Only legacy modes (empty, dialogue, post, diary, log, words) are used.
-     The page is decoded in whatever library mode the user is currently in
-     (human/random) — no engine= parameter is forced in URLs.
-     This makes all results compatible with both library modes. */
-  function searchMultiMode(phrase, modes) {
-    const modeList = modes || ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
-    const promises = modeList.map(mode =>
-      dispatch('search', { phrase, mode, count: 1 })
-        .then(variants => ({ mode, variant: variants[0] || null }))
-        .catch(() => ({ mode, variant: null }))
-    );
+     Returns { phrase, modes: { [mode]: variant, ... }, libraryMode }
+     - human mode: returns prefix variants (prefix1, prefix2, ...)
+     - random mode: returns genre variants (empty, dialogue, post, diary, log, words) */
+  function searchMultiMode(phrase, modes, libraryMode) {
+    const mode = libraryMode || 'human';
 
-    return Promise.all(promises).then(results => {
-      const byMode = {};
-      for (const r of results) {
-        if (r.variant) byMode[r.mode] = r.variant;
+    if (mode === 'human') {
+      /* Human mode: use prefix search (honest codec).
+         Each variant produces different coordinates where the phrase
+         exists in prefix-decoded text. */
+      const variantCount = 6;
+      const promises = [];
+      for (let v = 1; v <= variantCount; v++) {
+        promises.push(
+          dispatch('prefixSearch', { phrase, variant: v })
+            .then(result => {
+              if (!result || !result.found) return null;
+              /* Normalize to same format as legacy search results */
+              const coord = result.coords;
+              return {
+                mode: 'prefix',
+                variant: v,
+                number: result.address,
+                coordinates: coord,
+                xy: result.xy,
+                phrase: result.phrase,
+                position: result.phrasePos,
+                text: result.text,
+                range: { start: result.phrasePos, length: result.phraseLen },
+              };
+            })
+            .catch(() => null)
+        );
       }
-      return { phrase, modes: byMode };
-    });
+      return Promise.all(promises).then(results => {
+        const byMode = {};
+        const validResults = results.filter(r => r !== null);
+        if (validResults.length > 0) {
+          /* Group by variant number for UI rendering */
+          for (let i = 0; i < validResults.length; i++) {
+            const key = `variant${i + 1}`;
+            byMode[key] = validResults[i];
+          }
+        }
+        return { phrase, modes: byMode, libraryMode: 'human' };
+      });
+    } else {
+      /* Random mode: use Feistel-compatible filler search.
+         Coordinates decode correctly with prefixDecodePage(x,y,z,'random'). */
+      const modeList = modes || ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+      const promises = modeList.map(mode =>
+        dispatch('searchRandom', { phrase, mode, count: 1 })
+          .then(variants => ({ mode, variant: variants[0] || null }))
+          .catch(() => ({ mode, variant: null }))
+      );
+
+      return Promise.all(promises).then(results => {
+        const byMode = {};
+        for (const r of results) {
+          if (r.variant) byMode[r.mode] = r.variant;
+        }
+        return { phrase, modes: byMode, libraryMode: 'random' };
+      });
+    }
+  }
+
+  /* Find a phrase in the other library mode (for "same page in other mode" link).
+     Returns a single result: { coords, xy, text, range } or null. */
+  function findInOtherMode(phrase, currentMode) {
+    const otherMode = currentMode === 'human' ? 'random' : 'human';
+    if (otherMode === 'human') {
+      return dispatch('prefixSearch', { phrase, variant: 1 })
+        .then(result => {
+          if (!result || !result.found) return null;
+          return {
+            libraryMode: 'human',
+            coordinates: result.coords,
+            xy: result.xy,
+            text: result.text,
+            range: { start: result.phrasePos, length: result.phraseLen },
+          };
+        })
+        .catch(() => null);
+    } else {
+      return dispatch('searchRandom', { phrase, mode: 'words', count: 1 })
+        .then(variants => {
+          if (!variants || !variants[0]) return null;
+          const v = variants[0];
+          return {
+            libraryMode: 'random',
+            coordinates: v.coordinates,
+            xy: v.xy,
+            text: v.text,
+            range: v.range,
+          };
+        })
+        .catch(() => null);
+    }
   }
 
   app.workerBridge = {
@@ -301,6 +380,8 @@
     },
 
     searchMultiMode,
+
+    findInOtherMode,
 
     getPageData(number) {
       return dispatch('pageData', { number: String(number) });

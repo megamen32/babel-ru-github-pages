@@ -198,7 +198,7 @@
 
     /* ─── URL ─── */
 
-    coordsToPageUrl(coords, params) {
+    coordsToPageUrl(coords, params, libraryMode) {
       const c = {
         x: typeof coords.x === 'bigint' ? coords.x : BigInt(coords.x || 0),
         y: typeof coords.y === 'bigint' ? coords.y : BigInt(coords.y || 0),
@@ -207,18 +207,33 @@
       /* Используем base36 для компактных URL: 
          BigInt → base36 сокращает длину в ~2 раза */
       const base = `#/x/${c.x.toString(36)}/y/${c.y.toString(36)}/z/${c.z.toString(36)}`;
-      if (params) {
-        const qs = new URLSearchParams(params).toString();
-        return `${base}?${qs}`;
+      const allParams = { ...(params || {}) };
+      /* Include library mode in URL so shared links open in correct mode */
+      if (libraryMode && (libraryMode === 'human' || libraryMode === 'random')) {
+        allParams.mode = libraryMode;
       }
-      return base;
+      const qs = new URLSearchParams(allParams).toString();
+      return qs ? `${base}?${qs}` : base;
     },
 
-    /* Get engine mode from URL params — 'prefix' or 'random' */
+    /* Get engine mode from URL params — 'prefix' or 'random' (legacy) */
     getEngineFromUrl(params) {
       if (!params) return null;
       const engine = params.get('engine');
       if (engine === 'prefix' || engine === 'random') return engine;
+      return null;
+    },
+
+    /* Get library mode from URL params — 'human' or 'random'.
+       Falls back to engine param for backwards compatibility. */
+    getModeFromUrl(params) {
+      if (!params) return null;
+      const mode = params.get('mode');
+      if (mode === 'human' || mode === 'random') return mode;
+      /* Legacy: engine=prefix → human, engine=random → random */
+      const engine = params.get('engine');
+      if (engine === 'prefix') return 'human';
+      if (engine === 'random') return 'random';
       return null;
     },
 

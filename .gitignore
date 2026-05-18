@@ -7,3 +7,4 @@ test-results/
 output/playwright/
 .next/
 next-env.d.ts
+.next/
