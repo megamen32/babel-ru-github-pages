@@ -273,65 +273,16 @@
   /* Search across multiple modes simultaneously.
      Returns { phrase, modes: { [mode]: variant, ... } } — one variant per mode.
 
-     IMPORTANT: Includes a 'prefix' mode that uses encodePhraseToCoords()
-     through the prefix codec. This guarantees the phrase EXISTS in the
-     decoded page when the user navigates to the result. The legacy
-     worker modes (empty, dialogue, etc.) use the old byte-level system
-     and the phrase may NOT be in the prefix-decoded page. */
+     Only legacy modes (empty, dialogue, post, diary, log, words) are used.
+     The page is decoded in whatever library mode the user is currently in
+     (human/random) — no engine= parameter is forced in URLs.
+     This makes all results compatible with both library modes. */
   function searchMultiMode(phrase, modes) {
     const modeList = modes || ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
     const promises = modeList.map(mode =>
       dispatch('search', { phrase, mode, count: 1 })
         .then(variants => ({ mode, variant: variants[0] || null }))
         .catch(() => ({ mode, variant: null }))
-    );
-
-    /* Add prefix-verified mode: uses encodePhraseToCoords() which
-       goes through the prefix codec. The phrase IS guaranteed to
-       exist (or at least individual words) in the decoded page.
-       Now supports variant parameter for multiple different results. */
-    const prefixVariant = Math.floor(Math.random() * 100) + 1;
-    promises.push(
-      Promise.resolve().then(() => {
-        try {
-          const lib = app.library;
-          const result = lib.encodePhraseToCoords(phrase, prefixVariant);
-          if (!result) return { mode: 'prefix', variant: null };
-
-          /* Convert BigInt coordinates to strings for serialization */
-          const coords = result.coordinates || {};
-          const xy = result.xy || {};
-          return {
-            mode: 'prefix',
-            variant: {
-              mode: 'prefix',
-              number: String(result.number || 0n),
-              coordinates: {
-                sector: String(coords.sector || 1n),
-                hall: String(coords.hall || 1n),
-                wall: String(coords.wall || 1n),
-                shelf: String(coords.shelf || 1n),
-                volume: String(coords.volume || 1n),
-                page: String(coords.page || 1n),
-                x: String(coords.x || 0n),
-                y: String(coords.y || 0n),
-                z: String(coords.z || 1n),
-              },
-              xy: { x: String(xy.x || 0n), y: String(xy.y || 0n) },
-              phrase: result.phrase,
-              position: result.position || 0,
-              text: result.text,
-              variant: result.variant || prefixVariant,
-              range: result.range || { start: 0, length: 0 },
-              prefixVerified: true,
-              phraseFound: result.phraseFound !== false,
-            },
-          };
-        } catch (err) {
-          console.warn('prefix search error:', err);
-          return { mode: 'prefix', variant: null };
-        }
-      })
     );
 
     return Promise.all(promises).then(results => {

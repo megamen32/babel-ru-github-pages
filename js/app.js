@@ -404,9 +404,8 @@
     const resultsSlot = $('#searchResultsSlot');
     const q = route.params.get('q') || '';
 
-    /* Genre definitions */
+    /* Genre definitions — no prefix mode, all results compatible with both library modes */
     const GENRE_INFO = {
-      prefix:   { icon: '✅', label: 'Проверенная страница', desc: 'Фраза точно на этой странице — проверено через префиксный кодек' },
       empty:    { icon: '📄', label: 'На пустом листе',   desc: 'Фраза сама по себе, в тишине пустой страницы' },
       dialogue: { icon: '💬', label: 'В переписке',       desc: 'Фраза внутри чата — между репликами собеседников' },
       post:     { icon: '📱', label: 'В посте',           desc: 'Фраза в ленте — среди мыслей и тегов' },
@@ -447,11 +446,9 @@
           <p>Вот несколько входов в это множество:</p>
         </div>`;
 
-        /* Render one card per genre — order depends on library mode */
-        const currentMode = themes.getLibraryMode();
-        const genreOrder = currentMode === 'random'
-          ? ['empty', 'dialogue', 'post', 'diary', 'log', 'words', 'prefix']
-          : ['prefix', 'empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+        /* Render one card per genre — same order regardless of library mode,
+           all results work in both modes */
+        const genreOrder = ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
         for (const mode of genreOrder) {
           const v = resultsByMode[mode];
           if (!v) continue;
@@ -462,10 +459,10 @@
           const snippet = app.utils.snippetByRange(v.text, v.range, 80);
           const snippetEscaped = esc(snippet);
           const highlightedSnippet = snippetEscaped.replace(phraseEscaped, `<mark>${phraseEscaped}</mark>`);
+          /* No engine= parameter — page decodes in whatever library mode
+             the user is currently in (human or random). This makes all
+             search results compatible with both modes. */
           const urlParams = { hl: `${v.range.start}:${v.range.length}` };
-          /* Pass engine mode: prefix results use prefix codec, legacy use random */
-          if (mode === 'prefix') urlParams.engine = 'prefix';
-          else urlParams.engine = 'random';
           const pageUrl = lib.coordsToPageUrl(vCoords, urlParams);
           const wanderUrl = `#/x/${themes.fmtXY(vXY.x)}/y/${themes.fmtXY(vXY.y)}`;
           html += `

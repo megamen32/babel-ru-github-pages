@@ -524,9 +524,9 @@
       let jokeTicker = null;
       const userMessage = u.$('#searchUserMessage');
 
-      /* Genre definitions for multi-mode results */
+      /* Genre definitions for multi-mode results — no prefix mode,
+         all results are compatible with both library modes */
       const GENRE_INFO = {
-        prefix:   { icon: '✅', label: 'Проверенная страница', desc: 'Фраза точно на этой странице — проверено через префиксный кодек' },
         empty:    { icon: '📄', label: 'На пустом листе',   desc: 'Фраза сама по себе, в тишине пустой страницы' },
         dialogue: { icon: '💬', label: 'В переписке',       desc: 'Фраза внутри чата — между репликами собеседников' },
         post:     { icon: '📱', label: 'В посте',           desc: 'Фраза в ленте — среди мыслей и тегов' },
@@ -589,21 +589,19 @@
             </div>
           </div>`;
 
-          /* Render one card per genre — order depends on library mode */
-          const currentLibMode = h.getLibraryMode();
-          const genreOrder = currentLibMode === 'random'
-            ? ['empty', 'dialogue', 'post', 'diary', 'log', 'words', 'prefix']
-            : ['prefix', 'empty', 'dialogue', 'post', 'diary', 'log', 'words'];
+          /* Render one card per genre — same order regardless of library mode,
+             all results work in both modes */
+          const genreOrder = ['empty', 'dialogue', 'post', 'diary', 'log', 'words'];
           for (const mode of genreOrder) {
             const v = resultsByMode[mode];
             if (!v) continue;
             const gi = GENRE_INFO[mode];
             const vCoords = { x: BigInt(v.coordinates.x || 0), y: BigInt(v.coordinates.y || 0), z: BigInt(v.coordinates.z || 1), sector: BigInt(v.coordinates.sector), hall: BigInt(v.coordinates.hall), wall: BigInt(v.coordinates.wall), shelf: BigInt(v.coordinates.shelf), volume: BigInt(v.coordinates.volume), page: BigInt(v.coordinates.page) };
             const vXY = { x: BigInt(v.xy.x), y: BigInt(v.xy.y) };
+            /* No engine= parameter — page decodes in whatever library mode
+               the user is currently in (human or random). This makes all
+               search results compatible with both modes. */
             const urlParams = { hl: `${v.range.start}:${v.range.length}` };
-            /* Pass engine mode: prefix results use prefix codec, legacy use random */
-            if (mode === 'prefix') urlParams.engine = 'prefix';
-            else urlParams.engine = 'random';
             const pageUrl = lib.coordsToPageUrl(vCoords, urlParams);
             if (mode === 'dialogue') {
               const dialoguePreview = h.renderDialogueSearchPreview(v, pageUrl);
