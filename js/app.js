@@ -6,6 +6,16 @@
   const store = app.storage;
   const themes = app.themes;
 
+  /* Safety check: if themes system failed to initialize, show error */
+  if (!themes || typeof themes.getThemeRenderer !== 'function') {
+    console.error('[babel] app.themes is malformed or missing. Full app.themes:', themes);
+    document.addEventListener('DOMContentLoaded', () => {
+      const view = document.getElementById('view');
+      if (view) view.innerHTML = '<div class="section-shell"><div class="notice">Критическая ошибка: система тем не загрузилась. Попробуйте Ctrl+Shift+R (жёсткое обновление) или очистите кэш браузера.</div></div>';
+    });
+    return;
+  }
+
   /* ═══════════════════════════════════════════════════════════
      ROUTER — Theme-Aware
      ═══════════════════════════════════════════════════════════ */
@@ -211,6 +221,11 @@
 
       switch (route.name) {
         case 'home': {
+          if (typeof renderer.renderHome !== 'function') {
+            view.innerHTML = '<div class="section-shell"><div class="notice">Тема не поддерживает renderHome. Попробуйте Ctrl+Shift+R или сменить тему.</div></div>';
+            console.error('[babel] renderer.renderHome is not a function. renderer=', renderer);
+            break;
+          }
           view.innerHTML = renderer.renderHome();
           keepCleanup(renderer.bindHome ? renderer.bindHome() : null);
           break;
@@ -274,6 +289,11 @@
             return;
           }
 
+          if (typeof renderer.renderPage !== 'function') {
+            view.innerHTML = '<div class="section-shell"><div class="notice">Тема не поддерживает renderPage. Попробуйте Ctrl+Shift+R или сменить тему.</div></div>';
+            console.error('[babel] renderer.renderPage is not a function. renderer=', renderer);
+            break;
+          }
           view.innerHTML = renderer.renderPage(route);
           if (renderer.bindPage) keepCleanup(renderer.bindPage(route));
           else keepCleanup(themes.bindSharedPage(route));
@@ -306,9 +326,11 @@
         }
         default: {
           const r = themes.getThemeRenderer();
-          if (r) {
+          if (r && typeof r.renderHome === 'function') {
             view.innerHTML = r.renderHome();
             keepCleanup(r.bindHome ? r.bindHome() : null);
+          } else {
+            view.innerHTML = '<div class="section-shell"><div class="notice">Неизвестный раздел. <a href="#/">На главную</a></div></div>';
           }
         }
       }

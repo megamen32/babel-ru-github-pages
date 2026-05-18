@@ -1,11 +1,14 @@
 (() => {
   'use strict';
+  try {
   const app = window.BabelApp = window.BabelApp || {};
   const ALG = app.config.ALG;
   const lib = app.library;
   const store = app.storage;
   const u = app.utils;
   const h = app.themes._helpers;
+
+  if (!h) throw new Error('theme-helpers._helpers is null — theme-helpers.js may have failed');
 
   /* Collect theme objects registered by earlier files */
   const bookshelfTheme = app.themes._bookshelf;
@@ -821,4 +824,40 @@
   delete app.themes._messenger;
   delete app.themes._feed;
   delete app.themes._terminal;
+
+  } catch(e) {
+    console.error('[babel] theme-views.js failed:', e);
+    /* CRITICAL: provide a minimal fallback app.themes so app.js doesn't crash.
+       Without this, app.themes would be the intermediate object (with _helpers
+       but without getThemeRenderer), causing "Cannot read properties of
+       undefined (reading 'renderHome')" downstream. */
+    const app = window.BabelApp = window.BabelApp || {};
+    const fallbackHelpers = app.themes && app.themes._helpers
+      ? app.themes._helpers
+      : { getTheme: () => 'bookshelf', setTheme: () => {}, DEFAULT_THEME: 'bookshelf', THEMES: {}, LIBRARY_MODES: {}, getLibraryMode: () => 'human', setLibraryMode: () => {}, fmtXY: v => String(v), fmtBigNum: v => String(v) };
+
+    /* Try to find any registered theme to use as fallback renderer */
+    const fallbackRenderer = (app.themes && (app.themes._bookshelf || app.themes._cosmos || app.themes._messenger || app.themes._feed || app.themes._terminal)) || null;
+
+    app.themes = {
+      THEMES: fallbackHelpers.THEMES || {},
+      DEFAULT_THEME: fallbackHelpers.DEFAULT_THEME || 'bookshelf',
+      LIBRARY_MODES: fallbackHelpers.LIBRARY_MODES || {},
+      getTheme: fallbackHelpers.getTheme || (() => 'bookshelf'),
+      setTheme: fallbackHelpers.setTheme || (() => {}),
+      getLibraryMode: fallbackHelpers.getLibraryMode || (() => 'human'),
+      setLibraryMode: fallbackHelpers.setLibraryMode || (() => {}),
+      getThemeRenderer: () => fallbackRenderer,
+      renderThemePicker: () => '<div id="themePicker"></div>',
+      bindThemePicker: () => {},
+      fmtXY: fallbackHelpers.fmtXY || (v => String(v)),
+      fmtBigNum: fallbackHelpers.fmtBigNum || (v => String(v)),
+      sharedPageRender: () => '<div class="notice">Ошибка загрузки темы. Попробуйте Ctrl+Shift+R.</div>',
+      bindSharedPage: () => {},
+      renderAtlas: () => '<div class="notice">Атлас недоступен. Попробуйте обновить страницу.</div>',
+      bindAtlas: () => {},
+      renderGenre: () => '<div class="notice">Жанры недоступны. Попробуйте обновить страницу.</div>',
+      bindGenre: () => {},
+    };
+  }
 })();
