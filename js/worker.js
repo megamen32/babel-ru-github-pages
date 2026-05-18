@@ -140,34 +140,64 @@ function createSearchVariants(phrase, mode, count) {
 
 /* ─── Search: phrase → address variants (Feistel-compatible for random mode) ─── */
 
-function createSearchVariantsFeistel(phrase, mode, count) {
+function createSearchVariantsFeistel(phraseRaw, mode, countRaw) {
   /* Feistel-compatible search for random library mode.
-     Uses the same lib.createSearchVariants but forces mode to 'random'
-     so that coordinates decode correctly through Feistel permutation
-     when prefixDecodePage uses mode='random'. */
-  const effectiveMode = mode || 'random';
-  const variants = lib.createSearchVariants(phrase, effectiveMode, count);
-  return variants.map(v => {
-    const c = v.coordinates || {};
-    const xy = v.xy || {};
-    return {
-      mode: v.mode || effectiveMode,
-      number: String(v.number || 0n),
-      coordinates: {
-        x: String(c.x || 0n), y: String(c.y || 0n), z: String(c.z || 1n),
-        sector: String(c.sector || 1n), hall: String(c.hall || 1n),
-        wall: String(c.wall || 1n), shelf: String(c.shelf || 1n),
-        volume: String(c.volume || 1n), page: String(c.page || 1n),
-      },
-      xy: { x: String(xy.x || 0n), y: String(xy.y || 0n) },
-      phrase: v.phrase,
-      position: v.position || v.range?.start || 0,
-      text: v.text,
-      variant: v.variant || 1,
-      range: v.range || { start: 0, length: 0 },
-      phraseFound: v.phraseFound !== false,
-    };
-  });
+     Creates filler text with the phrase embedded, then uses feistelUnpermute
+     (instead of the prefix codec) so that coordinates decode correctly
+     when prefixDecodePage uses mode='random'.
+
+     Round-trip: filler → indicesToNumber → feistelUnpermute → rawIdx → coords
+     Decode: coords → rawIdx → feistelPermute → number → numberToIndices → text
+     Since feistelPermute(feistelUnpermute(N)) = N, the decoded text matches. */
+  const utils = self.BabelApp.utils;
+  const config = self.BabelApp.config;
+  const fillers = self.BabelApp.library._fillers;
+  const cp = self.BabelApp.library._coordPerm;
+
+  const phrase = utils.normalizeText(phraseRaw);
+  if (!phrase) throw new Error('После нормализации фраза пуста.');
+  const phraseIndices = utils.tokenizeText(phrase);
+  if (phraseIndices.length > config.ALG.pageLength) throw new Error('Фраза длиннее страницы.');
+  const count = Math.min(Math.max(Math.floor(Number(countRaw) || 6), 1), 100);
+  const effectiveMode = mode || 'words';
+  const variants = [];
+
+  for (let variant = 1; variant <= count; variant++) {
+    const seed = `${config.ALG.label}:mode:${effectiveMode}:phrase:${phrase}:variant:${variant}`;
+    const rng = utils.rngFrom(seed);
+    const phraseLen = phraseIndices.length;
+    const maxPos = config.ALG.pageLength - phraseLen;
+    const position = effectiveMode === 'empty'
+      ? Math.max(0, Math.floor((config.ALG.pageLength - phraseLen) / 2))
+      : Math.min(Math.floor(rng() * Math.max(1, maxPos + 1)), Math.max(0, maxPos));
+
+    const fillerIndices = fillers.createFillerIndices(effectiveMode, seed, config.ALG.pageLength);
+    for (let i = 0; i < phraseLen; i++) fillerIndices[position + i] = phraseIndices[i];
+    if (position > 0) fillerIndices[position - 1] = 0;
+    if (position + phraseLen < config.ALG.pageLength) fillerIndices[position + phraseLen] = 0;
+
+    /* Feistel-compatible: use feistelUnpermute so the round-trip through
+       prefixDecodePage(x,y,z,'random') preserves the filler text */
+    const number = utils.indicesToNumber(fillerIndices);
+    const rawIdx = cp.unpermute(number);
+    const coord = cp.rawIndexToCoord(rawIdx);
+    const fullCoords = lib.xyToCoordinates(coord.x, coord.y, coord.z);
+    const xy = lib.coordinatesToXY(fullCoords);
+
+    variants.push({
+      mode: effectiveMode,
+      number: number.toString(),
+      coordinates: stringifyCoords(fullCoords),
+      xy: stringifyXY(xy),
+      phrase,
+      position,
+      text: utils.indicesToString(fillerIndices),
+      variant,
+      range: { start: position, length: phraseLen },
+      phraseFound: true,
+    });
+  }
+  return variants;
 }
 
 /* ─── Page data from BigInt number (legacy byte-level) ─── */
