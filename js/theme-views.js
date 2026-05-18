@@ -664,9 +664,31 @@
     terminal: terminalTheme,
   };
 
+  /* Diagnostic: log which themes registered successfully */
+  const missingThemes = Object.entries(themeRegistry)
+    .filter(([_, v]) => !v)
+    .map(([k]) => k);
+  if (missingThemes.length > 0) {
+    console.error('[babel] Missing themes:', missingThemes,
+      '— theme IIFEs may have thrown errors. Check console above.');
+  }
+
   function getThemeRenderer() {
     const id = h.getTheme();
-    return themeRegistry[id] || themeRegistry[h.DEFAULT_THEME];
+    const renderer = themeRegistry[id] || themeRegistry[h.DEFAULT_THEME];
+    if (!renderer) {
+      /* Fallback: find first available theme in the registry */
+      console.error('[babel] getThemeRenderer: theme', id, 'not found, default', h.DEFAULT_THEME, 'also missing');
+      for (const key of Object.keys(themeRegistry)) {
+        if (themeRegistry[key]) {
+          console.warn('[babel] Falling back to theme:', key);
+          return themeRegistry[key];
+        }
+      }
+      /* No themes available at all — this means theme files failed to load */
+      console.error('[babel] No themes available! Theme files may have failed to load.');
+    }
+    return renderer;
   }
 
   /* Theme picker HTML */

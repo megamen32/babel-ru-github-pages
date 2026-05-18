@@ -1,5 +1,6 @@
 (() => {
   'use strict';
+  try {
   const app = window.BabelApp = window.BabelApp || {};
   const ALG = app.config.ALG;
   const lib = app.library;
@@ -176,4 +177,5 @@
   };
 
   app.themes._cosmos = cosmosTheme;
+  } catch(e) { console.error('[babel] theme-cosmos.js failed:', e); app.themes = app.themes || {}; app.themes._cosmos = null; }
 })();

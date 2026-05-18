@@ -1,7 +1,8 @@
 (() => {
   'use strict';
+  try {
   const app = window.BabelApp = window.BabelApp || {};
-  const ALG = app.config.ALG;
+  const ALG = app.config && app.config.ALG;
   const lib = app.library;
   const store = app.storage;
   const u = app.utils;
@@ -796,4 +797,5 @@
     safeNum,
     drawJourneyMap,
   };
+  } catch(e) { console.error('[babel] theme-helpers.js failed:', e); app.themes = app.themes || {}; app.themes._helpers = null; }
 })();

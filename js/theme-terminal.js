@@ -1,5 +1,6 @@
 (() => {
   'use strict';
+  try {
   const app = window.BabelApp = window.BabelApp || {};
   const ALG = app.config.ALG;
   const lib = app.library;
@@ -455,4 +456,5 @@ ${highlighted}
   };
 
   app.themes._terminal = terminalTheme;
+  } catch(e) { console.error('[babel] theme-terminal.js failed:', e); app.themes = app.themes || {}; app.themes._terminal = null; }
 })();

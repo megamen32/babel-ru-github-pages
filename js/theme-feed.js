@@ -1,5 +1,6 @@
 (() => {
   'use strict';
+  try {
   const app = window.BabelApp = window.BabelApp || {};
   const ALG = app.config.ALG;
   const lib = app.library;
@@ -156,4 +157,5 @@
   };
 
   app.themes._feed = feedTheme;
+  } catch(e) { console.error('[babel] theme-feed.js failed:', e); app.themes = app.themes || {}; app.themes._feed = null; }
 })();

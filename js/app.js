@@ -203,6 +203,12 @@
     try {
       const renderer = themes.getThemeRenderer();
 
+      if (!renderer) {
+        view.innerHTML = `<div class="section-shell"><div class="notice">Ошибка загрузки темы. Попробуйте обновить страницу (Ctrl+Shift+R) или очистить кэш браузера.</div></div>`;
+        console.error('[babel] getThemeRenderer() returned null — theme files may have failed to load');
+        return;
+      }
+
       switch (route.name) {
         case 'home': {
           view.innerHTML = renderer.renderHome();
@@ -300,8 +306,10 @@
         }
         default: {
           const r = themes.getThemeRenderer();
-          view.innerHTML = r.renderHome();
-          keepCleanup(r.bindHome ? r.bindHome() : null);
+          if (r) {
+            view.innerHTML = r.renderHome();
+            keepCleanup(r.bindHome ? r.bindHome() : null);
+          }
         }
       }
     } catch (err) {

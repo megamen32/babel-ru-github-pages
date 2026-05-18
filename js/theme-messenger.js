@@ -1,5 +1,6 @@
 (() => {
   'use strict';
+  try {
   const app = window.BabelApp = window.BabelApp || {};
   const ALG = app.config.ALG;
   const lib = app.library;
@@ -755,4 +756,5 @@
   };
 
   app.themes._messenger = messengerTheme;
+  } catch(e) { console.error('[babel] theme-messenger.js failed:', e); app.themes = app.themes || {}; app.themes._messenger = null; }
 })();
